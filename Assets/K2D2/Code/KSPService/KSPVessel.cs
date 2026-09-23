@@ -118,9 +118,6 @@ namespace K2D2.KSPService
             if (current_vehicle == null) return null;
 
             var activeNodes = maneuvers.GetNodesForVessel(current_vehicle.Guid);
-            // FIXED during Redux port verification: GetNodesForVessel returns a List<ManeuverNodeData>,
-            // which has no Count() method (there's no `using System.Linq;` in this file either) - only the
-            // Count property. Count() (as a call) would not compile.
             ManeuverNodeData next_node = (activeNodes.Count > 0) ? activeNodes[0] : null;
             return next_node;
         }
@@ -634,11 +631,10 @@ namespace K2D2.KSPService
 
         public double getCurrentOrbitSpeed()
         {
-            // FIXED during Redux port verification: orbitalSpeed exists only on the concrete
-            // PatchedConicsOrbit class in the current assemblies, not on the IKeplerPatch interface
-            // VesselComponent.Orbit is statically typed as - unlike the other getters in this file
-            // (getApoapsis/getPeriapsis/getCurrenOrbitHeight/getEccentricity/getInclination), which all use
-            // members that genuinely are on IOrbit/IKeplerOrbit and don't need a cast.
+            // orbitalSpeed only exists on the concrete PatchedConicsOrbit type, not on the
+            // IKeplerPatch interface VesselComponent.Orbit is typed as, so this getter needs an
+            // explicit cast, unlike the other getters here which use members already on
+            // IOrbit/IKeplerOrbit.
             return ((PatchedConicsOrbit)VesselComponent.Orbit).orbitalSpeed;
         }
 

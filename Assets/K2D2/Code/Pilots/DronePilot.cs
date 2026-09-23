@@ -16,10 +16,6 @@ namespace K2D2.Controller
     {
         public Setting<bool> show_details = new("drone.show_details", true);
         public Setting<float> wanted_speed = new("drone.wanted_speed", 0);
-        // FIXED during Redux port verification: this used the same settings key as wanted_speed above
-        // ("drone.wanted_speed"), so the two aliased each other's persisted value instead of being stored
-        // independently - saving one silently overwrote the other. The commented-out UI code further down
-        // this file (AltitudeControl("drone.wanted_altitude", ...)) confirms the intended key.
         public ClampSetting<float> wanted_altitude = new("drone.wanted_altitude", 0, 0, float.MaxValue);
         public Setting<float> speed_limit = new("drone.speed_limit", 10);
         public ClampSetting<float> kill_h_speed_ratio = new("speed.kill_h_speed_ratio", 1, 0, 10);

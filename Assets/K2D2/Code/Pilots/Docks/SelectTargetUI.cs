@@ -71,10 +71,8 @@ namespace K2D2.Controller.Docks
 
             List<string> part_names = new();
             foreach (NamedComponent part in control_parts.Parts)
-                // FIXED during Redux port verification: List<T> has no mutating Append() method - with
-                // `using System.Linq;` in scope this silently resolved to Enumerable.Append<T>(), which
-                // returns a *new* sequence instead of mutating part_names, so the list stayed empty and
-                // the dropdown was always populated with nothing. Changed to List<T>.Add().
+                // Use List<T>.Add() here, not Linq's Append() - Append() returns a new sequence
+                // instead of mutating part_names, which would leave the dropdown empty.
                 part_names.Add(part.name);
 
             control_from_drop.choices = part_names;
@@ -88,8 +86,6 @@ namespace K2D2.Controller.Docks
 
             var body = pilot.current_vessel.currentBody();
 
-            // FIXED during Redux port verification: this call was duplicated on the next line
-            // (harmless, but redundant) - removed the duplicate.
             var allVessels = GameManager.Instance.Game.SpaceSimulation.UniverseModel.GetAllVessels();
             allVessels.Remove(pilot.current_vessel.VesselComponent);
             allVessels.RemoveAll(v => v.IsDebris());
@@ -104,14 +100,8 @@ namespace K2D2.Controller.Docks
 
             List<string> vessel_names = new();
             foreach (var vessel in target_vessels)
-                // FIXED during Redux port verification: same List<T>.Append() vs .Add() bug as
-                // buildControlList() above - Append() is the non-mutating LINQ extension, not a list mutator.
                 vessel_names.Add(vessel.Name);
 
-            // FIXED during Redux port verification: this assigned into control_from_drop.choices
-            // (apparent copy-paste from buildControlList() above), so the target dropdown never actually
-            // got populated with vessel names, and the control dropdown got clobbered with vessel names
-            // instead of part names whenever the target dropdown was opened. Corrected to target_drop.
             target_drop.choices = vessel_names;
         }
 

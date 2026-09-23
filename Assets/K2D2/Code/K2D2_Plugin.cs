@@ -228,13 +228,8 @@ namespace K2D2
         {
             if (GeneralTools.Game == null) return false;
 
-            // FIXED during the Redux port verification pass: KSP.Game.GameStateMachine has no GetState()
-            // method in the current Redux assemblies (confirmed via full member enumeration of
-            // GameStateMachine in Assembly-CSharp.dll - no such member exists, and no unrelated overload
-            // matches either). The real accessor is GetGameState(), which returns a GameStateConfiguration
-            // struct whose public GameState field is what this code actually wants. Without this fix,
-            // ValidScene() - which gates every per-frame pilot update - would throw a MissingMethodException
-            // the instant it ran.
+            // GameStateMachine has no GetState() method on Redux's current assemblies; the current
+            // GameState comes from GetGameState().GameState instead.
             var state = GeneralTools.Game.GlobalGameState.GetGameState().GameState;
             bool is_valid = validScenes.Contains(state);
             if (!is_valid)

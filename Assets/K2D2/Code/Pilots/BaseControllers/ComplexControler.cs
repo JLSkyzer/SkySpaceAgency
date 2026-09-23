@@ -19,8 +19,6 @@ namespace K2D2.Controller
 
         public override void updateUI(VisualElement root_el, FullStatus st)
         {
-            // On GUI is used to draw UI in needed, using GUILayout
-
             foreach (BaseController contoller in sub_contollers)
             {
                 contoller.updateUI(root_el, st);
@@ -29,8 +27,6 @@ namespace K2D2.Controller
 
         public override void Update()
         {
-            // Update is called each frame
-
             foreach (BaseController contoller in sub_contollers)
             {
                 contoller.Update();
@@ -39,8 +35,6 @@ namespace K2D2.Controller
 
         public override void LateUpdate()
         {
-            // Late Update is called just before rendering
-
             foreach (BaseController contoller in sub_contollers)
             {
                 contoller.LateUpdate();
@@ -49,8 +43,6 @@ namespace K2D2.Controller
 
         public override void FixedUpdate()
         {
-            // Fixed Update is called on physic update
-
             foreach (BaseController contoller in sub_contollers)
             {
                 contoller.FixedUpdate();

@@ -7,7 +7,6 @@ using ILogger = ReduxLib.Logging.ILogger;
 
 namespace K2D2.KSPService
 {
-    /// Simple class used to compute Burned DV
     public class BurndV : BaseController
     {
         public ILogger logger = ReduxLib.ReduxLib.GetLogger("K2D2.SettingsFile");

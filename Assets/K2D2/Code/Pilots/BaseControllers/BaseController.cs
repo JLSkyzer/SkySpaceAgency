@@ -91,7 +91,6 @@ namespace K2D2.Controller
 
         public virtual void FixedUpdate()
         {
-            // Fixed Update is called on physic update
         }
 
 
