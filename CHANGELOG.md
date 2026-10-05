@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased (SkySpaceAgency)
+
+### Changed
+
+- Project remixed as SkySpaceAgency, starting from IanMealworm's K2D2Redux 1.3.0 (commit `7ea025c`). README, `NOTICE.md` and `LICENSE.md` now credit the upstream port and state the remix's CC BY-SA 4.0 terms. No gameplay change yet: the mod is still named K2-D2.
+
 ## 1.3.0
 
 ### Added

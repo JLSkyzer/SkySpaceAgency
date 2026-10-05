@@ -1,4 +1,12 @@
-# K2-D2 (Redux port)
+# SkySpaceAgency
+
+**SkySpaceAgency is a remix of [K2-D2 (Redux port)](https://github.com/IanMealworm/K2D2Redux) by [@IanMealworm](https://github.com/IanMealworm)**, itself a port of [Christophe Floutier's original K2-D2](https://github.com/cfloutier/k2d2). All credit for the existing autopilots goes to them; this repository starts from IanMealworm's work at commit [`7ea025c`](https://github.com/IanMealworm/K2D2Redux/commit/7ea025c) (version 1.3.0, 2026-09-23), with its full history kept.
+
+> The mod itself is still named K2-D2 for now: the rename to SkySpaceAgency will come in a later release. Changes made in this remix are listed in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## K2-D2 (Redux port)
 
 An astromech-style autopilot suite for Kerbal Space Program 2, ported to the **Redux** modding framework from [Christophe Floutier's original K2-D2](https://github.com/cfloutier) (built for SpaceWarp1).
 
@@ -35,7 +43,7 @@ This is a from-scratch port of the original code onto Redux's APIs, not a compat
 ## Credits
 
 - **[Christophe Floutier](https://github.com/cfloutier)** - original K2-D2 mod for SpaceWarp1
-- **IanMealworm** - Redux port
+- **[@IanMealworm](https://github.com/IanMealworm)** - Redux port ([K2D2Redux](https://github.com/IanMealworm/K2D2Redux)), the base of this remix
 - **[Mole](https://github.com/Mole1803)** - original Circularize work
 - **[schlosrat](https://forum.kerbalspaceprogram.com/index.php?/profile/141963-schlosrat/)** - original testing and code help, especially node creation
 - **Opus** - named the mod

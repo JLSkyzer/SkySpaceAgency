@@ -3,6 +3,16 @@
 K2D2 for KSP2 Redux is licensed under Creative Commons Attribution-ShareAlike
 4.0 International (CC-BY-SA 4.0) - see `LICENSE.md`.
 
+## SkySpaceAgency (this remix)
+
+SkySpaceAgency - https://github.com/JLSkyzer/SkySpaceAgency - is Adapted
+Material of **K2D2Redux by IanMealworm** - https://github.com/IanMealworm/K2D2Redux -
+taken at commit `7ea025c` (version 1.3.0, 2026-09-23) with its full history.
+Per the Attribution and ShareAlike terms of CC-BY-SA 4.0, K2D2Redux's license
+and all attributions below are kept, this remix is licensed onward under the
+same CC-BY-SA 4.0 terms, and every change made in it is recorded in
+`CHANGELOG.md` and in the git history after that commit.
+
 ## K2-D2 (original)
 
 This project is a port of **K2-D2** by cfloutier -

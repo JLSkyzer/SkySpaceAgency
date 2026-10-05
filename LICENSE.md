@@ -4,6 +4,8 @@ K2-D2 (Redux port) is distributed under the **Creative Commons Attribution-Share
 
 This matches the license of the original K2-D2 mod by Christophe Floutier, which this project is a derivative of - CC BY-SA requires derivative works to carry the same license, so this port inherits it directly.
 
+SkySpaceAgency is a remix of IanMealworm's K2D2Redux and is distributed under the same CC BY-SA 4.0 license, as its ShareAlike terms require. See `NOTICE.md` for the full chain of attribution.
+
 Full license text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
 
 Human-readable summary: https://creativecommons.org/licenses/by-sa/4.0/
