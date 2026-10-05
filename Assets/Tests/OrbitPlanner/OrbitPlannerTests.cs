@@ -66,4 +66,100 @@ public class OrbitPlannerTests
         double t = OrbitMath.TimeToDirection(r, v, Mu, new Vector3d(0, 1, 0));
         AssertRelative(el.Period / 4, t, 1e-6, "time to +y");
     }
+
+    static readonly BodyInfo Kerbin = new BodyInfo { Mu = Mu, Radius = R, AtmosphereDepth = Atm };
+
+    // Applies the plan's burns with the propagator and returns the resulting orbit.
+    static OrbitElements Simulate(Vector3d r, Vector3d v, double ut0, OrbitPlan plan)
+    {
+        double ut = ut0;
+        foreach (var burn in plan.Burns)
+        {
+            KeplerPropagator.Propagate(r, v, Mu, burn.UT - ut, out var r1, out var v1);
+            r = r1;
+            v = v1 + burn.DeltaV;
+            ut = burn.UT;
+        }
+        return OrbitMath.Elements(r, v, Mu);
+    }
+
+    [Test]
+    public void Plan_RaiseApOnly_OneHohmannBurn()
+    {
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 500000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+        double r1 = R + 100000, r2 = R + 500000;
+        double hohmann = Math.Sqrt(Mu / r1) * (Math.Sqrt(2 * r2 / (r1 + r2)) - 1);
+        AssertRelative(hohmann, plan.Burns[0].DeltaV.magnitude, 1e-2, "Hohmann dv");
+        var final = Simulate(r, v, 1000, plan);
+        AssertRelative(r2, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(r1, final.PeriapsisRadius, 1e-3, "final rp");
+    }
+
+    [Test]
+    public void Plan_LowerPeOnly_OneBurnAtApoapsis()
+    {
+        StateAtPeriapsis(100000, 500000, 0, out var r, out var v);
+        var el = OrbitMath.Elements(r, v, Mu);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { PeAltitude = 300000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+        AssertRelative(1000 + el.Period / 2, plan.Burns[0].UT, 1e-3, "burn at apoapsis");
+        var final = Simulate(r, v, 1000, plan);
+        AssertRelative(R + 500000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 300000, final.PeriapsisRadius, 1e-3, "final rp");
+    }
+
+    [Test]
+    public void Plan_ApAndPe_TwoBurns()
+    {
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 500000, PeAltitude = 300000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(2, plan.Burns.Count);
+        Assert.Less(plan.Burns[0].UT, plan.Burns[1].UT);
+        var final = Simulate(r, v, 1000, plan);
+        AssertRelative(R + 500000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 300000, final.PeriapsisRadius, 1e-3, "final rp");
+    }
+
+    [Test]
+    public void Plan_AlreadyOnTarget_NoBurn()
+    {
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 100000, PeAltitude = 100000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(0, plan.Burns.Count);
+    }
+
+    [TestCase(-10000.0, 400000.0, OrbitPlanError.PeBelowSurface)]
+    [TestCase(50000.0, 400000.0, OrbitPlanError.PeInAtmosphere)]
+    [TestCase(300000.0, 200000.0, OrbitPlanError.PeAboveAp)]
+    public void Plan_RefusesBadTargets(double peAlt, double apAlt, OrbitPlanError expected)
+    {
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = apAlt, PeAltitude = peAlt });
+        Assert.AreEqual(expected, plan.Error);
+        Assert.AreEqual(0, plan.Burns.Count);
+    }
+
+    [Test]
+    public void Plan_RefusesEscapeTrajectory()
+    {
+        double rMag = R + 100000;
+        var r = new Vector3d(rMag, 0, 0);
+        var v = new Vector3d(0, 1.5 * Math.Sqrt(2 * Mu / rMag), 0);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 500000 });
+        Assert.AreEqual(OrbitPlanError.EscapeTrajectory, plan.Error);
+    }
+
+    [Test]
+    public void Plan_RefusesUnstableCurrentOrbit()
+    {
+        StateAtPeriapsis(50000, 50000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 500000 });
+        Assert.AreEqual(OrbitPlanError.UnstableCurrentOrbit, plan.Error);
+    }
 }
