@@ -34,6 +34,7 @@ This is a from-scratch port of the original code onto Redux's APIs, not a compat
 
 **Known limitations:**
 - Precision Landing on atmospheric bodies is still a work in progress and isn't exposed in the UI yet - only bodies with no atmosphere have a player-facing Precision Landing option for now.
+- Landing's braking plan ignores atmospheric drag (which only helps) and assumes the active engines stay as they are: auto-staging during the landing burn is not planned for.
 
 ## Installation
 

@@ -16,6 +16,20 @@
   - Removed `Copied/assets/bundles` (~65 MB): `k2d2_ui.bundle` and the twelve SDK plume / ray-tracing bundles built alongside it. The UI has been loaded through Addressables since 1.3.0 and nothing loads these bundles anymore. The editor tool that rebuilt them (`K2D2/Rebuild UI Bundle`) is removed with them.
 - Fixed: `NullReferenceException` in `ValidScene()` from `Update`/`FixedUpdate`/`LateUpdate` during game startup, before the plugin is initialized and while the game state machine is not ready yet.
 - The Redux SDK package is pinned to commit `8ed8010` instead of the `26w39a` tag: the `26w39a` SDK no longer compiles against KSP2 Redux 26w40a and later (`PQSRenderer.CreateColliders` was removed). To be replaced by the next template tag.
+- **Landing autopilot safety**:
+  - **Refused starts**: Start (Brake or Touch Down) now refuses to start, with a message that stays in the tab, when:
+    - no engine is active;
+    - the local TWR is too low to stop safely (the plan counts on 85 % of the thrust);
+    - even braking now would hit the ground;
+    - the vessel has less than 110 % of the Δv the braking burn needs.
+
+    When the game reports no Δv, the tab shows a warning instead of refusing.
+  - **Braking start**: braking starts at the latest moment that still stops 50 m above the terrain. A simulation of the burn finds that moment, accounting for gravity, the approach angle, mass loss, body rotation and the terrain under the path. "Burn before" is now an extra margin on top.
+  - **Descent speed**: the speed limit in Brake (precision) and Touch Down is now capped by what the active engines can stop. The altitude/speed profile still applies when it is slower.
+  - **Engines**: only active engines (ignited, not shut down) count for landing. With no thrust the throttle goes to 0 instead of NaN.
+  - **"Cannot stop before the ground!" alert**: shown when stopping is no longer possible: in Brake, according to the simulation; in Touch Down, when even full thrust is not enough. Touch Down then brakes at full throttle.
+  - **Brake (non-precision)**: now ends on total surface speed instead of vertical speed. Before, a shallow approach could leave Brake before it burned at all.
+  - **Failed phases**: a Circularize or deorbit phase that cannot do its job now stops the landing and shows why, instead of moving on to the next phase.
 
 ## 1.3.0
 
