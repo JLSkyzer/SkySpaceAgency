@@ -162,4 +162,62 @@ public class OrbitPlannerTests
         var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 500000 });
         Assert.AreEqual(OrbitPlanError.UnstableCurrentOrbit, plan.Error);
     }
+
+    [Test]
+    public void Plan_RaiseAp_FromBetweenApsides_BurnsAtNextPeriapsis()
+    {
+        StateAtPeriapsis(100000, 500000, 0, out var r, out var v);
+        var el = OrbitMath.Elements(r, v, Mu);
+        KeplerPropagator.Propagate(r, v, Mu, el.Period / 4, out var rq, out var vq);
+        var plan = OrbitPlanner.Plan(rq, vq, 1000, Kerbin, new OrbitTargets { ApAltitude = 800000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+        AssertRelative(el.Period * 3 / 4, plan.Burns[0].UT - 1000, 1e-3, "time to next periapsis");
+        var final = Simulate(rq, vq, 1000, plan);
+        AssertRelative(R + 800000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 100000, final.PeriapsisRadius, 1e-3, "final rp");
+    }
+
+    [Test]
+    public void Plan_RaiseAp_AtPeriapsis_WaitsOnePeriod()
+    {
+        StateAtPeriapsis(100000, 500000, 0, out var r, out var v);
+        var el = OrbitMath.Elements(r, v, Mu);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 800000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+        AssertRelative(el.Period, plan.Burns[0].UT - 1000, 1e-3, "one period lead");
+        var final = Simulate(r, v, 1000, plan);
+        AssertRelative(R + 800000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 100000, final.PeriapsisRadius, 1e-3, "final rp");
+    }
+
+    [Test]
+    public void Plan_LowerBoth_TwoBurns()
+    {
+        StateAtPeriapsis(400000, 400000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 300000, PeAltitude = 200000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(2, plan.Burns.Count);
+        Assert.Less(plan.Burns[0].UT, plan.Burns[1].UT);
+        var final = Simulate(r, v, 1000, plan);
+        AssertRelative(R + 300000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 200000, final.PeriapsisRadius, 1e-3, "final rp");
+    }
+
+    [Test]
+    public void Plan_RaiseAp_BurnIsPurePrograde()
+    {
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { ApAltitude = 500000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        var burn = plan.Burns[0];
+        double dv = burn.DeltaV.magnitude;
+        Assert.Less(Math.Abs(burn.Radial), 1e-6 * dv);
+        Assert.Less(Math.Abs(burn.Normal), 1e-6 * dv);
+        Assert.Greater(burn.Prograde, 0);
+        AssertRelative(dv, burn.Prograde, 1e-9, "prograde");
+        AssertRelative(plan.Burns[0].DeltaV.magnitude, plan.TotalDeltaV, 1e-12, "total");
+        AssertRelative(R + 500000, plan.Final.ApoapsisRadius, 1e-3, "final ra");
+    }
 }
