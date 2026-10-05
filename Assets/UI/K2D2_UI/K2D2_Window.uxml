@@ -18,7 +18,7 @@
          keep the window from being crushed smaller than its own header/toolbar can fit;
          ResizeManipulator (see resize-handle below and K2D2Window.cs) additionally clamps against
          its own Max/MinWidth/MaxHeight and the screen edges at drag time. -->
-    <UitkForKsp2.Controls.AppShell name="MainFrame" title="K2-D2" close-button-name="close-button" icon-texture="project://database/Assets/Images/cropped_40px.png?fileID=2800000&amp;guid=6a5fd6f51e722db49a3b2c207a7e7a73&amp;type=3#cropped_40px" style="position: absolute; left: 11px; top: 36px; width: 350px; height: 500px; min-width: 300px; min-height: 250px;">
+    <UitkForKsp2.Controls.AppShell name="MainFrame" title="SkySpaceAgency" close-button-name="close-button" icon-texture="project://database/Assets/Images/cropped_40px.png?fileID=2800000&amp;guid=6a5fd6f51e722db49a3b2c207a7e7a73&amp;type=3#cropped_40px" style="position: absolute; left: 11px; top: 36px; width: 350px; height: 500px; min-width: 300px; min-height: 250px;">
         <!-- Wraps only the tab content, not the toolbar below - so the Start/Auto-staging/gear
              footer row stays pinned in place and only the tab body scrolls, matching how stock
              KSP2 panels keep their own footer controls fixed while the list above scrolls. -->
@@ -43,7 +43,7 @@
             <K2UI.ToggleButton label="Auto-staging" name="staging-toggle" value="false" class="auto-staging-toggle">
                 <ui:VisualElement name="icon" />
             </K2UI.ToggleButton>
-            <ui:Button text="i" name="info-toggle" tooltip="About K2-D2" style="width: 25px; height: 25px;" />
+            <ui:Button text="i" name="info-toggle" tooltip="About SkySpaceAgency" style="width: 25px; height: 25px;" />
         </ui:VisualElement>
         <!-- Stock drag-to-resize handle: reuses Redux's own ".window-resize-handle"/
              ".window-resize-handle-icon" CSS and resize-handle.png (KerbalUI.uss) rather than

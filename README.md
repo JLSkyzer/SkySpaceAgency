@@ -2,7 +2,7 @@
 
 **SkySpaceAgency is a remix of [K2-D2 (Redux port)](https://github.com/IanMealworm/K2D2Redux) by [@IanMealworm](https://github.com/IanMealworm)**, itself a port of [Christophe Floutier's original K2-D2](https://github.com/cfloutier/k2d2). All credit for the existing autopilots goes to them; this repository starts from IanMealworm's work at commit [`7ea025c`](https://github.com/IanMealworm/K2D2Redux/commit/7ea025c) (version 1.3.0, 2026-09-23), with its full history kept.
 
-> The mod itself is still named K2-D2 for now: the rename to SkySpaceAgency will come in a later release. Changes made in this remix are listed in [`CHANGELOG.md`](CHANGELOG.md).
+> In game the mod is named **SkySpaceAgency** (mod id `SkySpaceAgency`, `SkySpaceAgency.dll`). It is a separate mod from K2-D2: do not install both, they share the `Alt-O` shortcut and the same autopilots. Changes made in this remix are listed in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -38,7 +38,7 @@ This is a from-scratch port of the original code onto Redux's APIs, not a compat
 
 1. Install [Redux](https://ksp2redux.org) for Kerbal Space Program 2.
 2. Make sure you're on KSP2 beta snapshot 26w33a or newer (Redux Launcher: Settings [gear icon to the right of the "Mods" tab] > Release Channel > Beta, then update to the latest beta).
-3. Download the latest K2-D2 release and drop the contents into your KSP2 `mods` folder (merge folders if prompted).
+3. Download the latest SkySpaceAgency release and extract it into a `SkySpaceAgency` folder inside your KSP2 `mods` folder.
 
 ## Credits
 

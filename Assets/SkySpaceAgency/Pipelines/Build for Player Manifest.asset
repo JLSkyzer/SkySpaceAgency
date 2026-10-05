@@ -1,0 +1,102 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e563561e08b6a3642a487177f5cfbb37, type: 3}
+  m_Name: Build for Player Manifest
+  m_EditorClassIdentifier: ThunderKit.Core::ThunderKit.Core.Manifests.Manifest
+  Data:
+  - {fileID: 2719234618299205719}
+  - {fileID: 8253265483121237232}
+  - {fileID: 4939413543333127067}
+  - {fileID: 464662598952248152}
+  identity: {fileID: 4631611416825498606}
+  QuickAccess: 0
+--- !u!114 &464662598952248152
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b7e13dda513544419a89926bd12ad8a, type: 3}
+  m_Name: AssemblyDefinitions
+  m_EditorClassIdentifier: ThunderKit.Core::ThunderKit.Core.Manifests.Datums.AssemblyDefinitions
+  StagingPaths:
+  - I:\SteamLibrary\steamapps\common\Kerbal Space Program 2/mods/__Testing/SkySpaceAgency
+  definitions:
+  - {fileID: 5897886265953266890, guid: 93190621d9e2bbd499cb80f5e4faad15, type: 3}
+--- !u!114 &2719234618299205719
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 470dbf1cc5834ffc97c653aa1126938c, type: 3}
+  m_Name: CopyFolderDatum
+  m_EditorClassIdentifier: ksp2community.ksp2unitytools.editor::Ksp2UnityTools.Editor.Modding.Thunderkit.CopyFolderDatum
+  StagingPaths: []
+  sourcePath: Assets\SkySpaceAgency/Copied
+  destinationPath: I:\SteamLibrary\steamapps\common\Kerbal Space Program 2/mods/__Testing/SkySpaceAgency
+--- !u!114 &4631611416825498606
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f22bb7fd1d3b56a48bc52f8e407901d6, type: 3}
+  m_Name: SkySpaceAgency - Editor
+  m_EditorClassIdentifier: ThunderKit.Core::ThunderKit.Core.Manifests.Datum.ManifestIdentity
+  StagingPaths: []
+  Author: JLSkyzer (based on K2-D2 by IanMealworm and Christophe Floutier)
+  Name: 
+  Description: 'SkySpaceAgency is an autopilot suite for KSP2 Redux: maneuver node execution, ascent guidance, automated landing, docking, and attitude hold, all from one panel (Alt-O or AppBar). Based on K2-D2 by Christophe Floutier and its Redux port by IanMealworm.'
+  Version: 1.3.0
+  Dependencies: []
+--- !u!114 &4939413543333127067
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83ea0a28af7349aa972a4bcb474b48d7, type: 3}
+  m_Name: AddressablesGroupDatum
+  m_EditorClassIdentifier: ksp2community.ksp2unitytools.editor::Ksp2UnityTools.Editor.Modding.Thunderkit.AddressablesGroupDatum
+  StagingPaths:
+  - I:\SteamLibrary\steamapps\common\Kerbal Space Program 2/mods/__Testing/SkySpaceAgency/addressables
+  mod: {fileID: 11400000, guid: 45688422081d8d54a80d6e200b0cb29b, type: 2}
+  targetFolder: I:\SteamLibrary\steamapps\common\Kerbal Space Program 2/mods/__Testing/SkySpaceAgency/addressables
+--- !u!114 &8253265483121237232
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a089732392b94873b7dffb12543079c3, type: 3}
+  m_Name: TextAssets
+  m_EditorClassIdentifier: ksp2community.ksp2unitytools.editor::Ksp2UnityTools.Editor.Modding.Thunderkit.TextAssets
+  StagingPaths:
+  - I:\SteamLibrary\steamapps\common\Kerbal Space Program 2/mods/__Testing/SkySpaceAgency
+  possibleFolders:
+  - Assets\SkySpaceAgency

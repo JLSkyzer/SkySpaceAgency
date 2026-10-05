@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9065a46703c44e8fabd263388eaeb6e7, type: 3}
+  m_Name: SkySpaceAgency
+  m_EditorClassIdentifier: ksp2community.ksp2unitytools.editor::Ksp2UnityTools.Editor.Modding.Mod
+  id: SkySpaceAgency
+  name: SkySpaceAgency
+  author: JLSkyzer (based on K2-D2 by IanMealworm and Christophe Floutier)
+  description: 'SkySpaceAgency is an autopilot suite for KSP2 Redux: maneuver node execution, ascent guidance, automated landing, docking, and attitude hold, all from one panel (Alt-O or AppBar). Based on K2-D2 by Christophe Floutier and its Redux port by IanMealworm.'
+  version: 1.3.0
+  versionCheck: 
+  minKsp2Version: '*'
+  maxKsp2Version: '*'
+  source: https://github.com/JLSkyzer/SkySpaceAgency
+  allGroup: {fileID: 11400000, guid: 0130084ab70381a40b9d1e906d480b60, type: 2}
+  partsGroup: {fileID: 11400000, guid: 6fc8ae98348f3d24f896d50f78bd5c0f, type: 2}
+  missionsGroup: {fileID: 11400000, guid: eb784028c81464044b562fb2bca90571, type: 2}
+  celestialBodiesGroup: {fileID: 11400000, guid: c0d6c16e15ea7244f93b113110611360, type: 2}
+  scienceExperimentGroup: {fileID: 11400000, guid: adf88e9466e904949943a456f4b4d396, type: 2}
+  techNodeDataGroup: {fileID: 11400000, guid: bab182b176f44264b84df02bed48c179, type: 2}
+  resourcesGroup: {fileID: 11400000, guid: a5697319ec9f7e74192ce3e2ed53e1f9, type: 2}
+  addressablesProfileId: 9db6d9f7f0c08684c84d20db8ae2fc27
+  dependencies:
+  - id: SpaceWarp2
+    min: 2.0.0
+    max: '*'
+  incompatibilities: []

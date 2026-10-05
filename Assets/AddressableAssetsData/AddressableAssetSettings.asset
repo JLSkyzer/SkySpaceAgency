@@ -17,6 +17,7 @@ MonoBehaviour:
     serializedVersion: 2
     Hash: 00000000000000000000000000000000
   m_ExtractTypeTreeData: 0
+  m_DisableWriteTypeTree: 0
   m_OptimizeCatalogSize: 0
   m_BuildRemoteCatalog: 0
   m_BundleLocalCatalog: 0
@@ -92,10 +93,10 @@ MonoBehaviour:
         m_Value: 'ServerData/[BuildTarget]'
     - m_InheritedParent: 
       m_Id: 9db6d9f7f0c08684c84d20db8ae2fc27
-      m_ProfileName: K2D2
+      m_ProfileName: SkySpaceAgency
       m_Values:
       - m_Id: 1c4835cdc12e1554fa9f3458e269af4f
-        m_Value: '{SpaceWarpPaths.K2D2}/addressables/StandaloneWindows64'
+        m_Value: '{SpaceWarpPaths.SkySpaceAgency}/addressables/StandaloneWindows64'
       - m_Id: 9a6091b1ef213814a9a22eb080ef7566
         m_Value: '[UnityEditor.EditorUserBuildSettings.activeBuildTarget]'
       - m_Id: d0e18158ce494dc4caa68511221ef673
@@ -130,6 +131,8 @@ MonoBehaviour:
     - missions
     - techNodeData
     - resources
+    - SkySpaceAgency_patches
+    - SkySpaceAgency_prefab_patches
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: b2f9fee1b51ae544cb34ea285e9bc5a5, type: 2}
