@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using K2D2.Controller;
+using K2D2.OrbitPlanning;
 using K2UI;
 using K2UI.Tabs;
 using KSP.UI.Binding;
@@ -157,6 +158,7 @@ namespace K2D2.UI
                     all_panels.Add(panel_);
             }
 
+            all_panels.Add(new OrbitUI());
             all_panels.Add(new AboutUI());
 
             tab_page = _rootElement.Q<TabbedPage>();

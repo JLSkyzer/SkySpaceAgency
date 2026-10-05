@@ -1,0 +1,29 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/K2D2_UI/K2D2.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#K2D2" />
+    <Style src="project://database/Assets/Runtime/K2UI/USS/K2UI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#K2UI" />
+    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Toggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#K2Toggle" />
+    <K2UI.Tabs.TabPage name="orbit" label="Orbit" style="display: flex;">
+        <ui:VisualElement name="page" style="flex-grow: 1;">
+            <ui:Label text="Orbit Planner" name="Title" class="unselectedContent" style="width: 100%; -unity-text-align: upper-center;" />
+            <K2UI.Group text="Target orbit">
+                <ui:VisualElement style="flex-direction: row; align-items: center;">
+                    <K2UI.K2Toggle label="Ap (km)" name="ap_enabled" tooltip="Change the apoapsis altitude" style="width: 50%;" />
+                    <ui:FloatField name="ap_km" value="100" style="flex-grow: 1;" />
+                </ui:VisualElement>
+                <ui:VisualElement style="flex-direction: row; align-items: center;">
+                    <K2UI.K2Toggle label="Pe (km)" name="pe_enabled" tooltip="Change the periapsis altitude" style="width: 50%;" />
+                    <ui:FloatField name="pe_km" value="100" style="flex-grow: 1;" />
+                </ui:VisualElement>
+                <ui:VisualElement style="flex-direction: row; align-items: center;">
+                    <K2UI.K2Toggle label="Inclination (°)" name="inc_enabled" tooltip="Change the inclination (0 equatorial, 90 polar)" style="width: 50%;" />
+                    <ui:FloatField name="inc_deg" value="0" style="flex-grow: 1;" />
+                </ui:VisualElement>
+            </K2UI.Group>
+            <ui:Button name="create_maneuvers" text="Create maneuvers" class="big" style="height: 30px; margin-top: 10px;" />
+            <ui:Label name="summary" text="Tick the targets to change, then create the maneuvers. Unticked targets keep the current value. Execute the nodes from the Node tab." style="white-space: normal; margin-top: 10px;" />
+        </ui:VisualElement>
+        <ui:VisualElement name="settings" style="display: none;">
+            <ui:Label text="No Orbit Settings..." name="Title" class="unselectedContent" />
+        </ui:VisualElement>
+    </K2UI.Tabs.TabPage>
+</ui:UXML>
