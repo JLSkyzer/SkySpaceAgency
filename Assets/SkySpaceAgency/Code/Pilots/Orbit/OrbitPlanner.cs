@@ -126,8 +126,59 @@ namespace K2D2.OrbitPlanning
                 ShapeBurn(plan, ref state, mu, Math.PI, rpTarget, $"Set Pe {(rpTarget - body.Radius) / 1000:n1} km");
             }
 
+            if (targets.InclinationDeg.HasValue)
+            {
+                double iTarget = targets.InclinationDeg.Value * Deg;
+                var shaped = OrbitMath.Elements(state.R, state.V, mu);
+                if (Math.Abs(iTarget - shaped.InclinationRad) > InclinationToleranceDeg * Deg)
+                    PlaneBurn(plan, ref state, mu, iTarget);
+            }
+
             plan.Final = OrbitMath.Elements(state.R, state.V, mu);
             return plan;
+        }
+
+        // Rotates the velocity about the radius vector at the orbital node farther from the body
+        // (slower there, so cheaper). An equatorial orbit has no node line: the burn point becomes
+        // the node (apoapsis, or in 3 minutes on a near-circular orbit).
+        static void PlaneBurn(OrbitPlan plan, ref State state, double mu, double iTarget)
+        {
+            var el = OrbitMath.Elements(state.R, state.V, mu);
+            bool circular = el.ApoapsisRadius - el.PeriapsisRadius < CircularThresholdMeters;
+            Vector3d h = el.AngularMomentum;
+            Vector3d nodeLine = Vector3d.Cross(OrbitMath.North, h);
+
+            double dt;
+            string where;
+            if (nodeLine.magnitude / h.magnitude < 1e-4)
+            {
+                dt = circular ? CircularBurnDelaySeconds : Lead(OrbitMath.TimeToTrueAnomaly(state.R, state.V, mu, Math.PI), el.Period);
+                where = circular ? "in 3 min" : "at apoapsis";
+            }
+            else
+            {
+                Vector3d ascending = nodeLine.normalized;
+                Vector3d descending = -1.0 * ascending;
+                double rAsc = OrbitMath.RadiusAtDirection(el, mu, ascending);
+                double rDesc = OrbitMath.RadiusAtDirection(el, mu, descending);
+                double tAsc = Lead(OrbitMath.TimeToDirection(state.R, state.V, mu, ascending), el.Period);
+                double tDesc = Lead(OrbitMath.TimeToDirection(state.R, state.V, mu, descending), el.Period);
+                bool useAscending = SameRadius(rAsc, rDesc) ? tAsc <= tDesc : rAsc > rDesc;
+                dt = useAscending ? tAsc : tDesc;
+                where = useAscending ? "at ascending node" : "at descending node";
+            }
+
+            KeplerPropagator.Propagate(state.R, state.V, mu, dt, out var rb, out var vb);
+            Vector3d axis = rb.normalized;
+            double delta = Math.Abs(iTarget - el.InclinationRad);
+            Vector3d vPlus = OrbitMath.Rotate(vb, axis, delta);
+            Vector3d vMinus = OrbitMath.Rotate(vb, axis, -delta);
+            double errPlus = Math.Abs(OrbitMath.Elements(rb, vPlus, mu).InclinationRad - iTarget);
+            double errMinus = Math.Abs(OrbitMath.Elements(rb, vMinus, mu).InclinationRad - iTarget);
+            Vector3d vNew = errPlus <= errMinus ? vPlus : vMinus;
+
+            AddBurn(plan, state.UT + dt, rb, vb, vNew - vb, $"Inclination {iTarget / Deg:n2}° {where}");
+            state = new State { R = rb, V = vNew, UT = state.UT + dt };
         }
 
         // Burn at true anomaly 'nu' (0 = periapsis, π = apoapsis) so that the opposite apsis

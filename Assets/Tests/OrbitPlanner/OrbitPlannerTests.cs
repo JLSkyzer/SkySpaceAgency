@@ -220,4 +220,57 @@ public class OrbitPlannerTests
         AssertRelative(plan.Burns[0].DeltaV.magnitude, plan.TotalDeltaV, 1e-12, "total");
         AssertRelative(R + 500000, plan.Final.ApoapsisRadius, 1e-3, "final ra");
     }
+
+    [Test]
+    public void Plan_InclinationOnly_OnePlaneChange()
+    {
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { InclinationDeg = 30 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+        double speed = Math.Sqrt(Mu / (R + 100000));
+        AssertRelative(2 * speed * Math.Sin(15 * Deg), plan.Burns[0].DeltaV.magnitude, 1e-3, "plane change dv");
+        var final = Simulate(r, v, 1000, plan);
+        Assert.AreEqual(30.0, final.InclinationRad / Deg, 0.05);
+        AssertRelative(R + 100000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 100000, final.PeriapsisRadius, 1e-3, "final rp");
+
+        var burn = plan.Burns[0];
+        KeplerPropagator.Propagate(r, v, Mu, burn.UT - 1000, out var rb, out var vb);
+        Vector3d pro = vb.normalized;
+        Vector3d nor = Vector3d.Cross(rb, vb).normalized;
+        Vector3d rad = Vector3d.Cross(pro, nor);
+        Vector3d rebuilt = burn.Prograde * pro + burn.Normal * nor + burn.Radial * rad;
+        Assert.Less((rebuilt - burn.DeltaV).magnitude, 1e-6 * burn.DeltaV.magnitude, "decomposition rebuilds DeltaV");
+        Assert.Greater(Math.Abs(burn.Normal), 0.5 * burn.DeltaV.magnitude, "plane change is mostly normal");
+    }
+
+    [Test]
+    public void Plan_Combined_ThreeBurnsInOrder()
+    {
+        StateAtPeriapsis(100000, 500000, 10, out var r, out var v);
+        var targets = new OrbitTargets { ApAltitude = 800000, PeAltitude = 200000, InclinationDeg = 45 };
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, targets);
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(3, plan.Burns.Count);
+        Assert.Less(plan.Burns[0].UT, plan.Burns[1].UT);
+        Assert.Less(plan.Burns[1].UT, plan.Burns[2].UT);
+        var final = Simulate(r, v, 1000, plan);
+        AssertRelative(R + 800000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 200000, final.PeriapsisRadius, 1e-3, "final rp");
+        Assert.AreEqual(45.0, final.InclinationRad / Deg, 0.05);
+        foreach (var burn in plan.Burns)
+        {
+            double parts = Math.Sqrt(burn.Radial * burn.Radial + burn.Normal * burn.Normal + burn.Prograde * burn.Prograde);
+            AssertRelative(burn.DeltaV.magnitude, parts, 1e-9, "burn components");
+        }
+    }
+
+    [Test]
+    public void Plan_RefusesInclinationOutOfRange()
+    {
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { InclinationDeg = 200 });
+        Assert.AreEqual(OrbitPlanError.InclinationOutOfRange, plan.Error);
+    }
 }
