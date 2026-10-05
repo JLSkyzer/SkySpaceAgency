@@ -16,6 +16,7 @@
   - Removed `Copied/assets/bundles` (~65 MB): `k2d2_ui.bundle` and the twelve SDK plume / ray-tracing bundles built alongside it. The UI has been loaded through Addressables since 1.3.0 and nothing loads these bundles anymore. The editor tool that rebuilt them (`K2D2/Rebuild UI Bundle`) is removed with them.
 - Fixed: `NullReferenceException` in `ValidScene()` from `Update`/`FixedUpdate`/`LateUpdate` during game startup, before the plugin is initialized and while the game state machine is not ready yet.
 - The Redux SDK package is pinned to commit `8ed8010` instead of the `26w39a` tag: the `26w39a` SDK no longer compiles against KSP2 Redux 26w40a and later (`PQSRenderer.CreateColliders` was removed). To be replaced by the next template tag.
+- Fixed: the window could not be dragged up or down. The drag limits assumed the window is laid out from the screen's top-left corner, at the screen size UITK reports. They now use the window's actual layout position and the panel's real size, and the drag start logs that geometry.
 - **Landing autopilot safety**:
   - **Refused starts**: Start (Brake or Touch Down) now refuses to start, with a message that stays in the tab, when:
     - no engine is active;
