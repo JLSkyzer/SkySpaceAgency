@@ -86,10 +86,11 @@ namespace K2D2.Landing
         public override void Start()
         {
             finished = false;
+            failure_reason = null;
             node = null;
 
             var current_vessel = K2D2_Plugin.Instance.current_vessel;
-            if (current_vessel == null) { finished = true; return; }
+            if (current_vessel == null) { Fail("No active vessel."); return; }
 
             var check = CheckOrbit(out double apoapsisAlt_m, out double periapsisAlt_m);
 
@@ -104,8 +105,7 @@ namespace K2D2.Landing
             if (check == OrbitCheck.TooHigh)
             {
                 logger.LogInfo($"[Circularize] starting orbit too high (Ap {apoapsisAlt_m:n0}m / Pe {periapsisAlt_m:n0}m, max {max_starting_altitude_m:n0}m).");
-                status_line = $"Starting orbit too high for precision landing (Ap {apoapsisAlt_m / 1000:n0}km / Pe {periapsisAlt_m / 1000:n0}km, max {max_starting_altitude_m / 1000:n0}km) - circularize to a lower orbit first.";
-                finished = true;
+                Fail($"Starting orbit too high for precision landing (Ap {apoapsisAlt_m / 1000:n0}km / Pe {periapsisAlt_m / 1000:n0}km, max {max_starting_altitude_m / 1000:n0}km) - circularize to a lower orbit first.");
                 return;
             }
 

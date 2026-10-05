@@ -87,12 +87,13 @@ namespace K2D2.Landing
         public override void Start()
         {
             finished = false;
+            failure_reason = null;
             node = null;
 
             var current_vessel = K2D2_Plugin.Instance.current_vessel;
             if (current_vessel == null)
             {
-                finished = true;
+                Fail("No active vessel.");
                 return;
             }
 
@@ -123,8 +124,7 @@ namespace K2D2.Landing
 
             if (!found)
             {
-                status_line = "Couldn't find a safe deorbit window - try again in a moment.";
-                finished = true;
+                Fail("Couldn't find a safe deorbit window - try again in a moment.");
                 return;
             }
 

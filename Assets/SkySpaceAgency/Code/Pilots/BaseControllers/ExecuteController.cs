@@ -34,6 +34,10 @@ namespace K2D2.Controller
             }
         }
 
+        public bool failed => sub_controler != null && sub_controler.failure_reason != null;
+
+        public string failure_reason => sub_controler?.failure_reason;
+
         // Forwards to whichever ExecuteController is currently active, same idea as status_line
         // above - lets LandingUI ask "current_executor" for its numeric telemetry rows without
         // caring whether it's TouchDown, WarpTo, or nothing at all right now.
@@ -55,10 +59,22 @@ namespace K2D2.Controller
         public bool finished = false;
         public string status_line = "";
 
+        // Set (with finished) by a controller that cannot do its task; null otherwise. The pilot
+        // running it stops and shows the reason instead of moving on to its next phase.
+        public string failure_reason = null;
+
         // called everytime the Pilot shoudl start
         public virtual void Start()
         {
             finished = false;
+            failure_reason = null;
+        }
+
+        protected void Fail(string reason)
+        {
+            failure_reason = reason;
+            status_line = reason;
+            finished = true;
         }
 
         // Numeric telemetry a controller wants shown as label/value rows in its tab's own
