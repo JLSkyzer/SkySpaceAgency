@@ -14,6 +14,8 @@ namespace K2D2.OrbitPlanning
     public class OrbitUI : K2Page
     {
         const double Rad2Deg = 180 / Math.PI;
+        // Both units are accepted by the frame guard because the unit of orbit.inclination is
+        // unconfirmed in game (Redux documents radians, stock KSP stores degrees).
         const double FrameGuardDeg = 0.5;
 
         struct Current
@@ -106,13 +108,28 @@ namespace K2D2.OrbitPlanning
                 return;
             }
 
-            // Frame guard (spec): our inclination from the state vectors must match the game's
-            // (documented in radians for Redux's CurrentPatchedConicsOrbit).
-            double gapDeg = Math.Abs(c.El.InclinationRad - c.GameInclinationRad) * Rad2Deg;
-            if (gapDeg > FrameGuardDeg)
+            // Frame guard (spec): our inclination from the state vectors must match the game's,
+            // in either unit (see FrameGuardDeg).
+            double gapRadAsDeg = Math.Abs(c.El.InclinationRad - c.GameInclinationRad) * Rad2Deg;
+            double gapDegAsDeg = Math.Abs(c.IncDeg - c.GameInclinationRad);
+            if (gapRadAsDeg <= FrameGuardDeg || gapDegAsDeg <= FrameGuardDeg)
+            {
+                string unit = gapRadAsDeg <= FrameGuardDeg ? "radians" : "degrees";
+                K2D2_Plugin.logger.LogInfo($"[OrbitUI] frame guard: game inclination {c.GameInclinationRad} " +
+                    $"matched as {unit} (computed {c.IncDeg:n3}°)");
+            }
+            else
             {
                 summary.text = $"Unexpected reference frame: computed inclination {c.IncDeg:n2}°, " +
                     $"game reports {c.GameInclinationRad:n4} (raw value). No node created.";
+                K2D2_Plugin.logger.LogWarning($"[OrbitUI] frame guard refused: computed inclination {c.IncDeg:n3}°, " +
+                    $"game reports {c.GameInclinationRad} (raw value, matches neither radians nor degrees)");
+                return;
+            }
+
+            if (!OrbitSettings.ap_enabled.V && !OrbitSettings.pe_enabled.V && !OrbitSettings.inc_enabled.V)
+            {
+                summary.text = "Tick at least one target (Ap, Pe or Inclination) first.";
                 return;
             }
 
@@ -135,10 +152,11 @@ namespace K2D2.OrbitPlanning
             }
 
             summary.text = Summary(plan, c, "Creating nodes...");
+            K2D2_Plugin.ResetControllers(); // CreateNodes wipes every node: stop any pilot flying one
             maneuver_creator.Update();
             maneuver_creator.CreateNodes(plan.Burns, count =>
                 summary.text = Summary(plan, c, count == plan.Burns.Count
-                    ? $"{count} node(s) created: run them one by one from the Node tab."
+                    ? $"{count} node(s) created: run them one by one from the Node tab. After a burn you can press Create maneuvers again to re-plan from the actual orbit."
                     : $"Warning: the game holds {count} node(s) for {plan.Burns.Count} planned."));
         }
 
