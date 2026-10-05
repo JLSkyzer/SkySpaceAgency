@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using K2D2.UI;
 using K2D2.Controller;
+using K2D2.Landing.Braking;
 
 using KTools;
 using ILogger = ReduxLib.Logging.ILogger;
@@ -20,6 +21,10 @@ namespace K2D2.Landing
 
         public bool gravity_compensation;
         public float max_speed = 0;
+
+        // True when even full thrust can no longer stop before the ground (DescentEnvelope.CanStop).
+        // The landing tab shows it as an alert; braking goes on at full throttle anyway.
+        public bool cannot_stop = false;
 
         // Atmo/Vacuum profile split (see LandingSettings.cs's class comment) - TouchDown's own 5
         // tunables get the same treatment: two full copies (atmo/vac, each its own independent
@@ -212,6 +217,7 @@ namespace K2D2.Landing
         public override void Start()
         {
             finished = false;
+            cannot_stop = false;
             smoothed_throttle = 0;
             smoothed_arc_deg = 0;
             smoothed_correction_deg = 0;
@@ -242,23 +248,21 @@ namespace K2D2.Landing
 
         void compute_Throttle()
         {
-            float min_throttle = 0;
-
-            if (gravity_compensation)
+            // Only engines that can thrust right now (BurndV.active_dv). Without any, idle
+            // instead of dividing by zero: the landing tab shows the "Cannot stop" alert.
+            float accel = burn_dV.active_dv;
+            delta_speed = current_speed - max_speed;
+            if (!(accel > 0))
             {
-                if (gravity_direction_factor == 0)
-                    min_throttle = 0;
-                else
-                {
-                    float minimum_dv = gravity_direction_factor * gravity;
-                    min_throttle = minimum_dv / burn_dV.full_dv;
-                }
+                wanted_throttle = 0;
+                return;
             }
 
+            float min_throttle = 0;
+            if (gravity_compensation && gravity_direction_factor != 0)
+                min_throttle = gravity_direction_factor * gravity / accel;
 
-            delta_speed = current_speed - max_speed;
-
-            float remaining_full_burn_time = (float)(delta_speed / burn_dV.full_dv);
+            float remaining_full_burn_time = delta_speed / accel;
             wanted_throttle = Mathf.Clamp(remaining_full_burn_time + min_throttle, 0, 1);
         }
 
@@ -865,12 +869,30 @@ namespace K2D2.Landing
 
         float current_speed;
 
+        void UpdateCannotStop()
+        {
+            if (landing == null)
+            {
+                cannot_stop = false;
+                return;
+            }
+            double gravity_now = current_vessel.VesselComponent.graviticAcceleration.magnitude;
+            bool now = !DescentEnvelope.CanStop(current_speed, landing.altitude, burn_dV.active_dv,
+                gravity_now, landing.settings.touch_down_speed.V);
+            if (now && !cannot_stop)
+                logger.LogWarning($"[TouchDown] cannot stop before the ground: speed {current_speed:n1} m/s, " +
+                    $"height {landing.altitude:n0} m, thrust accel {burn_dV.active_dv:n2} m/s², gravity {gravity_now:n2} m/s²");
+            cannot_stop = now;
+        }
+
         public override void Update()
         {
             if (current_vessel == null || current_vessel.VesselVehicle == null)
                 return;
 
             current_speed = (float)current_vessel.VesselVehicle.SurfaceSpeed;
+
+            UpdateCannotStop();
 
             delta_speed = current_speed - max_speed;
 
