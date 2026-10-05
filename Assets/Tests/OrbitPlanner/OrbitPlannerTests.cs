@@ -273,4 +273,60 @@ public class OrbitPlannerTests
         var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { InclinationDeg = 200 });
         Assert.AreEqual(OrbitPlanError.InclinationOutOfRange, plan.Error);
     }
+
+    [Test]
+    public void Plan_Inclination_BurnsAtFartherNode()
+    {
+        const double ut0 = 1000;
+        StateAtPeriapsis(100000, 1000000, 20, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, ut0, Kerbin, new OrbitTargets { InclinationDeg = 30 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+
+        var burn = plan.Burns[0];
+        KeplerPropagator.Propagate(r, v, Mu, burn.UT - ut0, out var rb, out var vb);
+        AssertRelative(R + 1000000, rb.magnitude, 1e-3, "burn at the farther node (apoapsis)");
+
+        Vector3d pro = vb.normalized;
+        Vector3d nor = Vector3d.Cross(rb, vb).normalized;
+        Vector3d rad = Vector3d.Cross(pro, nor);
+        Vector3d rebuilt = burn.Prograde * pro + burn.Normal * nor + burn.Radial * rad;
+        Assert.Less((rebuilt - burn.DeltaV).magnitude, 1e-6 * burn.DeltaV.magnitude, "decomposition rebuilds DeltaV");
+        Assert.Greater(Math.Abs(burn.Normal), 0.5 * burn.DeltaV.magnitude, "plane change is mostly normal");
+
+        var final = Simulate(r, v, ut0, plan);
+        Assert.AreEqual(30.0, final.InclinationRad / Deg, 0.05);
+        AssertRelative(R + 1000000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 100000, final.PeriapsisRadius, 1e-3, "final rp");
+    }
+
+    [Test]
+    public void Plan_Inclination_LowerToEquatorial()
+    {
+        const double ut0 = 1000;
+        StateAtPeriapsis(100000, 500000, 20, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, ut0, Kerbin, new OrbitTargets { InclinationDeg = 0 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+        var final = Simulate(r, v, ut0, plan);
+        Assert.AreEqual(0.0, final.InclinationRad / Deg, 0.05);
+        AssertRelative(R + 500000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 100000, final.PeriapsisRadius, 1e-3, "final rp");
+    }
+
+    [Test]
+    public void Plan_Inclination_Retrograde()
+    {
+        const double ut0 = 1000;
+        StateAtPeriapsis(100000, 500000, 150, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, ut0, Kerbin, new OrbitTargets { InclinationDeg = 170 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+        KeplerPropagator.Propagate(r, v, Mu, plan.Burns[0].UT - ut0, out var rb, out var vb);
+        AssertRelative(R + 500000, rb.magnitude, 1e-3, "burn at the farther node (apoapsis)");
+        var final = Simulate(r, v, ut0, plan);
+        Assert.AreEqual(170.0, final.InclinationRad / Deg, 0.05);
+        AssertRelative(R + 500000, final.ApoapsisRadius, 1e-3, "final ra");
+        AssertRelative(R + 100000, final.PeriapsisRadius, 1e-3, "final rp");
+    }
 }
