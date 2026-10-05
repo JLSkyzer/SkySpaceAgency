@@ -86,13 +86,21 @@ namespace K2D2.Landing
             run_button.listeners += v =>
             {
                 pilot.isRunning = v;
+                if (v && !pilot.isRunning)
+                {
+                    // Refused by the start checks (pilot.last_error is shown below): put the
+                    // toggle back. This re-enters the listener with false, which sets the label.
+                    run_button.Value = false;
+                    return;
+                }
                 run_button.label = v ? "Stop" : "Brake";
             };
 
             touch_down.listenClick(() =>
             {
                 pilot.isRunning = true;
-                pilot.setMode(LandingPilot.Mode.TouchDown);
+                if (pilot.isRunning)
+                    pilot.setMode(LandingPilot.Mode.TouchDown);
             });
 
             // Atmo/Vacuum profile panels - two full sibling groups/panels in Landing.uxml, each
@@ -376,21 +384,33 @@ namespace K2D2.Landing
                         status_bar.Status($"Waiting : {StrTool.DurationToString(pilot.startBurn_UT - GeneralTools.Game.UniverseModel.UniverseTime)}");
                         break;
                     case LandingPilot.Mode.Brake:
-                        status_bar.Warning($"Brake !");
+                        if (pilot.brake.cannot_stop)
+                            status_bar.Error("Cannot stop before the ground!");
+                        else
+                            status_bar.Warning($"Brake !");
                         break;
                     case LandingPilot.Mode.TouchDown:
-                        status_bar.Warning($"Touch Down...");
+                        if (pilot.brake.cannot_stop)
+                            status_bar.Error("Cannot stop before the ground!");
+                        else
+                            status_bar.Warning($"Touch Down...");
                         break;
                 }
 
                 if (pilot.current_executor != null && !string.IsNullOrEmpty(pilot.current_executor.status_line))
                     status_bar.Console(pilot.current_executor.status_line);
+
+                if (!string.IsNullOrEmpty(pilot.last_warning))
+                    status_bar.Console(pilot.last_warning);
             }
             else
             {
-                // Idle placeholder, same idea as Node's "No Node Created"/Lift's "Lift autopilot
-                // not enabled".
-                status_bar.Status("Landing autopilot not enabled");
+                // A refused start or a failed phase stays visible until the next successful
+                // start; status_bar.Reset() wipes everything else every tick.
+                if (!string.IsNullOrEmpty(pilot.last_error))
+                    status_bar.Error(pilot.last_error);
+                else
+                    status_bar.Status("Landing autopilot not enabled");
             }
 
             //    UI_Tools.Console("SurfaceVelocity" + StrTool.VectorToString(SurfaceVelocity.vector));
