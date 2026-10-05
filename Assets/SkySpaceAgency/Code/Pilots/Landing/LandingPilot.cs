@@ -275,6 +275,10 @@ namespace K2D2.Landing
         internal bool brake_result_valid = false;
         float next_brake_sim_time = 0;
         const float BrakeSimInterval = 0.5f;
+        // The collision search reports no collision on every non-converged frame: keep the last
+        // result for this many ticks (4 x 0.5 s) instead of flipping to the legacy start.
+        const int BrakeSimKeepTicks = 4;
+        int brake_sim_no_collision_ticks = 0;
         BrakeStatus last_logged_brake_status = (BrakeStatus)(-1);
         float next_brake_log_time = 0;
 
@@ -601,9 +605,19 @@ namespace K2D2.Landing
                 return;
             next_brake_sim_time = now_real + BrakeSimInterval;
 
-            brake_result_valid = false;
             if (!collision_detected || current_vessel?.VesselComponent == null)
+            {
+                if (force)
+                {
+                    // The start check must never use a stale result.
+                    brake_result_valid = false;
+                    brake_sim_no_collision_ticks = 0;
+                }
+                else if (++brake_sim_no_collision_ticks > BrakeSimKeepTicks)
+                    brake_result_valid = false;
                 return;
+            }
+            brake_sim_no_collision_ticks = 0;
 
             IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
             var body = orbit.referenceBody;
