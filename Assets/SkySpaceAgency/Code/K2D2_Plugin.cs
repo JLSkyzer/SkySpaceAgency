@@ -226,11 +226,15 @@ namespace K2D2
 
         private static bool ValidScene()
         {
-            if (GeneralTools.Game == null) return false;
+            // Update/FixedUpdate/LateUpdate run before OnInitialized, while the game instance exists
+            // but its state machine is not set up yet: both used to throw NullReferenceException here.
+            if (!loaded || GeneralTools.Game == null) return false;
 
             // GameStateMachine has no GetState() method on Redux's current assemblies; the current
             // GameState comes from GetGameState().GameState instead.
-            var state = GeneralTools.Game.GlobalGameState.GetGameState().GameState;
+            var gameState = GeneralTools.Game.GlobalGameState?.GetGameState();
+            if (gameState == null) return false;
+            var state = gameState.GameState;
             bool is_valid = validScenes.Contains(state);
             if (!is_valid)
             {
