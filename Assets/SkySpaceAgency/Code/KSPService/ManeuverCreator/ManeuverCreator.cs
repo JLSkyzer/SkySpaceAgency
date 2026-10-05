@@ -6,6 +6,7 @@ using KSP.Map;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP.Sim.Maneuver;
+using K2D2.OrbitPlanning;
 using KSP2FlightAssistant.MathLibrary;
 using UnityEngine;
 using ILogger = ReduxLib.Logging.ILogger;
@@ -316,13 +317,20 @@ namespace K2D2.KSPService
         // normalDeltaV added for precision landing's optional small plane trim (see
         // LandingTargeting.FindBestDeorbitBurn) - defaults to 0 so every existing caller
         // (Circularize.cs, Final.cs) keeps behaving exactly as before, pure prograde/retrograde.
-        public ManeuverNodeData CreateManeuverNodeAtUT(double UT, double progradeDeltaV, double normalDeltaV = 0)
+        // radialDeltaV and onManeuverTrajectory added for the Orbit tab's multi-node plans: a node
+        // after the first lies on the trajectory produced by the previous node, which the
+        // ManeuverNodeData constructor's isOnManeuverTrajectory flag declares (API doc:
+        // "True if the node lies on a trajectory produced by a prior maneuver"). Defaults keep
+        // every existing caller unchanged.
+        public ManeuverNodeData CreateManeuverNodeAtUT(double UT, double progradeDeltaV, double normalDeltaV = 0,
+            double radialDeltaV = 0, bool onManeuverTrajectory = false)
         {
-            Vector3d burnVector = ProgradeBurnVector(progradeDeltaV) + NormalBurnVector(normalDeltaV);
+            Vector3d burnVector = ProgradeBurnVector(progradeDeltaV) + NormalBurnVector(normalDeltaV)
+                + RadialOutBurnVector(radialDeltaV);
 
             var SimulationObject = _vesselComponent.SimulationObject;
 
-            ManeuverNodeData nodeData = new ManeuverNodeData(SimulationObject.GlobalId, false, UT);
+            ManeuverNodeData nodeData = new ManeuverNodeData(SimulationObject.GlobalId, onManeuverTrajectory, UT);
             nodeData.InitializeTransform();
             nodeData.BurnVector = burnVector;
 
@@ -408,6 +416,41 @@ namespace K2D2.KSPService
                 $"deltaV={progradeDeltaV:n2} normalDeltaV={normalDeltaV:n2} - {count_after} node(s) now on the plan.");
 
             onCreated?.Invoke(nodeData);
+        }
+
+        // Sign mapping the physics normal (r × v) to the game's BurnVector.y. Same assumption as
+        // LandingTargeting's plane trim; if the Orbit tab's inclination burn turns the orbit the
+        // wrong way in game, flip this to -1.
+        public const double GameNormalSign = 1.0;
+
+        /// <summary>
+        /// Replaces the vessel's plan with the given burns (Orbit tab): removes every node, then
+        /// creates one node per FixedUpdate in chronological order - never in the same frame as
+        /// the removal (see RemoveAllNodesThenCreate). onDone receives how many nodes the plan
+        /// holds afterwards, so the caller can tell whether the game accepted all of them.
+        /// </summary>
+        public void CreateNodes(IReadOnlyList<PlannedBurn> burns, System.Action<int> onDone)
+        {
+            RemoveAllNodes();
+            K2D2_Plugin.Instance.StartCoroutine(CreateNodes_Co(burns, onDone));
+        }
+
+        private IEnumerator CreateNodes_Co(IReadOnlyList<PlannedBurn> burns, System.Action<int> onDone)
+        {
+            for (int i = 0; i < burns.Count; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                PlannedBurn burn = burns[i];
+                var node = CreateManeuverNodeAtUT(burn.UT, burn.Prograde, burn.Normal * GameNormalSign, burn.Radial, i > 0);
+                logger.LogInfo($"[ManeuverCreator] CreateNodes: node {i + 1}/{burns.Count} {node?.NodeID} at UT={burn.UT:n1} " +
+                    $"prograde={burn.Prograde:n2} normal={burn.Normal:n2} radial={burn.Radial:n2} ({burn.Label})");
+            }
+
+            yield return new WaitForFixedUpdate();
+            var maneuvers_component = _vesselComponent?.SimulationObject?.FindComponent<ManeuverPlanComponent>();
+            int count = maneuvers_component?.GetNodes()?.Count ?? 0;
+            logger.LogInfo($"[ManeuverCreator] CreateNodes: {count} node(s) on the plan for {burns.Count} requested.");
+            onDone?.Invoke(count);
         }
 
         private IEnumerator UpdateMapGizmo_Co(ManeuverNodeData nodeData)
