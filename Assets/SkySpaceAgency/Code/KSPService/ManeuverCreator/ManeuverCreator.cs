@@ -21,6 +21,10 @@ namespace K2D2.KSPService
         #region fields
 
         private VesselComponent _vesselComponent;
+
+        // True while a CreateNodes sequence is running; guards against a second one (double click)
+        // removing the first one's nodes midway.
+        private bool _creatingNodes;
         public GameInstance Game => GameManager.Instance == null ? null : GameManager.Instance.Game;
 
         public KSPVessel kspVessel { get; set; }
@@ -334,10 +338,12 @@ namespace K2D2.KSPService
             nodeData.InitializeTransform();
             nodeData.BurnVector = burnVector;
 
-            // IsOnManeuverTrajectory is false here (first/only node), so per
+            // IsOnManeuverTrajectory is false for a first/only node, so per
             // Map3DManeuvers.OnAddManeuver() SetManeuverState is correctly skipped - the engine's
             // own maneuver-plan pipeline (ManeuverPlanComponent.AddNode, same path the in-game
-            // "add node" UI uses) resolves ManeuverTrajectoryPatch from here.
+            // "add node" UI uses) resolves ManeuverTrajectoryPatch from here. It is true (via
+            // onManeuverTrajectory) for the later nodes of an Orbit tab sequence; that behaviour
+            // is validated in game.
             Game.SpaceSimulation.Maneuvers.AddNodeToVessel(nodeData);
 
             K2D2_Plugin.Instance.StartCoroutine(UpdateMapGizmo_Co(nodeData));
@@ -427,30 +433,61 @@ namespace K2D2.KSPService
         /// Replaces the vessel's plan with the given burns (Orbit tab): removes every node, then
         /// creates one node per FixedUpdate in chronological order - never in the same frame as
         /// the removal (see RemoveAllNodesThenCreate). onDone receives how many nodes the plan
-        /// holds afterwards, so the caller can tell whether the game accepted all of them.
+        /// holds afterwards, so the caller can tell whether the game accepted all of them. The
+        /// burns must be in chronological order (the Orbit planner produces them that way).
+        /// onDone always fires (with the real count, or 0 for an unusable request), except when a
+        /// sequence is already being created: that request is ignored and onDone is not called.
         /// </summary>
         public void CreateNodes(IReadOnlyList<PlannedBurn> burns, System.Action<int> onDone)
         {
+            if (_creatingNodes)
+            {
+                logger.LogWarning("[ManeuverCreator] CreateNodes: a node sequence is already being created - request ignored.");
+                return;
+            }
+
+            if (_vesselComponent == null || burns == null || burns.Count == 0)
+            {
+                onDone?.Invoke(0);
+                return;
+            }
+
+            _creatingNodes = true;
             RemoveAllNodes();
             K2D2_Plugin.Instance.StartCoroutine(CreateNodes_Co(burns, onDone));
         }
 
         private IEnumerator CreateNodes_Co(IReadOnlyList<PlannedBurn> burns, System.Action<int> onDone)
         {
-            for (int i = 0; i < burns.Count; i++)
+            try
             {
-                yield return new WaitForFixedUpdate();
-                PlannedBurn burn = burns[i];
-                var node = CreateManeuverNodeAtUT(burn.UT, burn.Prograde, burn.Normal * GameNormalSign, burn.Radial, i > 0);
-                logger.LogInfo($"[ManeuverCreator] CreateNodes: node {i + 1}/{burns.Count} {node?.NodeID} at UT={burn.UT:n1} " +
-                    $"prograde={burn.Prograde:n2} normal={burn.Normal:n2} radial={burn.Radial:n2} ({burn.Label})");
-            }
+                for (int i = 0; i < burns.Count; i++)
+                {
+                    yield return new WaitForFixedUpdate();
+                    PlannedBurn burn = burns[i];
+                    try
+                    {
+                        var node = CreateManeuverNodeAtUT(burn.UT, burn.Prograde, burn.Normal * GameNormalSign, burn.Radial, i > 0);
+                        logger.LogInfo($"[ManeuverCreator] CreateNodes: node {i + 1}/{burns.Count} {node?.NodeID} at UT={burn.UT:n1} " +
+                            $"prograde={burn.Prograde:n2} normal={burn.Normal:n2} radial={burn.Radial:n2} ({burn.Label})");
+                    }
+                    catch (System.Exception e)
+                    {
+                        logger.LogError($"[ManeuverCreator] CreateNodes: node {i + 1}/{burns.Count} failed: {e.Message}");
+                        break;
+                    }
+                }
 
-            yield return new WaitForFixedUpdate();
-            var maneuvers_component = _vesselComponent?.SimulationObject?.FindComponent<ManeuverPlanComponent>();
-            int count = maneuvers_component?.GetNodes()?.Count ?? 0;
-            logger.LogInfo($"[ManeuverCreator] CreateNodes: {count} node(s) on the plan for {burns.Count} requested.");
-            onDone?.Invoke(count);
+                yield return new WaitForFixedUpdate();
+                var maneuvers_component = _vesselComponent?.SimulationObject?.FindComponent<ManeuverPlanComponent>();
+                int count = maneuvers_component?.GetNodes()?.Count ?? 0;
+                logger.LogInfo($"[ManeuverCreator] CreateNodes: {count} node(s) on the plan for {burns.Count} requested.");
+                onDone?.Invoke(count);
+            }
+            finally
+            {
+                _creatingNodes = false;
+            }
         }
 
         private IEnumerator UpdateMapGizmo_Co(ManeuverNodeData nodeData)
