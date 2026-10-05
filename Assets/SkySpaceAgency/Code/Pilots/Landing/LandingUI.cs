@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using K2D2.Landing.Braking;
 using K2D2.UI;
 using K2UI;
 using K2UI.Tabs;
@@ -384,7 +385,7 @@ namespace K2D2.Landing
                         status_bar.Status($"Waiting : {StrTool.DurationToString(pilot.startBurn_UT - GeneralTools.Game.UniverseModel.UniverseTime)}");
                         break;
                     case LandingPilot.Mode.Brake:
-                        if (pilot.brake.cannot_stop)
+                        if (pilot.brake_result_valid && pilot.brake_result.Status == BrakeStatus.Impossible)
                             status_bar.Error("Cannot stop before the ground!");
                         else
                             status_bar.Warning($"Brake !");

@@ -1,6 +1,8 @@
 using System;
+using System.Diagnostics;
 using K2D2.KSPService;
 using KSP.Sim;
+using KSP.Sim.DeltaV;
 using KSP.Sim.impl;
 using KTools;
 // using KTools.UI;
@@ -162,6 +164,8 @@ namespace K2D2.Landing
                     break;
                 case Mode.Brake:
                 case Mode.TouchDown:
+                    // Clear a stale flag from a previous descent.
+                    brake.cannot_stop = false;
                     current_executor.setController(brake);
                     break;
             }
@@ -281,6 +285,7 @@ namespace K2D2.Landing
         int brake_sim_no_collision_ticks = 0;
         BrakeStatus last_logged_brake_status = (BrakeStatus)(-1);
         float next_brake_log_time = 0;
+        double last_brake_sim_ms = 0;
 
         // Sign of the body rotation in the Zup frame (BodyRotation.ChooseSign), calibrated once
         // per body against the surface speed the game measures.
@@ -597,9 +602,14 @@ namespace K2D2.Landing
         }
 
         // Runs the braking simulation from the current state, at most every BrakeSimInterval
-        // (unless forced). brake_result_valid is false when there is no predicted collision.
+        // (unless forced). The result is kept for up to BrakeSimKeepTicks ticks after the last
+        // detected collision, then brake_result_valid goes false. Unforced calls do nothing in
+        // TouchDown, which does not read the result.
         void UpdateBrakeSimulation(bool force)
         {
+            if (!force && mode == Mode.TouchDown)
+                return;
+
             float now_real = UnityEngine.Time.realtimeSinceStartup;
             if (!force && now_real < next_brake_sim_time)
                 return;
@@ -641,7 +651,10 @@ namespace K2D2.Landing
                 ImpactUT = adjusted_collision_UT,
                 TerrainHeight = p => TerrainHeightAt(body, p),
             };
+            var sim_timer = Stopwatch.StartNew();
             brake_result = BrakeSimulator.FindStart(input);
+            sim_timer.Stop();
+            last_brake_sim_ms = sim_timer.Elapsed.TotalMilliseconds;
             brake_result_valid = true;
             LogBrakeResult(now);
         }
@@ -657,6 +670,9 @@ namespace K2D2.Landing
 
             double measured = current_vessel.VesselVehicle.SurfaceSpeed;
             rotation_sign = BodyRotation.ChooseSign(r0, v0, omega, measured);
+            // A non-finite measurement says nothing: keep +1 and calibrate again later.
+            if (double.IsNaN(measured) || double.IsInfinity(measured))
+                return;
             rotation_sign_body = body.Name;
             logger.LogInfo($"[Landing] rotation sign for {body.Name}: {rotation_sign} " +
                 $"(measured surface speed {measured:n1} m/s, ω {omega:e3} rad/s)");
@@ -681,7 +697,8 @@ namespace K2D2.Landing
             next_brake_log_time = now_real + 5;
             logger.LogInfo($"[Landing] brake sim: {brake_result.Status} start in {brake_result.StartUT - now:n1}s, " +
                 $"burn {brake_result.BurnDuration:n1}s, Δv {brake_result.DeltaVNeeded:n0} m/s, stop {brake_result.StopAltitude:n0} m above terrain | " +
-                $"thrust {burn_dV.active_thrust:n1} kN, mass {burn_dV.mass:n2} t, Isp {burn_dV.active_isp:n0} s, rotation sign {rotation_sign}");
+                $"thrust {burn_dV.active_thrust:n1} kN, mass {burn_dV.mass:n2} t, Isp {burn_dV.active_isp:n0} s, rotation sign {rotation_sign}, " +
+                $"sim {last_brake_sim_ms:n1} ms");
         }
 
         // Speed the descent must not exceed at this height: the player's profile, capped by what
@@ -697,13 +714,14 @@ namespace K2D2.Landing
         bool CheckCanStart()
         {
             last_warning = "";
-            if (current_vessel?.VesselComponent == null)
+            if (current_vessel?.VesselComponent == null || current_vessel.VesselVehicle == null)
             {
                 last_error = "No active vessel.";
                 return false;
             }
 
             burn_dV.Compute_Thrust();
+            LogEngines();
             var body = current_vessel.VesselComponent.Orbit.referenceBody;
             double surface_gravity = body.gravParameter / (body.radius * body.radius);
 
@@ -728,11 +746,35 @@ namespace K2D2.Landing
             return true;
         }
 
+        // One line per engine, to check the active-engine filter against the game's real flags.
+        void LogEngines()
+        {
+            var engines = current_vessel.VesselComponent.VesselDeltaV?.EngineInfo;
+            if (engines == null)
+            {
+                logger.LogInfo("[Landing] engine: no engine info");
+                return;
+            }
+            for (int i = 0; i < engines.Count; i++)
+            {
+                DeltaVEngineInfo info = engines[i];
+                var engine = info?.Engine;
+                if (engine == null)
+                {
+                    logger.LogInfo($"[Landing] engine {i}: null");
+                    continue;
+                }
+                logger.LogInfo($"[Landing] engine {i}: ignited={engine.EngineIgnited} shutdown={engine.EngineShutdown} " +
+                    $"operational={engine.IsOperational} starved={engine.IsPropellantStarved} staged={engine.staged} " +
+                    $"active={BurndV.IsActive(info)}");
+            }
+        }
+
         void StopWithError(string reason)
         {
             logger.LogWarning($"[Landing] stopped: {reason}");
-            isRunning = false;
             last_error = reason;
+            isRunning = false;
         }
         Vector SurfaceVelocity;
         public override void Update()
@@ -841,7 +883,10 @@ namespace K2D2.Landing
                 else
                 {
                     brake.max_speed = 0;
-                    if (current_falling_speed < settings.brake_speed)
+                    // Total surface speed, not the vertical speed: max_speed = 0 drives the total
+                    // to zero, and on a shallow approach most of the speed is horizontal, so the
+                    // vertical speed is already below brake_speed on the first tick.
+                    if (current_vessel.VesselVehicle.SurfaceSpeed < settings.brake_speed)
                     {
                         // we reached the speed to stop brake
                         // check next phase

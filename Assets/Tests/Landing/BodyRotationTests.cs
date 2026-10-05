@@ -56,6 +56,16 @@ public class BodyRotationTests
     }
 
     [Test]
+    public void ChooseSign_NaNMeasurement_KeepsPlusOne()
+    {
+        var r = new Vector3d(R + 10000, 0, 0);
+        var v = new Vector3d(0, 550, 0);
+        double omega = 1e-3;
+        Assert.IsTrue(BodyRotation.IsDecisive(r, v, omega));
+        Assert.AreEqual(1, BodyRotation.ChooseSign(r, v, omega, double.NaN));
+    }
+
+    [Test]
     public void ChooseSign_PolarOrbit_KeepsPlusOne()
     {
         // Velocity along the rotation axis: omega x r is perpendicular to v, so both signs give

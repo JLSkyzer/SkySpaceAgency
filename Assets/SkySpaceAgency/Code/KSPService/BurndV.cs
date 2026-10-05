@@ -32,7 +32,7 @@ namespace K2D2.KSPService
         public Vector3 full_thrust;
         public float full_dv;
 
-        // Engines that can thrust right now (ignited, operational, not starved), at full
+        // Active engines (ignited, not shut down; see IsActive), at full
         // throttle. Landing uses these; full_dv still counts every engine (other autopilots).
         public float active_thrust;   // kN
         public float active_dv;       // m/s², 0 when nothing is active
@@ -58,12 +58,12 @@ namespace K2D2.KSPService
             return (engine_info.Engine.EngineIgnited && engine_info.Engine.RequestedMassFlow > 0f);
         }
 
-        // Can this engine thrust if the throttle is raised? Staged (ignited), not broken or
-        // shut down, and fed.
+        // An active engine is ignited and not shut down. IsOperational and IsPropellantStarved
+        // depend on the current throttle, so they would drop idle engines (throttle 0 at start).
         public static bool IsActive(DeltaVEngineInfo engine_info)
         {
             var engine = engine_info.Engine;
-            return engine != null && engine.EngineIgnited && engine.IsOperational && !engine.IsPropellantStarved;
+            return engine != null && engine.EngineIgnited && !engine.EngineShutdown;
         }
 
         float compute_full_thrust(DeltaVEngineInfo engineInfo)
@@ -84,11 +84,28 @@ namespace K2D2.KSPService
             }
         }
 
+        // No stale values from a previous vessel on an early return.
+        void ClearActive()
+        {
+            active_thrust = 0;
+            active_dv = 0;
+            active_isp = 0;
+            mass = 0;
+        }
+
         public void Compute_Thrust()
         {
-            if (current_vessel.VesselComponent == null) return;
+            if (current_vessel.VesselComponent == null)
+            {
+                ClearActive();
+                return;
+            }
             VesselDeltaVComponent delta_v = current_vessel.VesselComponent.VesselDeltaV;
-            if (delta_v == null) return;
+            if (delta_v == null)
+            {
+                ClearActive();
+                return;
+            }
 
             mass = current_vessel.VesselComponent.totalMass;
 

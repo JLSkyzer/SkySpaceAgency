@@ -38,6 +38,9 @@ namespace K2D2.Landing.Braking
         // the two predictions are too close to tell.
         public static int ChooseSign(Vector3d r, Vector3d v, double angularSpeed, double measuredSurfaceSpeed)
         {
+            // A NaN or infinite measurement compares false everywhere and would pick -1 at random.
+            if (double.IsNaN(measuredSurfaceSpeed) || double.IsInfinity(measuredSurfaceSpeed))
+                return 1;
             Predict(r, v, angularSpeed, out double plus, out double minus);
             if (Math.Abs(plus - minus) < MinSpeedDifference)
                 return 1;

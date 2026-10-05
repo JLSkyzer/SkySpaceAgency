@@ -248,9 +248,10 @@ namespace K2D2.Landing
 
         void compute_Throttle()
         {
-            // Only engines that can thrust right now (BurndV.active_dv). Without any, idle
-            // instead of dividing by zero: the landing tab shows the "Cannot stop" alert.
-            float accel = burn_dV.active_dv;
+            // Active engines (BurndV.active_dv). If the active filter misreads the game's flags,
+            // fall back to all engines rather than idling. With no thrust at all, idle instead of
+            // dividing by zero: the landing tab shows the "Cannot stop" alert.
+            float accel = burn_dV.active_dv > 0 ? burn_dV.active_dv : burn_dV.full_dv;
             delta_speed = current_speed - max_speed;
             if (!(accel > 0))
             {
@@ -264,6 +265,11 @@ namespace K2D2.Landing
 
             float remaining_full_burn_time = delta_speed / accel;
             wanted_throttle = Mathf.Clamp(remaining_full_burn_time + min_throttle, 0, 1);
+
+            // Cannot stop any more: keep braking at maximum (spec). After the computation above,
+            // which would otherwise overwrite it.
+            if (cannot_stop)
+                wanted_throttle = 1;
         }
 
         float delta_speed = 0;
@@ -871,7 +877,10 @@ namespace K2D2.Landing
 
         void UpdateCannotStop()
         {
-            if (landing == null)
+            // The envelope (DescentEnvelope.CanStop) is a vertical-fall formula on total ground
+            // speed: only meaningful in the final TouchDown phase. Brake's alert comes from the
+            // braking simulation instead (LandingUI).
+            if (landing == null || landing.mode != LandingPilot.Mode.TouchDown)
             {
                 cannot_stop = false;
                 return;
