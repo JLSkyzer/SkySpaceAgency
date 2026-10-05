@@ -198,7 +198,7 @@
 
 .k2-status-line {
     font-size: 16px;
-    -unity-font-definition: url('project://database/Packages/uitkforksp2.controls/Assets/Theme/Fonts/NotoSansMonoCJK/NotoSansMonoCJKtc-Regular%20SDF.asset?fileID=11400000&guid=7e59a668a0d7f70429ea9a2737af9ff9&type=2#NotoSansMonoCJKtc-Regular SDF');
+    -unity-font-definition: url('project://database/Packages/uitkforksp2.controls/Assets/Theme/Fonts/JetBrainsMono/JetBrainsMono-Regular%20SDF.asset?fileID=11400000&guid=f5454c9c675002c44a5a7234bd40c390&type=2#JetBrainsMono-Regular SDF');
     white-space: normal;
 }
 

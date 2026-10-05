@@ -18,8 +18,10 @@
 }
 
 /* K2UI.StatusLine (run-status messages like "No Maneuver node.", shown via the shared
-   StatusGroup.uxml template - reaches every tab): K2UI.uss's own .k2-status-line rule points
-   it at NotoSansMonoCJK instead of the stock JetBrains Mono body font used everywhere else.
+   StatusGroup.uxml template - reaches every tab): K2UI.uss's own .k2-status-line rule used to
+   point it at NotoSansMonoCJK; it now names JetBrains Mono too, because merely referencing the
+   CJK face pulled its ~16 MB source font into the Addressables bundle (fix from LeoMarinDev's
+   PR #2 on IanMealworm/K2D2Redux). This override is kept so the font stays pinned here.
    Same tie-specificity/load-order issue as the progress bar (K2UI.uss loads after K2D2.uss),
    so !important - this is scoped to just this one class, not a blanket override, so it won't
    touch .console/.oab-button__label's own intentional fonts. */
