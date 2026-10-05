@@ -6,6 +6,7 @@ using KTools;
 // using KTools.UI;
 using K2D2.Controller;
 using K2D2.Node;
+using K2D2.Landing.Braking;
 using ILogger = ReduxLib.Logging.ILogger;
 
 namespace K2D2.Landing
@@ -200,6 +201,15 @@ namespace K2D2.Landing
                 }
                 else
                 {
+                    // Refuse an impossible landing before touching anything: _active stays
+                    // false, and LandingUI shows last_error and resets its button.
+                    if (!CheckCanStart())
+                    {
+                        logger.LogInfo($"[Landing] start refused: {last_error}");
+                        return;
+                    }
+                    last_error = "";
+
                     // Start total burn counter
                     burn_dV.reset();
 
@@ -259,6 +269,26 @@ namespace K2D2.Landing
         internal double predicted_landing_lon = 0;
         internal double target_error_m = 0;
 
+        // Braking simulation (Braking/BrakeSimulator.cs). It runs dozens of simulated burns, so it
+        // is refreshed every BrakeSimInterval seconds of real time, not every frame.
+        internal BrakeResult brake_result;
+        internal bool brake_result_valid = false;
+        float next_brake_sim_time = 0;
+        const float BrakeSimInterval = 0.5f;
+        BrakeStatus last_logged_brake_status = (BrakeStatus)(-1);
+        float next_brake_log_time = 0;
+
+        // Sign of the body rotation in the Zup frame (BodyRotation.ChooseSign), calibrated once
+        // per body against the surface speed the game measures.
+        int rotation_sign = 1;
+        string rotation_sign_body = null;
+
+        // Why the last start was refused, or why the last run stopped. Shown until the next
+        // successful start.
+        internal string last_error = "";
+        // Start-check warning that does not refuse (unknown Δv). Shown while running.
+        internal string last_warning = "";
+
         public void computeValues()
         {
             collision_detected = false;
@@ -277,8 +307,10 @@ namespace K2D2.Landing
 
             collision_detected = compute_real_collision();
             speed_collision = orbit.GetOrbitalVelocityAtUTZup(adjusted_collision_UT).magnitude;
-            burn_duration = (speed_collision / burn_dV.full_dv);
+            // Legacy estimate, still used by precision landing's floor; 0 (not infinity) without thrust.
+            burn_duration = burn_dV.active_dv > 0 ? speed_collision / burn_dV.active_dv : 0;
 
+            UpdateBrakeSimulation(force: false);
             compute_startBurn();
         }
 
@@ -362,14 +394,31 @@ namespace K2D2.Landing
             }
 
             startBurn_UT = adjusted_collision_UT - burn_duration - burn_before;
+            double now_ut = GeneralTools.Game.UniverseModel.UniverseTime;
+
+            // The braking simulation gives the real latest safe start (gravity, approach angle,
+            // mass loss, terrain, body rotation); the player's "burn before" stays an extra margin.
+            // Precision landing keeps the earlier of the two, so its correction margins above
+            // still apply. TooLate / Impossible: brake now, at full thrust.
+            if (brake_result_valid)
+            {
+                if (brake_result.Status == BrakeStatus.Ok)
+                {
+                    double simulated = brake_result.StartUT - settings.burn_before.V;
+                    startBurn_UT = settings.precision_landing.V ? Math.Min(startBurn_UT, simulated) : simulated;
+                }
+                else
+                {
+                    startBurn_UT = now_ut;
+                }
+                burn_duration = brake_result.BurnDuration;
+            }
 
             // Backstop: whatever combination of the floors above, never schedule the burn as
             // already overdue. WarpTo silently no-ops the instant its target time is in the past,
-            // so an overshot burn_before wouldn't just start the burn a bit early, it would skip
-            // the warp entirely and force a real-time wait for however long was actually left.
-            // Clamping here means the worst case is "start braking immediately", not "silently
-            // stop warping while still minutes out".
-            double now_ut = GeneralTools.Game.UniverseModel.UniverseTime;
+            // so an overshot start wouldn't just start the burn a bit early, it would skip the
+            // warp entirely and force a real-time wait for however long was actually left.
+            // Clamping here means the worst case is "start braking immediately".
             if (startBurn_UT < now_ut)
                 startBurn_UT = now_ut;
 
@@ -542,6 +591,135 @@ namespace K2D2.Landing
             double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
             return radius * c;
         }
+
+        // Runs the braking simulation from the current state, at most every BrakeSimInterval
+        // (unless forced). brake_result_valid is false when there is no predicted collision.
+        void UpdateBrakeSimulation(bool force)
+        {
+            float now_real = UnityEngine.Time.realtimeSinceStartup;
+            if (!force && now_real < next_brake_sim_time)
+                return;
+            next_brake_sim_time = now_real + BrakeSimInterval;
+
+            brake_result_valid = false;
+            if (!collision_detected || current_vessel?.VesselComponent == null)
+                return;
+
+            IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
+            var body = orbit.referenceBody;
+            double now = GeneralTools.Current_UT;
+            Vector3d r0 = orbit.GetRelativePositionAtUTZup(now);
+            Vector3d v0 = orbit.GetOrbitalVelocityAtUTZup(now);
+            double omega = BodyRotation.AngularSpeed(body.rotationPeriod);
+            UpdateRotationSign(body, r0, v0, omega);
+
+            var input = new BrakeInput
+            {
+                Position = r0,
+                Velocity = v0,
+                UT = now,
+                Mu = body.gravParameter,
+                BodyRadius = body.radius,
+                AngularVelocity = BodyRotation.AngularVelocity(omega, rotation_sign),
+                ThrustKN = burn_dV.active_thrust,
+                MassT = burn_dV.mass,
+                Isp = burn_dV.active_isp,
+                ImpactUT = adjusted_collision_UT,
+                TerrainHeight = p => TerrainHeightAt(body, p),
+            };
+            brake_result = BrakeSimulator.FindStart(input);
+            brake_result_valid = true;
+            LogBrakeResult(now);
+        }
+
+        void UpdateRotationSign(CelestialBodyComponent body, Vector3d r0, Vector3d v0, double omega)
+        {
+            if (rotation_sign_body == body.Name)
+                return;
+            rotation_sign = 1;
+            // Too slow, or a polar orbit: both signs predict the same speed. Keep +1, retry later.
+            if (!BodyRotation.IsDecisive(r0, v0, omega))
+                return;
+
+            double measured = current_vessel.VesselVehicle.SurfaceSpeed;
+            rotation_sign = BodyRotation.ChooseSign(r0, v0, omega, measured);
+            rotation_sign_body = body.Name;
+            logger.LogInfo($"[Landing] rotation sign for {body.Name}: {rotation_sign} " +
+                $"(measured surface speed {measured:n1} m/s, ω {omega:e3} rad/s)");
+        }
+
+        // Terrain height above the body radius under p (Zup, body-relative, current body
+        // orientation), with the same Zup -> Yup swap and frame as compute_real_collision.
+        static double TerrainHeightAt(CelestialBodyComponent body, Vector3d p_zup)
+        {
+            Vector3d p_yup = new Vector3d(p_zup.x, p_zup.z, p_zup.y);
+            Position ps = new Position(body.SimulationObject.transform.celestialFrame, p_yup);
+            body.GetAltitudeFromTerrain(ps, out double above_terrain, out double scenery_offset);
+            return p_zup.magnitude - body.radius - above_terrain;
+        }
+
+        void LogBrakeResult(double now)
+        {
+            float now_real = UnityEngine.Time.realtimeSinceStartup;
+            if (brake_result.Status == last_logged_brake_status && now_real < next_brake_log_time)
+                return;
+            last_logged_brake_status = brake_result.Status;
+            next_brake_log_time = now_real + 5;
+            logger.LogInfo($"[Landing] brake sim: {brake_result.Status} start in {brake_result.StartUT - now:n1}s, " +
+                $"burn {brake_result.BurnDuration:n1}s, Δv {brake_result.DeltaVNeeded:n0} m/s, stop {brake_result.StopAltitude:n0} m above terrain | " +
+                $"thrust {burn_dV.active_thrust:n1} kN, mass {burn_dV.mass:n2} t, Isp {burn_dV.active_isp:n0} s, rotation sign {rotation_sign}");
+        }
+
+        // Speed the descent must not exceed at this height: the player's profile, capped by what
+        // the active engines can still stop (DescentEnvelope).
+        float limit_speed(float height)
+        {
+            double gravity = current_vessel.VesselComponent.graviticAcceleration.magnitude;
+            return (float)DescentEnvelope.MaxSpeed(height, burn_dV.active_dv, gravity,
+                settings.touch_down_speed.V, settings.compute_limit_speed(height));
+        }
+
+        // Start checks (LandingFeasibility), on fresh data. Sets last_error / last_warning.
+        bool CheckCanStart()
+        {
+            last_warning = "";
+            if (current_vessel?.VesselComponent == null)
+            {
+                last_error = "No active vessel.";
+                return false;
+            }
+
+            burn_dV.Compute_Thrust();
+            var body = current_vessel.VesselComponent.Orbit.referenceBody;
+            double surface_gravity = body.gravParameter / (body.radius * body.radius);
+
+            collision_detected = compute_real_collision();
+            UpdateBrakeSimulation(force: true);
+            BrakeResult? brake = brake_result_valid ? brake_result : (BrakeResult?)null;
+
+            var delta_v = current_vessel.VesselComponent.VesselDeltaV;
+            double dv_remaining = delta_v != null ? delta_v.TotalDeltaVActual : double.NaN;
+
+            var check = LandingFeasibility.Check(burn_dV.active_dv, surface_gravity, brake, dv_remaining);
+            logger.LogInfo($"[Landing] start check: ok={check.Ok} accel {burn_dV.active_dv:n2} m/s², surface g {surface_gravity:n2}, " +
+                $"collision {collision_detected}, sim {(brake.HasValue ? brake.Value.Status.ToString() : "none")}, Δv {dv_remaining:n0} m/s" +
+                (check.Ok ? "" : $" -> {check.Error}"));
+
+            if (!check.Ok)
+            {
+                last_error = check.Error;
+                return false;
+            }
+            last_warning = check.Warning ?? "";
+            return true;
+        }
+
+        void StopWithError(string reason)
+        {
+            logger.LogWarning($"[Landing] stopped: {reason}");
+            isRunning = false;
+            last_error = reason;
+        }
         Vector SurfaceVelocity;
         public override void Update()
         {
@@ -641,7 +819,7 @@ namespace K2D2.Landing
                     // turns Brake and TouchDown into one continuous burn split only by an altitude
                     // threshold, instead of two different behaviors, so steering stays live the
                     // whole way down.
-                    brake.max_speed = settings.compute_limit_speed(altitude);
+                    brake.max_speed = limit_speed(altitude);
 
                     if (altitude < settings.start_touchdown_altitude.V)
                         setMode(Mode.TouchDown);
@@ -669,12 +847,20 @@ namespace K2D2.Landing
             else if (mode == Mode.TouchDown)
             {
                 TimeWarpTools.SetRateIndex(0, false);
-                brake.max_speed = settings.compute_limit_speed(altitude);
+                brake.max_speed = limit_speed(altitude);
                 brake.gravity_compensation = true;
             }
 
             // call the sub controllers
             base.Update();
+
+            // A phase that cannot do its job (Circularize too high, no deorbit window) stops
+            // the landing instead of falling through to the next phase.
+            if (current_executor.failed)
+            {
+                StopWithError(current_executor.failure_reason);
+                return;
+            }
 
             if (current_executor.finished)
             {
