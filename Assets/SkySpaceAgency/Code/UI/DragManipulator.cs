@@ -122,17 +122,43 @@ namespace K2D2.UI
             return checkTargetClass(target.parent, className, nb_parents);
         }
 
+        /// <summary>
+        /// Clamps a translation so the element stays inside the panel. The translation is relative
+        /// to where the host panel lays the element out (origin, in panel coordinates), which is
+        /// not necessarily the panel's top-left corner, so the range is [-origin, bounds - size -
+        /// origin]. When the element is larger than the panel, its top-left corner stays on screen.
+        /// </summary>
+        public static Vector2 ClampTranslation(Vector2 translation, Vector2 origin, Vector2 size, Vector2 bounds)
+        {
+            float maxX = Mathf.Max(bounds.x - size.x - origin.x, -origin.x);
+            float maxY = Mathf.Max(bounds.y - size.y - origin.y, -origin.y);
+            return new Vector2(
+                Mathf.Clamp(translation.x, -origin.x, maxX),
+                Mathf.Clamp(translation.y, -origin.y, maxY));
+        }
+
+        // Where the element sits with no translation, in panel coordinates.
+        Vector2 LayoutOrigin()
+        {
+            Vector2 origin = _target.worldBound.position - (Vector2)_target.transform.position;
+            return float.IsNaN(origin.x) || float.IsNaN(origin.y) ? Vector2.zero : origin;
+        }
+
+        // The panel's real size; Configuration's screen size only if the panel is not laid out yet.
+        Vector2 PanelSize()
+        {
+            var root = _target.panel?.visualTree;
+            if (root != null && root.layout.width > 0 && root.layout.height > 0)
+                return root.layout.size;
+            return new Vector2(Configuration.CurrentScreenWidth, Configuration.CurrentScreenHeight);
+        }
+
         public Vector3 clampWindow(Vector3 position)
         {
-            position.x = Mathf.Clamp(
-                position.x, 0,
-                Configuration.CurrentScreenWidth - _target.resolvedStyle.width
-            );
-            position.y = Mathf.Clamp(
-                position.y, 0,
-                Configuration.CurrentScreenHeight - _target.resolvedStyle.height
-            );
-
+            Vector2 size = new Vector2(_target.resolvedStyle.width, _target.resolvedStyle.height);
+            Vector2 clamped = ClampTranslation(new Vector2(position.x, position.y), LayoutOrigin(), size, PanelSize());
+            position.x = clamped.x;
+            position.y = clamped.y;
             return position;
         }
 
@@ -165,6 +191,12 @@ namespace K2D2.UI
             // target.pickingMode = PickingMode.Ignore;
             IsDragging = true;
             _offset = evt.localPosition;
+
+            // Geometry the drag clamps against, to check in the log when the window cannot reach
+            // part of the screen.
+            L.Log($"DragManipulator: drag start - origin {LayoutOrigin()}, translation {_target.transform.position}, " +
+                  $"size {_target.resolvedStyle.width}x{_target.resolvedStyle.height}, panel {PanelSize()}, " +
+                  $"Configuration screen {Configuration.CurrentScreenWidth}x{Configuration.CurrentScreenHeight}");
             _target.CapturePointer(evt.pointerId);
         }
 
