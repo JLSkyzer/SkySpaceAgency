@@ -453,8 +453,17 @@ namespace K2D2.KSPService
             }
 
             _creatingNodes = true;
-            RemoveAllNodes();
-            K2D2_Plugin.Instance.StartCoroutine(CreateNodes_Co(burns, onDone));
+            try
+            {
+                RemoveAllNodes();
+                K2D2_Plugin.Instance.StartCoroutine(CreateNodes_Co(burns, onDone));
+            }
+            catch (System.Exception e)
+            {
+                _creatingNodes = false;
+                logger.LogError($"[ManeuverCreator] CreateNodes: could not start the node sequence: {e.Message}");
+                onDone?.Invoke(0);
+            }
         }
 
         private IEnumerator CreateNodes_Co(IReadOnlyList<PlannedBurn> burns, System.Action<int> onDone)
