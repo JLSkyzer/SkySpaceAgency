@@ -254,7 +254,7 @@ namespace K2D2.Landing
             // fall back to all engines rather than idling. With no thrust at all, idle instead of
             // dividing by zero: the landing tab shows the "Cannot stop" alert.
             float accel = burn_dV.active_dv > 0 ? burn_dV.active_dv : burn_dV.full_dv;
-            delta_speed = current_speed - max_speed;
+            delta_speed = RegulatedSpeed() - max_speed;
             if (!(accel > 0))
             {
                 wanted_throttle = 0;
@@ -269,7 +269,8 @@ namespace K2D2.Landing
             wanted_throttle = Mathf.Clamp(remaining_full_burn_time + min_throttle, 0, 1);
 
             // Cannot stop any more: keep braking at maximum (spec). After the computation above,
-            // which would otherwise overwrite it.
+            // which would otherwise overwrite it. Below h_final the pinned throttle is still scaled
+            // by the alignment factor in Update (spec: thrust x cos(error)).
             if (cannot_stop)
                 wanted_throttle = 1;
         }
@@ -296,6 +297,15 @@ namespace K2D2.Landing
         float final_tilt_deg = 0;
         float thrust_factor = 1;
 
+        bool IsFinalDescent() => landing != null && landing.mode == LandingPilot.Mode.TouchDown
+            && FinalDescent.IsFinal(landing.altitude);
+
+        // The speed the throttle regulates: the total surface speed, except in the final descent
+        // where it is the downward vertical speed (the horizontal drift is the tilt's job).
+        float RegulatedSpeed() => final_descent
+            ? Mathf.Max(0, landing.current_falling_speed)
+            : current_speed;
+
         public bool checkDirection()
         {
 
@@ -309,7 +319,11 @@ namespace K2D2.Landing
 
             var speed_vertical_angle = (float)Vector3d.Angle(retro_dir.vector, HorizonUp.vector);
 
-            if (speed_vertical_angle > 90)
+            // Final descent (below FinalHeight): the vertical regulation in Update/compute_Throttle
+            // already lowers the throttle when the vessel climbs, so the guard below does not apply.
+            final_descent = IsFinalDescent();
+
+            if (speed_vertical_angle > 90 && !final_descent)
             {
                 status_line = $"Waiting for speed Down\nAngle = {speed_vertical_angle:n2}°\nFree Time Warp";
                 return false;
@@ -325,7 +339,9 @@ namespace K2D2.Landing
             // there's actually enough room to close a large miss; the taper inside
             // ComputeSteeredDirection is what keeps TouchDown itself safely close to pure vertical.
             Vector3d aim_dir = retro_dir.vector;
-            bool steering = landing != null && landing.settings.precision_landing.V && steering_max_angle.V > 0;
+            // Not while in the final descent: the vertical aim and its tilt handle the drift, and
+            // RCS fine correction would keep translating sideways under it.
+            bool steering = !final_descent && landing != null && landing.settings.precision_landing.V && steering_max_angle.V > 0;
             if (steering)
             {
                 // Updated before ComputeSteeredDirection below (not after) so a bailout latched
@@ -351,8 +367,6 @@ namespace K2D2.Landing
             // Final descent: aim at the local vertical tilted against the horizontal drift
             // (FinalDescent), instead of pure or steered retrograde. Applied through the same SAS
             // target as the steering below.
-            final_descent = landing != null && landing.mode == LandingPilot.Mode.TouchDown
-                && FinalDescent.IsFinal(landing.altitude);
             if (final_descent)
             {
                 double gravity_now = current_vessel.VesselComponent.graviticAcceleration.magnitude;
@@ -936,7 +950,8 @@ namespace K2D2.Landing
 
             UpdateCannotStop();
 
-            delta_speed = current_speed - max_speed;
+            final_descent = IsFinalDescent();
+            delta_speed = RegulatedSpeed() - max_speed;
 
             if (delta_speed > 0) // reset timewarp if it is time to burn
                 TimeWarpTools.SetRateIndex(0, false);
