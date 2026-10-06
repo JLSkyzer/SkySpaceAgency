@@ -30,6 +30,10 @@
             <!-- Atmo panel: no controls at all yet - just a short explanation of why, so it's
                  obvious this isn't a bug/missing feature rather than something silently broken. -->
             <ui:VisualElement name="landing_mode_group_atmo" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); margin-top: 8px; display: none;">
+                <!-- Landing mode (LandingSettings.mode, atmo profile only): Propulsive brakes on the
+                     engines, Parachute lands without them (ParachuteDescent.cs). -->
+                <K2UI.InlineEnum name="land_mode_atmo" labels="Propulsive;Parachute" />
+                <K2UI.K2Toggle label="Deploy legs early" name="deploy_legs_early_atmo" tooltip="Propulsive landing: deploy the legs when braking starts instead of at Touch Down" />
                 <ui:Label tabindex="-1" text="Precision landing isn't available on atmospheric bodies yet - Brake/Touch Down still work as usual." display-tooltip-when-elided="true" name="atmo_precision_note" style="color: rgb(180, 180, 180); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
             </ui:VisualElement>
 
@@ -58,6 +62,7 @@
                     <ui:FloatField label="Target Latitude" value="0" name="target_latitude_vac" />
                     <ui:FloatField label="Target Longitude" value="0" name="target_longitude_vac" />
                 </ui:VisualElement>
+                <K2UI.K2Toggle label="Deploy legs early" name="deploy_legs_early_vac" tooltip="Deploy the landing legs when braking starts instead of at Touch Down" />
             </ui:VisualElement>
 
             <!-- Brake/Touch Down restyled to the same bevel look as the reset buttons (see

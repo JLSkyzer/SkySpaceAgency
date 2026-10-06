@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using K2D2.Landing.Braking;
+using K2D2.KSPService;
 using K2D2.UI;
 using K2UI;
 using K2UI.Tabs;
@@ -48,6 +49,9 @@ namespace K2D2.Landing
         VisualElement atmo_settings_panel;
         VisualElement vac_settings_panel;
 
+        // "Land" for a parachute landing (one button, no engine), "Brake" otherwise.
+        string IdleLabel => pilot.parachute_mode ? "Land" : "Brake";
+
         public override bool onInit()
         {
             landing_infos = panel.Q<VisualElement>("landing_infos");
@@ -94,13 +98,16 @@ namespace K2D2.Landing
                     run_button.Value = false;
                     return;
                 }
-                run_button.label = v ? "Stop" : "Brake";
+                run_button.label = v ? "Stop" : IdleLabel;
             };
 
             touch_down.listenClick(() =>
             {
+                // Hidden in parachute mode (onUpdateUI); a parachute landing never goes to Touch Down.
+                if (pilot.parachute_mode)
+                    return;
                 pilot.isRunning = true;
-                if (pilot.isRunning)
+                if (pilot.isRunning && pilot.mode != LandingPilot.Mode.Parachute)
                     pilot.setMode(LandingPilot.Mode.TouchDown);
             });
 
@@ -312,6 +319,20 @@ namespace K2D2.Landing
             AddInfoRow("Fall Speed", $"{pilot.current_falling_speed:n2} m/s");
             AddInfoRow("Altitude", StrTool.DistanceToString(pilot.altitude));
 
+            // Legs and parachutes, shown even before starting: "No legs" tells the player the
+            // landing will go ahead without any.
+            var vessel = pilot.current_vessel?.VesselComponent;
+            if (vessel != null)
+            {
+                AddInfoRow("Legs", LandingGear.Summary(vessel));
+                if (LandingProfile.IsAtmospheric)
+                {
+                    ParachuteCounts chutes = Parachutes.Count(vessel);
+                    AddInfoRow("Parachutes", chutes.Total == 0 ? "None"
+                        : $"{chutes.Deployed} deployed, {chutes.SemiDeployed} semi, {chutes.Armed} armed, {chutes.Stowed} stowed");
+                }
+            }
+
             if (pilot.collision_detected)
             {
                 AddInfoRow("Collision In", StrTool.DurationToString(pilot.adjusted_collision_UT - GeneralTools.Game.UniverseModel.UniverseTime));
@@ -365,7 +386,10 @@ namespace K2D2.Landing
                 return true;
             }
 
-            touch_down.Show(pilot.mode != LandingPilot.Mode.TouchDown);
+            touch_down.Show(pilot.mode != LandingPilot.Mode.TouchDown
+                && pilot.mode != LandingPilot.Mode.Parachute && !pilot.parachute_mode);
+            if (!pilot.isRunning)
+                run_button.label = IdleLabel; // follows the mode selector
             if (pilot.isRunning)
             {
                 switch (pilot.mode)
@@ -395,6 +419,15 @@ namespace K2D2.Landing
                             status_bar.Error("Cannot stop before the ground!");
                         else
                             status_bar.Warning($"Touch Down...");
+                        break;
+                    case LandingPilot.Mode.Parachute:
+                        // Alerts only: without engines, nothing can be done about them.
+                        if (pilot.parachute_descent.no_parachute_left)
+                            status_bar.Error(ParachuteFeasibility.NoParachuteLeftMessage);
+                        else if (pilot.parachute_descent.too_fast_under_canopy)
+                            status_bar.Error(ParachuteFeasibility.TooFastMessage);
+                        else
+                            status_bar.Warning("Parachute descent...");
                         break;
                 }
 

@@ -158,6 +158,9 @@ namespace K2D2.Landing
             target_settings.Q<FloatField>("target_latitude_vac").Bind(target_latitude);
             target_settings.Q<FloatField>("target_longitude_vac").Bind(target_longitude);
 
+            // LEGS
+            root.Q<K2Toggle>("deploy_legs_early_vac").Bind(deploy_legs_early);
+
             // WARP
             root.Q<K2Toggle>("auto_warp_vac").Bind(auto_warp);
             var warp_settings = root.Q<VisualElement>("warp_settings_vac");
@@ -198,6 +201,10 @@ namespace K2D2.Landing
         // atmospheric precision landing is built.
         public void setupBasicUI(VisualElement root)
         {
+            // LANDING MODE (this is the atmo profile, so mode is not null)
+            root.Q<InlineEnum>("land_mode_atmo").Bind(mode);
+            root.Q<K2Toggle>("deploy_legs_early_atmo").Bind(deploy_legs_early);
+
             root.Q<K2Toggle>("auto_warp_atmo").Bind(auto_warp);
             var warp_settings = root.Q<VisualElement>("warp_settings_atmo");
             auto_warp.listen(v => warp_settings.Show(v));
