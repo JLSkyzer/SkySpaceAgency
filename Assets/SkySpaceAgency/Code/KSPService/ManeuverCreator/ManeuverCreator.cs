@@ -473,13 +473,17 @@ namespace K2D2.KSPService
         {
             double now = GeneralTools.Current_UT;
             double duration = EstimateBurnDuration(deltaVMagnitude);
-            double earliest = Math.Max(earliestUT, now + MinLead);
+            // MinLead gives the executor a moment, but never pushes the start past the impulse
+            // itself (an impulse less than MinLead away keeps its old, uncentered time).
+            double lead = Math.Max(now, Math.Min(impulseUT, now + MinLead));
+            double earliest = Math.Max(earliestUT, lead);
             double start = BurnTiming.CenteredStart(impulseUT, duration, earliest);
 
-            string tooLong = !double.IsNaN(duration) && impulseUT - duration / 2 < earliest
-                ? " (too long to center: starting now)" : "";
+            string clamped = "";
+            if (!double.IsNaN(duration) && impulseUT - duration / 2 < earliest)
+                clamped = earliestUT > lead ? " (clamped after the previous node)" : " (too long to center: starting now)";
             logger.LogInfo($"[ManeuverCreator] centered burn: impulse T+{impulseUT - now:n1}s, " +
-                $"duration {duration:n1}s, start T+{start - now:n1}s{tooLong}");
+                $"duration {duration:n1}s, start T+{start - now:n1}s{clamped}");
             return start;
         }
 
