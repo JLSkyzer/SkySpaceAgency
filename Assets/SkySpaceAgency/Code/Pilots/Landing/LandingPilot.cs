@@ -996,6 +996,10 @@ namespace K2D2.Landing
             {
                 TimeWarpTools.SetRateIndex(0, false);
                 brake.max_speed = limit_speed(altitude);
+                // Final descent: never aim below the contact speed floor, or a Touch-Down speed
+                // of 0 would hover instead of landing.
+                if (FinalDescent.IsFinal(altitude))
+                    brake.max_speed = Math.Max(brake.max_speed, (float)FinalDescent.ContactSpeed(settings.touch_down_speed.V));
                 brake.gravity_compensation = true;
             }
 

@@ -218,6 +218,8 @@ namespace K2D2.Landing
         {
             finished = false;
             cannot_stop = false;
+            final_descent = false;
+            thrust_factor = 1;
             smoothed_throttle = 0;
             smoothed_arc_deg = 0;
             smoothed_correction_deg = 0;
@@ -288,6 +290,12 @@ namespace K2D2.Landing
 
         float retrograde_angle;
 
+        // Final descent (FinalDescent: below FinalHeight, in TouchDown only), set by
+        // checkDirection. thrust_factor scales the throttle there; it is 1 everywhere else.
+        bool final_descent = false;
+        float final_tilt_deg = 0;
+        float thrust_factor = 1;
+
         public bool checkDirection()
         {
 
@@ -340,7 +348,22 @@ namespace K2D2.Landing
                 ResetRcsGrowthTracking();
             }
 
-            if (steering)
+            // Final descent: aim at the local vertical tilted against the horizontal drift
+            // (FinalDescent), instead of pure or steered retrograde. Applied through the same SAS
+            // target as the steering below.
+            final_descent = landing != null && landing.mode == LandingPilot.Mode.TouchDown
+                && FinalDescent.IsFinal(landing.altitude);
+            if (final_descent)
+            {
+                double gravity_now = current_vessel.VesselComponent.graviticAcceleration.magnitude;
+                // SurfaceMovementRetrograde is a direction: the surface velocity is minus it, at
+                // the current surface speed.
+                Vector3d surface_velocity = retro_dir.vector.normalized * (-current_speed);
+                aim_dir = FinalDescent.AimDirection(HorizonUp.vector, surface_velocity, gravity_now);
+                final_tilt_deg = (float)Vector3d.Angle(aim_dir, HorizonUp.vector);
+            }
+
+            if (steering || final_descent)
             {
                 var autopilot = current_vessel.Autopilot;
                 autopilot.Enabled = true;
@@ -369,8 +392,18 @@ namespace K2D2.Landing
             // still rotating to catch up with what's actually commanded, and throttle would fire
             // before it's actually pointed the right way.
             retrograde_angle = (float)Vector3d.Angle(aim_dir, forward_direction);
-            status_line = $"Waiting for Vessel rotation\nAngle = {retrograde_angle:n2}°";
 
+            if (final_descent)
+            {
+                // Below FinalHeight the thrust is never cut because SAS lags: Update scales it by
+                // how well the vessel points instead (FinalDescent.ThrustFactor).
+                thrust_factor = (float)FinalDescent.ThrustFactor(retrograde_angle);
+                status_line = $"Final descent\nTilt = {final_tilt_deg:n1}°, Angle = {retrograde_angle:n2}°";
+                return true;
+            }
+
+            thrust_factor = 1;
+            status_line = $"Waiting for Vessel rotation\nAngle = {retrograde_angle:n2}°";
             return retrograde_angle < touch_down_max_angle.V;
         }
 
@@ -936,6 +969,8 @@ namespace K2D2.Landing
             }
 
             compute_Throttle();
+            // 1 outside the final descent; there, the throttle follows how well the vessel points.
+            wanted_throttle *= thrust_factor;
 
             // Rate-limit the actual applied throttle instead of snapping straight to the freshly
             // computed value - see max_throttle_rate_per_sec's comment for why.
@@ -953,6 +988,8 @@ namespace K2D2.Landing
         {
             addRow("Max Speed", $"{max_speed:n2} m/s");
             addRow("Delta Speed", $"{delta_speed:n2} m/s");
+            if (final_descent)
+                addRow("Final Descent", $"tilt {final_tilt_deg:n1}°, thrust x{thrust_factor:n2}");
 
             if (K2D2Settings.debug_mode.V)
             {
