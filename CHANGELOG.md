@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Landing modes**: on bodies with an atmosphere, the Land tab has a mode selector, **Propulsive** or **Parachute**. Airless bodies are always propulsive.
+  - **Propulsive (legs)**:
+    - Landing legs deploy on their own when Touch Down starts, or from Brake with "Deploy legs early". 3 s later every leg is re-read, and any leg still retracted is extended one by one.
+    - Below 50 m the vessel flies upright, tilted at most 15° to cancel drift. Thrust is scaled by alignment instead of cut, and it regulates the fall speed, never below 0.5 m/s.
+    - The landing ends on the game's landed or splashed state. SAS is then released to Stability Assist and the engines stay off.
+  - **Parachute** (no engines, one "Land" button):
+    - The vessel holds retrograde, arms every stowed parachute, and lets the game open them when it is safe. Once a canopy is open it releases SAS and deploys the legs if there are any.
+    - It warns "Too fast under canopy" and "No parachute left".
+    - It refuses to start with no parachute, or when the trajectory stays above the atmosphere ("deorbit first").
+  - **Both modes**: refuse to start on a vessel that is already landed. The tab shows the state of the legs and how many parachutes are deployed or armed.
+
 - **Orbit tab**: tick the targets to change (Ap, Pe, inclination; unticked ones keep the current value) and press "Create maneuvers" to put every node needed on the plan at once: orbit shape at the apsides first, then the plane change at the orbital node farther from the body. Run the nodes from the Node tab as usual; after a burn, pressing "Create maneuvers" again re-plans from the actual orbit. Refuses escape trajectories, unstable current orbits, and targets with Pe below the surface, inside the atmosphere or above the Ap. Running autopilots are stopped before the plan is replaced.
 
 ### Changed

@@ -15,7 +15,7 @@ K2-D2 gives you one panel (`Alt-O` or the AppBar icon) with a set of autopilots:
 - **Node** - executes the next maneuver node, with auto-circularize at Ap/Pe and one-click buttons to create a node at the next apoapsis or periapsis
 - **Orbit** - set a target apoapsis, periapsis and/or inclination and create every maneuver node needed to get there in one click; execute them with Node
 - **Lift** - automated ascent guidance with a configurable altitude/heading profile, an optional roll program, and automatic circularization at the end of the climb
-- **Landing** - automated descent, braking, and touchdown, with an optional Precision Landing mode (currently bodies with no atmosphere only) that targets a specific site via Redux's waypoint system
+- **Landing** - automated descent, braking, and touchdown (propulsive with automatic legs, or parachute on bodies with an atmosphere), with an optional Precision Landing mode (currently bodies with no atmosphere only) that targets a specific site via Redux's waypoint system
 - **Docking** - automated final approach and docking
 - **Attitude** - point-and-hold attitude control (a simple plane autopilot)
 
