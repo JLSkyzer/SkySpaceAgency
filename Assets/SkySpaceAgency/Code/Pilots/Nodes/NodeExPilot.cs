@@ -331,6 +331,18 @@ namespace K2D2.Node
             if (atApoapsis)
             {
                 // Raise periapsis to meet the current apoapsis - burn at apoapsis.
+                // Past the apoapsis and falling on a trajectory that hits the ground: the next apoapsis
+                // comes one period later, after the impact, so a node there is meaningless (and the game
+                // fails to add it).
+                double groundRadius = body.radius + (body.hasAtmosphere ? body.atmosphereDepth : 0);
+                if (Vector3d.Dot(r_now, v_now) < 0 && periapsisRadius < groundRadius)
+                {
+                    circularize_error = "Already past apoapsis and falling: the next apoapsis comes after impact. Burn prograde now, or use Circularize at PE once in a stable orbit.";
+                    logger.LogInfo("[NodeExPilot] CreateCircularizeNode(AP): refused - descending suborbital trajectory " +
+                        $"(periapsis radius {periapsisRadius:n0} m < {groundRadius:n0} m)");
+                    return;
+                }
+
                 double time_to_apoapsis = LandingTargeting.TimeToNextApoapsis(r_now, v_now, body.gravParameter, period);
                 burn_UT = now + time_to_apoapsis;
 
@@ -361,10 +373,12 @@ namespace K2D2.Node
             logger.LogInfo($"[NodeExPilot] CreateCircularizeNode({(atApoapsis ? "AP" : "PE")}): " +
                 $"now={now:n1} burn_UT={burn_UT:n1} (T+{burn_UT - now:n1}s) deltaV={deltaV:n2}m/s");
 
+            // burn_UT is the apsis, the impulsive instant; the node's Time is where the burn starts,
+            // so center the burn on it (see ManeuverCreator.RemoveAllNodesThenCreate).
             maneuver_creator.RemoveAllNodesThenCreate(burn_UT, deltaV, created_node =>
             {
                 checkManeuver();
-            });
+            }, centerOnImpulse: true);
         }
 
         public override void Update()

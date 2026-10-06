@@ -150,7 +150,7 @@ namespace K2D2.Landing
                 mode = Mode.Turn;
                 current_executor.setController(turn);
                 turn.StartManeuver(node);
-            });
+            }, centerOnImpulse: true);
         }
 
         public override void Update()

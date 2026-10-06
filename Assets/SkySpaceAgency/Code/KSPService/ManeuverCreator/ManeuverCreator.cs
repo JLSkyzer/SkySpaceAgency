@@ -8,6 +8,7 @@ using KSP.Sim.impl;
 using KSP.Sim.Maneuver;
 using K2D2.OrbitPlanning;
 using KSP2FlightAssistant.MathLibrary;
+using KTools;
 using UnityEngine;
 using ILogger = ReduxLib.Logging.ILogger;
 
@@ -404,24 +405,82 @@ namespace K2D2.KSPService
         /// this, consistent with AddNodeToVessel's own gizmo/map update already waiting a
         /// WaitForFixedUpdate rather than touching the map layer in the same frame a node is added.
         /// </summary>
-        public void RemoveAllNodesThenCreate(double UT, double progradeDeltaV, System.Action<ManeuverNodeData> onCreated, double normalDeltaV = 0)
+        public void RemoveAllNodesThenCreate(double UT, double progradeDeltaV, System.Action<ManeuverNodeData> onCreated,
+            double normalDeltaV = 0, bool centerOnImpulse = false)
         {
             RemoveAllNodes();
-            K2D2_Plugin.Instance.StartCoroutine(RemoveAllNodesThenCreate_Co(UT, progradeDeltaV, onCreated, normalDeltaV));
+            K2D2_Plugin.Instance.StartCoroutine(RemoveAllNodesThenCreate_Co(UT, progradeDeltaV, onCreated, normalDeltaV, centerOnImpulse));
         }
 
-        private IEnumerator RemoveAllNodesThenCreate_Co(double UT, double progradeDeltaV, System.Action<ManeuverNodeData> onCreated, double normalDeltaV = 0)
+        private IEnumerator RemoveAllNodesThenCreate_Co(double UT, double progradeDeltaV, System.Action<ManeuverNodeData> onCreated,
+            double normalDeltaV = 0, bool centerOnImpulse = false)
         {
             yield return new WaitForFixedUpdate();
 
-            var nodeData = CreateManeuverNodeAtUT(UT, progradeDeltaV, normalDeltaV);
+            // centerOnImpulse: UT is the impulsive instant (e.g. the apsis); the node's own Time is
+            // the start of the finite burn, half its duration earlier.
+            double nodeUT = centerOnImpulse
+                ? CenteredNodeTime(UT, Math.Sqrt(progradeDeltaV * progradeDeltaV + normalDeltaV * normalDeltaV), 0)
+                : UT;
+
+            var nodeData = CreateManeuverNodeAtUT(nodeUT, progradeDeltaV, normalDeltaV);
 
             var maneuvers_component = _vesselComponent?.SimulationObject?.FindComponent<ManeuverPlanComponent>();
             int count_after = maneuvers_component?.GetNodes()?.Count ?? -1;
-            logger.LogInfo($"[ManeuverCreator] RemoveAllNodesThenCreate: created node {nodeData?.NodeID} at UT={UT:n1} " +
+            logger.LogInfo($"[ManeuverCreator] RemoveAllNodesThenCreate: created node {nodeData?.NodeID} at UT={nodeUT:n1} " +
                 $"deltaV={progradeDeltaV:n2} normalDeltaV={normalDeltaV:n2} - {count_after} node(s) now on the plan.");
 
             onCreated?.Invoke(nodeData);
+        }
+
+        // Smallest lead between now and a centered node's start, so the executor has a moment to react.
+        public const double MinLead = 5;
+
+        private BurndV _burnDv;
+
+        /// <summary>
+        /// Estimated duration in seconds of a burn of deltaV with the active vessel's active
+        /// engines at full throttle and its current mass (Tsiolkovsky, see BurnTiming.Duration).
+        /// Falls back to every engine's full thrust when none is active (engines may be shut down
+        /// while coasting). NaN when there is no usable thrust or mass.
+        /// </summary>
+        public double EstimateBurnDuration(double deltaV)
+        {
+            try
+            {
+                if (_burnDv == null)
+                    _burnDv = new BurndV();
+                _burnDv.Compute_Thrust();
+
+                double thrust = _burnDv.active_thrust;
+                if (thrust <= 0)
+                    thrust = _burnDv.full_thrust.magnitude;
+
+                return BurnTiming.Duration(deltaV, thrust, _burnDv.mass, _burnDv.active_isp);
+            }
+            catch (System.Exception e)
+            {
+                logger.LogWarning($"[ManeuverCreator] EstimateBurnDuration failed: {e.Message}");
+                return double.NaN;
+            }
+        }
+
+        /// <summary>
+        /// Node Time for a burn whose impulse is at impulseUT: half its duration earlier, but not
+        /// before earliestUT or now + MinLead. Logs one line per call.
+        /// </summary>
+        private double CenteredNodeTime(double impulseUT, double deltaVMagnitude, double earliestUT)
+        {
+            double now = GeneralTools.Current_UT;
+            double duration = EstimateBurnDuration(deltaVMagnitude);
+            double earliest = Math.Max(earliestUT, now + MinLead);
+            double start = BurnTiming.CenteredStart(impulseUT, duration, earliest);
+
+            string tooLong = !double.IsNaN(duration) && impulseUT - duration / 2 < earliest
+                ? " (too long to center: starting now)" : "";
+            logger.LogInfo($"[ManeuverCreator] centered burn: impulse T+{impulseUT - now:n1}s, " +
+                $"duration {duration:n1}s, start T+{start - now:n1}s{tooLong}");
+            return start;
         }
 
         // Sign mapping the physics normal (r × v) to the game's BurnVector.y. Same assumption as
@@ -470,14 +529,23 @@ namespace K2D2.KSPService
         {
             try
             {
+                double previousStart = double.NegativeInfinity;
                 for (int i = 0; i < burns.Count; i++)
                 {
                     yield return new WaitForFixedUpdate();
                     PlannedBurn burn = burns[i];
                     try
                     {
-                        var node = CreateManeuverNodeAtUT(burn.UT, burn.Prograde, burn.Normal * GameNormalSign, burn.Radial, i > 0);
-                        logger.LogInfo($"[ManeuverCreator] CreateNodes: node {i + 1}/{burns.Count} {node?.NodeID} at UT={burn.UT:n1} " +
+                        // Each burn is centered on its impulse time with its own duration, estimated from
+                        // the current mass (an approximation for later burns, flown after mass is lost).
+                        // Nodes stay in chronological order: never start before the previous one.
+                        double burnMagnitude = Math.Sqrt(burn.Prograde * burn.Prograde + burn.Normal * burn.Normal
+                            + burn.Radial * burn.Radial);
+                        double nodeUT = CenteredNodeTime(burn.UT, burnMagnitude, previousStart + 1);
+                        previousStart = nodeUT;
+
+                        var node = CreateManeuverNodeAtUT(nodeUT, burn.Prograde, burn.Normal * GameNormalSign, burn.Radial, i > 0);
+                        logger.LogInfo($"[ManeuverCreator] CreateNodes: node {i + 1}/{burns.Count} {node?.NodeID} at UT={nodeUT:n1} (impulse UT={burn.UT:n1}) " +
                             $"prograde={burn.Prograde:n2} normal={burn.Normal:n2} radial={burn.Radial:n2} ({burn.Label})");
                     }
                     catch (System.Exception e)
