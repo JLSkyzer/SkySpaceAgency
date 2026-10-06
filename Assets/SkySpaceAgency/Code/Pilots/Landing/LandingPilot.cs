@@ -278,8 +278,8 @@ namespace K2D2.Landing
         public override void onReset()
         {
             isRunning = false;
-            // A user stop or a vessel change: drop a pending leg check, it must not fire against
-            // another vessel. (A landing's own end keeps it, see FinishLanding.)
+            // Vessel change, scene change or another pilot's start: drop a pending leg check, it
+            // must not fire against another vessel. (A landing's own end keeps it, see FinishLanding.)
             gear.Reset();
         }
 
@@ -862,6 +862,10 @@ namespace K2D2.Landing
         Vector SurfaceVelocity;
         public override void Update()
         {
+            // Leg re-check and fallback (LandingGear). First, before the visibility test, so a
+            // check pending at touchdown completes on time even with the Land tab hidden.
+            gear.Update(current_vessel?.VesselComponent);
+
             if (!page.isVisible && !isRunning) return;
             if (current_vessel == null || current_vessel.VesselVehicle == null)
                 return;
@@ -907,10 +911,6 @@ namespace K2D2.Landing
                     isRunning = false;
                 }
             }
-
-            // Leg re-check and fallback (LandingGear). Before the isRunning test, so a check
-            // still pending at touchdown completes while the tab stays open.
-            gear.Update(current_vessel.VesselComponent);
 
             if (!isRunning)
                 return;

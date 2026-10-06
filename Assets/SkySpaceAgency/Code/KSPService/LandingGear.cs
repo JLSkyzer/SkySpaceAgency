@@ -132,7 +132,15 @@ namespace K2D2.KSPService
 
             if (recheck_ut >= 0 && now >= recheck_ut)
             {
+                bool overdue = now > recheck_ut + RecheckDelay;
                 recheck_ut = -1;
+                if (overdue)
+                {
+                    // Update was not called for a while (hidden tab, other scene...): the legs may
+                    // have been moved by hand since, so do not touch them.
+                    logger.LogInfo("[Landing] gear: re-check dropped (overdue)");
+                    return;
+                }
                 var legs = FindLegs(vessel);
                 int toggled = 0, stuck = 0;
                 foreach (var leg in legs)
