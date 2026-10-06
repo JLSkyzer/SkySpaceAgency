@@ -45,6 +45,13 @@ namespace K2D2.Landing
         // initializer - 'this' isn't available there.
         public TouchDown brake;
 
+        // Mode.Parachute's controller (Controlers/ParachuteDescent.cs).
+        public ParachuteDescent parachute_descent;
+
+        // Landing legs (KSPService/LandingGear.cs): deployed on entering Touch Down (or Brake with
+        // deploy_legs_early), or by ParachuteDescent once a canopy opens. One request per run.
+        internal LandingGear gear = new LandingGear();
+
         // Precondition phase for precision landing, run before deorbit_burn: circularizes the
         // starting orbit if it isn't already close to circular, or refuses if it's too high.
         // deorbit_burn's own math assumes a roughly circular starting orbit.
@@ -69,6 +76,7 @@ namespace K2D2.Landing
             settings_atmo = new LandingSettings(atmo_file, atmospheric: true);
             settings_vac = new LandingSettings(vac_file, atmospheric: false);
             brake = new TouchDown(this, atmo_file, vac_file);
+            parachute_descent = new ParachuteDescent(this);
             _page = new LandingUI(this);
 
             Instance = this;
@@ -97,7 +105,10 @@ namespace K2D2.Landing
             RotationWarp,
             Waiting,
             Brake,
-            TouchDown
+            TouchDown,
+            // Parachute landing (ParachuteDescent), entered straight from Off. Last on purpose:
+            // nextMode() never runs from it, and TouchDown never falls through into it.
+            Parachute
         }
 
         public Mode mode = Mode.Off;
@@ -171,7 +182,16 @@ namespace K2D2.Landing
                 case Mode.TouchDown:
                     // Clear a stale flag from a previous descent.
                     brake.cannot_stop = false;
+                    // Legs out on entering Touch Down, or already on entering Brake with "Deploy
+                    // legs early". LandingGear only acts on the first request of a run.
+                    if (mode == Mode.TouchDown || settings.deploy_legs_early.V)
+                        gear.Deploy(current_vessel.VesselComponent, $"entering {mode}");
                     current_executor.setController(brake);
+                    break;
+                case Mode.Parachute:
+                    current_vessel.SetThrottle(0);
+                    current_executor.setController(parachute_descent);
+                    parachute_descent.Start();
                     break;
             }
 
@@ -186,6 +206,10 @@ namespace K2D2.Landing
                 isRunning = true;
                 return;
             }
+
+            // TouchDown and Parachute are both final phases: the run ends on contact.
+            if (mode == Mode.TouchDown || mode == Mode.Parachute)
+                return;
 
             var next = this.mode + 1;
             setMode(next);
@@ -237,7 +261,10 @@ namespace K2D2.Landing
                     // LandingUI.cs's atmo panel), so there's normally no way for it to read true
                     // here at all. This just guarantees Circularize/DeorbitBurn (which assume a
                     // vacuum trajectory) can never run on an atmospheric body even if that changes.
-                    if (settings.precision_landing.V && !LandingProfile.IsAtmospheric)
+                    gear.Reset();
+                    if (parachute_mode)
+                        setMode(Mode.Parachute);
+                    else if (settings.precision_landing.V && !LandingProfile.IsAtmospheric)
                         setMode(Mode.Circularize);
                     else
                         setMode(Mode.QuickWarp);
@@ -251,6 +278,9 @@ namespace K2D2.Landing
         public override void onReset()
         {
             isRunning = false;
+            // A user stop or a vessel change: drop a pending leg check, it must not fire against
+            // another vessel. (A landing's own end keeps it, see FinishLanding.)
+            gear.Reset();
         }
 
         internal float current_falling_speed = 0;
@@ -609,10 +639,10 @@ namespace K2D2.Landing
         // Runs the braking simulation from the current state, at most every BrakeSimInterval
         // (unless forced). The result is kept for up to BrakeSimKeepTicks ticks after the last
         // detected collision, then brake_result_valid goes false. Unforced calls do nothing in
-        // TouchDown, which does not read the result.
+        // TouchDown and Parachute, which do not read the result.
         void UpdateBrakeSimulation(bool force)
         {
-            if (!force && mode == Mode.TouchDown)
+            if (!force && (mode == Mode.TouchDown || mode == Mode.Parachute))
                 return;
 
             float now_real = UnityEngine.Time.realtimeSinceStartup;
@@ -725,6 +755,12 @@ namespace K2D2.Landing
                 return false;
             }
 
+            // Refresh the profile now: the mode, and so the checks, depend on it. The engine,
+            // TWR and Δv checks below do not apply to a parachute landing.
+            LandingProfile.Update(current_vessel.currentBody());
+            if (parachute_mode)
+                return CheckCanStartParachute();
+
             burn_dV.Compute_Thrust();
             LogEngines();
             var body = current_vessel.VesselComponent.Orbit.referenceBody;
@@ -748,6 +784,35 @@ namespace K2D2.Landing
                 return false;
             }
             last_warning = check.Warning ?? "";
+            return true;
+        }
+
+        // Parachute landing start checks (ParachuteFeasibility). Periapsis from the state
+        // vectors, the same way Circularize.CheckOrbit computes it (also valid for an escape
+        // trajectory).
+        bool CheckCanStartParachute()
+        {
+            var vessel = current_vessel.VesselComponent;
+            IKeplerPatch orbit = vessel.Orbit;
+            var body = orbit.referenceBody;
+            double now = GeneralTools.Current_UT;
+            LandingTargeting.OrbitalElementsFromStateVectors(orbit.GetRelativePositionAtUTZup(now),
+                orbit.GetOrbitalVelocityAtUTZup(now), body.gravParameter,
+                out _, out _, out double periapsis_radius);
+            double periapsis_alt = periapsis_radius - body.radius;
+            ParachuteCounts chutes = Parachutes.Count(vessel);
+
+            var check = ParachuteFeasibility.Check(body.hasAtmosphere, body.atmosphereDepth,
+                vessel.IsInAtmosphere, periapsis_alt, chutes.Usable);
+            logger.LogInfo($"[Landing] parachute start check: ok={check.Ok} atmosphere {body.hasAtmosphere} " +
+                $"(depth {body.atmosphereDepth:n0} m), in atmosphere {vessel.IsInAtmosphere}, Pe {periapsis_alt:n0} m, {chutes}" +
+                (check.Ok ? "" : $" -> {check.Error}"));
+
+            if (!check.Ok)
+            {
+                last_error = check.Error;
+                return false;
+            }
             return true;
         }
 
@@ -779,6 +844,19 @@ namespace K2D2.Landing
         {
             logger.LogWarning($"[Landing] stopped: {reason}");
             last_error = reason;
+            isRunning = false;
+            gear.Reset();
+        }
+
+        // End of a landing, whichever the mode: no thrust, SAS holding attitude, autopilot off.
+        // Nothing relights the engines afterwards, even on a bounce or a slide.
+        void FinishLanding(bool landed_or_splashed)
+        {
+            logger.LogInfo($"[Landing] touchdown in {mode}: " +
+                (landed_or_splashed ? "LandedOrSplashed" : "altitude/fall-speed net") +
+                $", altitude {altitude:n1} m, fall speed {current_falling_speed:n2} m/s");
+            current_vessel.SetThrottle(0);
+            SASTool.setAutoPilot(AutopilotMode.StabilityAssist);
             isRunning = false;
         }
         Vector SurfaceVelocity;
@@ -819,7 +897,8 @@ namespace K2D2.Landing
                 // collision course.
                 if (isRunning)
                 {
-                    if (altitude < settings.start_touchdown_altitude.V)
+                    // A parachute landing has no Touch Down phase to fall back to.
+                    if (mode != Mode.Parachute && altitude < settings.start_touchdown_altitude.V)
                         setMode(Mode.TouchDown);
                 }
                 else
@@ -829,14 +908,19 @@ namespace K2D2.Landing
                 }
             }
 
+            // Leg re-check and fallback (LandingGear). Before the isRunning test, so a check
+            // still pending at touchdown completes while the tab stays open.
+            gear.Update(current_vessel.VesselComponent);
+
             if (!isRunning)
                 return;
 
-            // landing detection....
-            if (altitude < 5 && current_falling_speed < 1)
+            // Landing detection, common to both modes: the game's own LandedOrSplashed, with the
+            // old altitude/fall-speed test kept as a net.
+            bool landed = current_vessel.VesselComponent.LandedOrSplashed;
+            if (landed || (altitude < 5 && current_falling_speed < 1))
             {
-                //current_vessel.SetThrottle(0);
-                isRunning = false;
+                FinishLanding(landed);
                 return;
             }
             if (mode == Mode.Pause)
