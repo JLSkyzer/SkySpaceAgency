@@ -52,6 +52,15 @@ namespace K2D2.Landing
         // "Land" for a parachute landing (one button, no engine), "Brake" otherwise.
         string IdleLabel => pilot.parachute_mode ? "Land" : "Brake";
 
+        // The mode the tab is about: the running one, else the selector. Flipping the selector
+        // during a propulsive run must not change what the tab shows (Touch Down in particular).
+        bool ParachuteLanding => pilot.isRunning
+            ? pilot.mode == LandingPilot.Mode.Parachute
+            : pilot.parachute_mode;
+
+        // Logged once per session, then silent: the readout runs every UI tick.
+        bool readout_failure_logged = false;
+
         public override bool onInit()
         {
             landing_infos = panel.Q<VisualElement>("landing_infos");
@@ -104,7 +113,7 @@ namespace K2D2.Landing
             touch_down.listenClick(() =>
             {
                 // Hidden in parachute mode (onUpdateUI); a parachute landing never goes to Touch Down.
-                if (pilot.parachute_mode)
+                if (ParachuteLanding)
                     return;
                 pilot.isRunning = true;
                 if (pilot.isRunning && pilot.mode != LandingPilot.Mode.Parachute)
@@ -259,6 +268,27 @@ namespace K2D2.Landing
             landing_infos.Add(row);
         }
 
+        // An info row whose value comes from game queries that may throw: show "?" instead of
+        // breaking the whole table, and log the first failure only.
+        void AddSafeInfoRow(string label, System.Func<string> value)
+        {
+            string text;
+            try
+            {
+                text = value();
+            }
+            catch (System.Exception e)
+            {
+                text = "?";
+                if (!readout_failure_logged)
+                {
+                    readout_failure_logged = true;
+                    pilot.logger.LogInfo("[LandingUI] legs/parachutes readout failed: " + e);
+                }
+            }
+            AddInfoRow(label, text);
+        }
+
         // Always-visible "am I about to hit something" readout, next to the Brake/Touch Down
         // buttons regardless of whether LANDING INFO below is expanded. Kept separate from
         // updateContext()/landing_infos so it never depends on that Foldout's collapsed state.
@@ -324,21 +354,28 @@ namespace K2D2.Landing
             var vessel = pilot.current_vessel?.VesselComponent;
             if (vessel != null)
             {
-                AddInfoRow("Legs", LandingGear.Summary(vessel));
+                AddSafeInfoRow("Legs", () => LandingGear.Summary(vessel));
                 if (LandingProfile.IsAtmospheric)
                 {
-                    ParachuteCounts chutes = Parachutes.Count(vessel);
-                    AddInfoRow("Parachutes", chutes.Total == 0 ? "None"
-                        : $"{chutes.Deployed} deployed, {chutes.SemiDeployed} semi, {chutes.Armed} armed, {chutes.Stowed} stowed");
+                    AddSafeInfoRow("Parachutes", () =>
+                    {
+                        ParachuteCounts chutes = Parachutes.Count(vessel);
+                        return chutes.Total == 0 ? "None"
+                            : $"{chutes.Deployed} deployed, {chutes.SemiDeployed} semi, {chutes.Armed} armed, {chutes.Stowed} stowed";
+                    });
                 }
             }
 
             if (pilot.collision_detected)
             {
-                AddInfoRow("Collision In", StrTool.DurationToString(pilot.adjusted_collision_UT - GeneralTools.Game.UniverseModel.UniverseTime));
-                AddInfoRow("Collision Speed", $"{pilot.speed_collision:n2} m/s");
-                AddInfoRow("Start Burn In", StrTool.DurationToString(pilot.startBurn_UT - GeneralTools.Game.UniverseModel.UniverseTime));
-                AddInfoRow("Burn Duration", $"{pilot.burn_duration:n2} s");
+                // Braking rows mean nothing under a canopy: no burn is planned.
+                if (!ParachuteLanding)
+                {
+                    AddInfoRow("Collision In", StrTool.DurationToString(pilot.adjusted_collision_UT - GeneralTools.Game.UniverseModel.UniverseTime));
+                    AddInfoRow("Collision Speed", $"{pilot.speed_collision:n2} m/s");
+                    AddInfoRow("Start Burn In", StrTool.DurationToString(pilot.startBurn_UT - GeneralTools.Game.UniverseModel.UniverseTime));
+                    AddInfoRow("Burn Duration", $"{pilot.burn_duration:n2} s");
+                }
 
                 // Precision landing readouts - informational only, nothing steers toward this
                 // yet. Predicted Landing lets players confirm the lat/lon math is sane in-game
@@ -386,8 +423,7 @@ namespace K2D2.Landing
                 return true;
             }
 
-            touch_down.Show(pilot.mode != LandingPilot.Mode.TouchDown
-                && pilot.mode != LandingPilot.Mode.Parachute && !pilot.parachute_mode);
+            touch_down.Show(pilot.mode != LandingPilot.Mode.TouchDown && !ParachuteLanding);
             if (!pilot.isRunning)
                 run_button.label = IdleLabel; // follows the mode selector
             if (pilot.isRunning)

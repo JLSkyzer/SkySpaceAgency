@@ -933,12 +933,28 @@ namespace K2D2.Landing
                 return;
             }
             double gravity_now = current_vessel.VesselComponent.graviticAcceleration.magnitude;
-            bool now = !DescentEnvelope.CanStop(current_speed, landing.altitude, burn_dV.active_dv,
-                gravity_now, landing.settings.touch_down_speed.V);
+            // Final descent: the throttle regulates the downward speed to the contact speed, so the
+            // envelope is checked against those, not the total speed and the player's touch-down speed.
+            double speed = final_descent ? RegulatedSpeed() : current_speed;
+            double target_speed = final_descent
+                ? FinalDescent.ContactSpeed(landing.settings.touch_down_speed.V)
+                : landing.settings.touch_down_speed.V;
+            bool now = !DescentEnvelope.CanStop(speed, landing.altitude, burn_dV.active_dv,
+                gravity_now, target_speed);
             if (now && !cannot_stop)
-                logger.LogWarning($"[TouchDown] cannot stop before the ground: speed {current_speed:n1} m/s, " +
+                logger.LogWarning($"[TouchDown] cannot stop before the ground: speed {speed:n1} m/s, " +
                     $"height {landing.altitude:n0} m, thrust accel {burn_dV.active_dv:n2} m/s², gravity {gravity_now:n2} m/s²");
             cannot_stop = now;
+        }
+
+        void LogFinalDescentStart()
+        {
+            double v_down = landing.current_falling_speed;
+            double v_h = Math.Sqrt(Math.Max(0, (double)current_speed * current_speed - v_down * v_down));
+            double gravity_now = current_vessel.VesselComponent.graviticAcceleration.magnitude;
+            double tilt_deg = FinalDescent.TiltDegrees(v_h, gravity_now);
+            logger.LogInfo($"[TouchDown] final descent: height {landing.altitude:n0} m, horizontal {v_h:n1} m/s, " +
+                $"fall {v_down:n1} m/s, tilt {tilt_deg:n1}°");
         }
 
         public override void Update()
@@ -948,9 +964,14 @@ namespace K2D2.Landing
 
             current_speed = (float)current_vessel.VesselVehicle.SurfaceSpeed;
 
+            // Before UpdateCannotStop: it reads final_descent.
+            bool was_final_descent = final_descent;
+            final_descent = IsFinalDescent();
+            if (final_descent && !was_final_descent)
+                LogFinalDescentStart();
+
             UpdateCannotStop();
 
-            final_descent = IsFinalDescent();
             delta_speed = RegulatedSpeed() - max_speed;
 
             if (delta_speed > 0) // reset timewarp if it is time to burn

@@ -262,6 +262,7 @@ namespace K2D2.Landing
                     // here at all. This just guarantees Circularize/DeorbitBurn (which assume a
                     // vacuum trajectory) can never run on an atmospheric body even if that changes.
                     gear.Reset();
+                    net_start_ut = double.NaN;
                     if (parachute_mode)
                         setMode(Mode.Parachute);
                     else if (settings.precision_landing.V && !LandingProfile.IsAtmospheric)
@@ -758,6 +759,14 @@ namespace K2D2.Landing
             // Refresh the profile now: the mode, and so the checks, depend on it. The engine,
             // TWR and Δv checks below do not apply to a parachute landing.
             LandingProfile.Update(current_vessel.currentBody());
+
+            // Both modes: nothing to land when already on the ground.
+            if (current_vessel.VesselComponent.LandedOrSplashed)
+            {
+                last_error = "Already landed.";
+                return false;
+            }
+
             if (parachute_mode)
                 return CheckCanStartParachute();
 
@@ -856,9 +865,23 @@ namespace K2D2.Landing
                 (landed_or_splashed ? "LandedOrSplashed" : "altitude/fall-speed net") +
                 $", altitude {altitude:n1} m, fall speed {current_falling_speed:n2} m/s");
             current_vessel.SetThrottle(0);
-            SASTool.setAutoPilot(AutopilotMode.StabilityAssist);
+            // Release the last aim: setAutoPilot does nothing when SAS is already in
+            // StabilityAssist, which would leave fly-by-wire on the final descent's tilted target.
+            var autopilot = current_vessel.Autopilot;
+            if (autopilot != null)
+            {
+                autopilot.SAS.DisconnectFlyByWire();
+                autopilot.SetMode(AutopilotMode.StabilityAssist);
+                autopilot.Enabled = true;
+                logger.LogInfo("[Landing] end: SAS released to StabilityAssist");
+            }
             isRunning = false;
         }
+        // Start (game time) of the continuous "near the ground and almost still" condition of the
+        // altitude/fall-speed net in Update; NaN while the condition does not hold.
+        double net_start_ut = double.NaN;
+        const double NetHoldSeconds = 1.0;
+
         Vector SurfaceVelocity;
         public override void Update()
         {
@@ -917,8 +940,18 @@ namespace K2D2.Landing
 
             // Landing detection, common to both modes: the game's own LandedOrSplashed, with the
             // old altitude/fall-speed test kept as a net.
+            // The net only fires once the vessel has stayed near the ground at (or below) half the
+            // contact floor for a full NetHoldSeconds: the final descent flies at the floor speed
+            // on purpose, so a speed-only test would cut the engine while still flying.
             bool landed = current_vessel.VesselComponent.LandedOrSplashed;
-            if (landed || (altitude < 5 && current_falling_speed < 1))
+            bool net_condition = altitude < 5 && current_falling_speed < FinalDescent.MinContactSpeed / 2;
+            double net_now = GeneralTools.Current_UT;
+            if (!net_condition)
+                net_start_ut = double.NaN;
+            else if (double.IsNaN(net_start_ut))
+                net_start_ut = net_now;
+            bool net_held = net_condition && net_now - net_start_ut >= NetHoldSeconds;
+            if (landed || net_held)
             {
                 FinishLanding(landed);
                 return;

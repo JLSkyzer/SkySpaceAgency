@@ -34,7 +34,7 @@
                      engines, Parachute lands without them (ParachuteDescent.cs). -->
                 <K2UI.InlineEnum name="land_mode_atmo" labels="Propulsive;Parachute" />
                 <K2UI.K2Toggle label="Deploy legs early" name="deploy_legs_early_atmo" tooltip="Propulsive landing: deploy the legs when braking starts instead of at Touch Down" />
-                <ui:Label tabindex="-1" text="Precision landing isn't available on atmospheric bodies yet - Brake/Touch Down still work as usual." display-tooltip-when-elided="true" name="atmo_precision_note" style="color: rgb(180, 180, 180); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
+                <ui:Label tabindex="-1" text="Precision landing isn't available on atmospheric bodies yet. Propulsive mode: Brake/Touch Down as usual. Parachute mode: one Land button, no engines." display-tooltip-when-elided="true" name="atmo_precision_note" style="color: rgb(180, 180, 180); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
             </ui:VisualElement>
 
             <!-- Vacuum panel - promoted up from a buried ADVANCED setting to an obvious choice
