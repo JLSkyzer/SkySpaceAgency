@@ -4,6 +4,13 @@ using K2UI;
 
 namespace K2D2.Landing
 {
+    // How to land on an atmospheric body (LandingSettings.mode, atmo profile only).
+    public enum LandingMethod
+    {
+        Propulsive,
+        Parachute,
+    }
+
     // Atmo/Vacuum profile split: LandingPilot constructs TWO of these (settings_atmo/
     // settings_vac), one per SettingsFile (k2d2_landing_atmo.json / k2d2_landing_vac.json), so
     // tuning one profile can never touch the other's saved values or UI. Every field keeps its
@@ -97,7 +104,14 @@ namespace K2D2.Landing
         // power the instant the threshold is crossed.
         public ClampSetting<float> rcs_fine_correction_power;
 
-        public LandingSettings(SettingsFile file)
+        // Landing mode. Atmo profile only: null on the vacuum profile, where the landing is
+        // always propulsive (see LandingPilot.parachute_mode).
+        public EnumSetting<LandingMethod> mode;
+
+        // Deploy the legs on entering Brake instead of Touch Down. Both profiles.
+        public Setting<bool> deploy_legs_early;
+
+        public LandingSettings(SettingsFile file, bool atmospheric)
         {
             auto_warp = new("land.auto_warp", true, file);
             burn_before = new("land.burnBefore", 0, 0, 10, file);
@@ -117,6 +131,10 @@ namespace K2D2.Landing
             use_rcs_fine_correction = new("land.use_rcs_fine_correction", false, file);
             rcs_fine_correction_threshold_m = new("land.rcs_fine_correction_threshold_m", 1000, 100, 5000, file);
             rcs_fine_correction_power = new("land.rcs_fine_correction_power", 0.5f, 0.05f, 1f, file);
+
+            deploy_legs_early = new("land.deploy_legs_early", false, file);
+            if (atmospheric)
+                mode = new("land.mode", LandingMethod.Propulsive, file);
         }
 
         // Full binding - Vacuum panel. Element names carry a "_vac" suffix in Landing.uxml so they

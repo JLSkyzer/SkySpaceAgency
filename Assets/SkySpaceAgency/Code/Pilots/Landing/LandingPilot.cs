@@ -26,6 +26,11 @@ namespace K2D2.Landing
         internal LandingSettings settings_vac;
         internal LandingSettings settings => LandingProfile.IsAtmospheric ? settings_atmo : settings_vac;
 
+        // Parachute landing is chosen on the atmosphere profile only; on an airless body the
+        // landing is always propulsive.
+        internal bool parachute_mode =>
+            LandingProfile.IsAtmospheric && settings_atmo.mode.V == LandingMethod.Parachute;
+
         public static LandingPilot Instance { get; set; }
 
         public KSPVessel current_vessel;
@@ -61,8 +66,8 @@ namespace K2D2.Landing
             // Both created in K2D2_Plugin.OnInitialized(), before any pilot is constructed.
             var atmo_file = SettingsFile.Get("land_atmo");
             var vac_file = SettingsFile.Get("land_vac");
-            settings_atmo = new LandingSettings(atmo_file);
-            settings_vac = new LandingSettings(vac_file);
+            settings_atmo = new LandingSettings(atmo_file, atmospheric: true);
+            settings_vac = new LandingSettings(vac_file, atmospheric: false);
             brake = new TouchDown(this, atmo_file, vac_file);
             _page = new LandingUI(this);
 
