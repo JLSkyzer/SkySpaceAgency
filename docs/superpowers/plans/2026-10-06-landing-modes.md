@@ -623,7 +623,12 @@ namespace K2D2.KSPService
                     continue;
                 if (!part.Model.TryGetModuleData<PartComponentModule_Deployable, Data_Deployable>(out Data_Deployable data) || data == null)
                     continue;
-                if ((data.DefaultActionGroup & KSPActionGroup.Gear) == 0)
+                // Bound to Gear, or carrying a wheel/suspension module (Data_WheelBase covers "rover
+                // wheels and landing legs"): either way it is landing gear, not a solar panel or an
+                // antenna. The second test keeps legs whose default action group is not Gear.
+                bool on_gear = (data.DefaultActionGroup & KSPActionGroup.Gear) != 0;
+                bool has_wheel = part.Model.TryGetModuleData<PartComponentModule_WheelBase, Data_WheelBase>(out Data_WheelBase wheel) && wheel != null;
+                if (!on_gear && !has_wheel)
                     continue;
                 legs.Add(data);
             }
@@ -743,7 +748,7 @@ namespace K2D2.KSPService
 
 Run the EditMode test command. Expected: 0 `error CS`, all tests green.
 
-If `TryGetModuleData<PartComponentModule_Deployable, Data_Deployable>` does not resolve, check the usings: `PartComponentModule_Deployable` is in `KSP.Sim.impl`, `Data_Deployable` in `KSP.Modules`. If `(data.DefaultActionGroup & KSPActionGroup.Gear) == 0` is rejected, write `== KSPActionGroup.None`.
+If `TryGetModuleData<PartComponentModule_Deployable, Data_Deployable>` does not resolve, check the usings: `PartComponentModule_Deployable` is in `KSP.Sim.impl`, `Data_Deployable` in `KSP.Modules`. If `(data.DefaultActionGroup & KSPActionGroup.Gear) != 0` is rejected, write `!= KSPActionGroup.None`. `PartComponentModule_WheelBase` is in `KSP.Sim.impl`, `Data_WheelBase` in `KSP.Modules`.
 
 - [ ] **Step 3: Commit**
 
