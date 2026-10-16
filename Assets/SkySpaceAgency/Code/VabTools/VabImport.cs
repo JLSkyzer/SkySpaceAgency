@@ -13,7 +13,7 @@ namespace K2D2.VabTools
         public VabImportFormat Format;
         public JObject Root;                      // the whole file
         public JObject Assembly;                  // the assembly to load as main; null for a workspace file
-        public List<JObject> Assemblies = new();  // every assembly to check (live nodes of Root)
+        public List<JObject> Assemblies = new();  // every assembly to check (nodes of Root, also for a string game_assembly)
     }
 
     public class VabImportResult
@@ -47,14 +47,18 @@ namespace K2D2.VabTools
             if (format == VabExport.Format)
             {
                 JToken embedded = root["game_assembly"];
-                if (embedded != null && embedded.Type == JTokenType.String)
+                bool fromString = embedded != null && embedded.Type == JTokenType.String;
+                if (fromString)
                 {
                     try { embedded = VabJson.Parse((string)embedded); }
                     catch (JsonException e) { return Fail("game_assembly is not valid JSON: " + e.Message); }
                 }
                 if (!(embedded is JObject assembly) || !(assembly["parts"] is JArray))
                     return Fail("This export has no game_assembly with a \"parts\" list.");
-                root["game_assembly"] = assembly;   // a string form is replaced by the parsed tree: Root and Assembly stay one
+                // A string form is replaced by its parsed tree (which has no parent yet, so it is attached, not
+                // cloned): Root and Assembly stay one. An embedded object already is Root's own node.
+                if (fromString)
+                    root["game_assembly"] = assembly;
                 return Done(VabImportFormat.ModExport, root, assembly, new List<JObject> { assembly });
             }
             if (format == VabDump.Format)

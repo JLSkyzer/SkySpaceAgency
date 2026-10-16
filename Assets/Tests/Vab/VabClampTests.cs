@@ -73,6 +73,21 @@ public class VabClampTests
             VabImport.ClampResources(rocket, Definition));
     }
 
+    // An embedded game_assembly object is Root's own node: parsing must not detach it (Newtonsoft clones a
+    // token that already has a parent when it is assigned).
+    [Test]
+    public void Parse_EmbeddedGameAssemblyStaysTheNodeOfRoot()
+    {
+        var export = new JObject
+        {
+            ["format"] = VabExport.Format, ["version"] = 1, ["summary"] = new JObject(), ["game_assembly"] = F.Rocket(),
+        };
+        VabImportResult r = VabImport.Parse(VabJson.WriteCompact(export));
+        Assert.IsTrue(r.Ok, r.Error);
+        Assert.AreSame(r.File.Assembly, r.File.Root["game_assembly"]);
+        Assert.AreSame(r.File.Assembly, r.File.Assemblies[0]);
+    }
+
     // game_assembly handed back as a JSON string is parsed into its own tree: clamping the loaded
     // assembly must also show in Root, so Root and Assembly never disagree.
     [Test]
