@@ -27,7 +27,14 @@
   - Removed `Copied/assets/bundles` (~65 MB): `k2d2_ui.bundle` and the twelve SDK plume / ray-tracing bundles built alongside it. The UI has been loaded through Addressables since 1.3.0 and nothing loads these bundles anymore. The editor tool that rebuilt them (`K2D2/Rebuild UI Bundle`) is removed with them.
 - Fixed: `NullReferenceException` in `ValidScene()` from `Update`/`FixedUpdate`/`LateUpdate` during game startup, before the plugin is initialized and while the game state machine is not ready yet.
 - The Redux SDK package is pinned to commit `8ed8010` instead of the `26w39a` tag: the `26w39a` SDK no longer compiles against KSP2 Redux 26w40a and later (`PQSRenderer.CreateColliders` was removed). To be replaced by the next template tag.
-- Fixed: Lift's auto-circularize node and the Node tab's "Circularize at AP/PE" buttons (and Landing's circularize phase, and the Orbit tab's nodes) produced a trajectory that still fell back to the ground.
+- Fixed (2026-10-16): circularization and Orbit-tab plans now fly closed-loop toward their target orbit.
+  - **Cause of the falling trajectories:** the game models a node as a finite burn timed on the *currently active* stage. A nearly empty first stage gave a 5093 s estimate for 1122 m/s, and the executor followed the game's marker into the ground.
+  - **Lift and the Node tab's Circularize at AP/PE buttons:** they no longer use a maneuver node. Every frame they burn toward the velocity of the target orbit, they keep working through staging, and they stop within 0.2 m/s.
+  - **Orbit-tab nodes:** they remember their target orbit. One Start in the Node tab runs the whole plan, and a node you edit by hand falls back to the normal executor.
+  - **Safety:** a burn that diverges is aborted with a message, and "No thrust — stage?" shows when no thrust arrives.
+  - **Precision landing:** it refuses to circularize on an orbit that is not closed, instead of creating a broken NaN node.
+  - **Log noise:** the map error logged after each node creation is gone.
+- Superseded: Lift's auto-circularize node and the Node tab's "Circularize at AP/PE" buttons (and Landing's circularize phase, and the Orbit tab's nodes) produced a trajectory that still fell back to the ground.
   - **Cause:** the game treats a node's time as the *start* of the burn, and the node executor starts there too, but these nodes were placed *at* the apsis, so a long burn happened entirely after it.
   - **Fix:** nodes are now centered on the apsis, from the active stage's thrust, mass and Isp. A burn too long to center starts as soon as possible, and the log says so (`[ManeuverCreator] centered burn: …`).
   - **Node execution mode:** with "mid-duration", these nodes would now start half a burn too early. Use "T0", the default.
