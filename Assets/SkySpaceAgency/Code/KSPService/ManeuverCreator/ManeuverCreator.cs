@@ -408,6 +408,13 @@ namespace K2D2.KSPService
         public void RemoveAllNodesThenCreate(double UT, double progradeDeltaV, System.Action<ManeuverNodeData> onCreated,
             double normalDeltaV = 0, bool centerOnImpulse = false)
         {
+            if (!IsFinite(UT) || !IsFinite(progradeDeltaV) || !IsFinite(normalDeltaV))
+            {
+                logger.LogWarning($"[ManeuverCreator] refused node with invalid Δv (UT={UT}, prograde={progradeDeltaV}, normal={normalDeltaV})");
+                onCreated?.Invoke(null);
+                return;
+            }
+
             RemoveAllNodes();
             K2D2_Plugin.Instance.StartCoroutine(RemoveAllNodesThenCreate_Co(UT, progradeDeltaV, onCreated, normalDeltaV, centerOnImpulse));
         }
@@ -515,6 +522,19 @@ namespace K2D2.KSPService
                 return;
             }
 
+            // A single unusable burn makes the whole plan meaningless: refuse it before touching
+            // the game (the existing nodes stay).
+            foreach (var burn in burns)
+            {
+                if (!IsFinite(burn.UT) || !IsFinite(burn.Prograde) || !IsFinite(burn.Normal) || !IsFinite(burn.Radial))
+                {
+                    logger.LogWarning($"[ManeuverCreator] refused node with invalid Δv ({burn.Label}: UT={burn.UT}, " +
+                        $"prograde={burn.Prograde}, normal={burn.Normal}, radial={burn.Radial})");
+                    onDone?.Invoke(0);
+                    return;
+                }
+            }
+
             _creatingNodes = true;
             try
             {
@@ -571,16 +591,34 @@ namespace K2D2.KSPService
             }
         }
 
+        static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
+
+        // Map3DManeuvers.GetNodeDataForVessels throws a NullReferenceException inside the game in
+        // some states (seen after every node creation, 2026-10-16). The node itself is fine; only
+        // the map refresh fails, so it is caught and reported once per session.
+        static bool _mapGizmoWarned;
+
         private IEnumerator UpdateMapGizmo_Co(ManeuverNodeData nodeData)
         {
             yield return new WaitForFixedUpdate();
 
-            MapCore mapCore = null;
-            Game.Map.TryGetMapCore(out mapCore);
-            if (mapCore)
+            try
             {
-                mapCore.map3D.ManeuverManager.GetNodeDataForVessels();
-                mapCore.map3D.ManeuverManager.UpdatePositionForGizmo(nodeData.NodeID);
+                MapCore mapCore = null;
+                Game.Map.TryGetMapCore(out mapCore);
+                if (mapCore)
+                {
+                    mapCore.map3D.ManeuverManager.GetNodeDataForVessels();
+                    mapCore.map3D.ManeuverManager.UpdatePositionForGizmo(nodeData.NodeID);
+                }
+            }
+            catch (System.Exception e)
+            {
+                if (!_mapGizmoWarned)
+                {
+                    _mapGizmoWarned = true;
+                    logger.LogWarning($"[ManeuverCreator] map gizmo update failed (reported once per session): {e.GetType().Name}: {e.Message}");
+                }
             }
         }
 

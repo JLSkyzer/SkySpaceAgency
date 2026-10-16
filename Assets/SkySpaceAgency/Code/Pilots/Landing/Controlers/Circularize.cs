@@ -83,6 +83,19 @@ namespace K2D2.Landing
             return OrbitCheck.NeedsCircularizing;
         }
 
+        // Unbound (hyperbolic/parabolic) trajectory, e.g. an approach before the capture burn: no
+        // apoapsis to circularize at (semi-major axis negative or NaN, apoapsis radius negative).
+        // Kept out of CheckOrbit so the Landing tab's orbit gate behaves as before.
+        static bool IsUnbound(KSPVessel vessel)
+        {
+            IKeplerPatch orbit = vessel.VesselComponent.Orbit;
+            double now = GeneralTools.Current_UT;
+            LandingTargeting.OrbitalElementsFromStateVectors(orbit.GetRelativePositionAtUTZup(now),
+                orbit.GetOrbitalVelocityAtUTZup(now), orbit.referenceBody.gravParameter,
+                out double sma, out double apoapsisRadius, out _);
+            return double.IsNaN(sma) || sma <= 0 || double.IsNaN(apoapsisRadius) || apoapsisRadius < 0;
+        }
+
         public override void Start()
         {
             finished = false;
@@ -91,6 +104,13 @@ namespace K2D2.Landing
 
             var current_vessel = K2D2_Plugin.Instance.current_vessel;
             if (current_vessel == null) { Fail("No active vessel."); return; }
+
+            if (IsUnbound(current_vessel))
+            {
+                logger.LogInfo("[Circularize] refused: unbound orbit (no apoapsis).");
+                Fail("Orbit not closed: capture into orbit first.");
+                return;
+            }
 
             var check = CheckOrbit(out double apoapsisAlt_m, out double periapsisAlt_m);
 
@@ -135,6 +155,12 @@ namespace K2D2.Landing
                 $"body={body.Name} period={period:n1}s time_to_apoapsis={time_to_apoapsis:n1}s | " +
                 $"burn_UT={burn_UT:n1} (T+{burn_UT - now:n1}s) deltaV={deltaV:n2}m/s");
 
+            if (double.IsNaN(deltaV) || double.IsInfinity(deltaV))
+            {
+                Fail("Orbit not closed: capture into orbit first.");
+                return;
+            }
+
             maneuver_creator.Update();
             // Clear any node already on the plan (e.g. one the player created by hand, or a
             // leftover from an aborted previous run) before adding ours. AddNodeToVessel only ever
@@ -146,6 +172,11 @@ namespace K2D2.Landing
             status_line = $"Circularizing: {deltaV:n1} m/s";
             maneuver_creator.RemoveAllNodesThenCreate(burn_UT, deltaV, created_node =>
             {
+                if (created_node == null)
+                {
+                    Fail("Could not create the circularization node.");
+                    return;
+                }
                 node = created_node;
                 mode = Mode.Turn;
                 current_executor.setController(turn);
