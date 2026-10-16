@@ -1,5 +1,6 @@
 using K2D2.Controller;
 using K2D2.KSPService;
+using K2D2.OrbitPlanning;
 using KSP.Messages;
 using KSP.Sim;
 using KSP.Sim.Maneuver;
@@ -28,6 +29,7 @@ namespace K2D2.Node
         WarpTo warp;
         BurnManeuver burn;
         CircularizeBurn circularize;
+        TargetOrbitBurn target_burn;
 
         // Used for auto-deleting execute_node once its burn is done (see nextMode()).
         ManeuverCreator maneuver_creator = new ManeuverCreator();
@@ -57,6 +59,7 @@ namespace K2D2.Node
             warp = new WarpTo();
             burn = new BurnManeuver();
             circularize = new CircularizeBurn();
+            target_burn = new TargetOrbitBurn();
         }
 
         public void OnActiveVesselChanged(MessageCenterMessage msg)
@@ -71,7 +74,9 @@ namespace K2D2.Node
             Warp,
             Burn,
             // "Circularize at AP/PE": closed-loop CircularizeBurn, no node.
-            Circularize
+            Circularize,
+            // A node with a registered target orbit (Orbit tab plan): closed-loop TargetOrbitBurn.
+            TargetOrbit
         }
 
         public Mode mode = Mode.Off;
@@ -194,6 +199,12 @@ namespace K2D2.Node
 
                 circularize_error = null;
 
+                if (target_error != null && target_error_node == next_maneuver_node.NodeID)
+                {
+                    st.Warning(target_error);
+                    return;
+                }
+
                 if (!valid_maneuver)
                 {
                     st.Warning("Node data glitched");
@@ -217,6 +228,11 @@ namespace K2D2.Node
         // UpdateUI can tell the player why nothing happened, instead of the button silently doing
         // nothing. Cleared on the next successful call.
         public string circularize_error = null;
+
+        // Set when the closed-loop burn of a registered node is refused or stops on an error, and
+        // shown while that node is still the next one. Cleared on the next successful start.
+        public string target_error = null;
+        System.Guid target_error_node;
 
         public bool valid_maneuver = false;
 
@@ -303,11 +319,118 @@ namespace K2D2.Node
             UpdateUI();
         }
 
+        // Start of a node run. A node the Orbit tab registered (NodeTargets) is flown by the
+        // closed-loop TargetOrbitBurn, which warps, aligns and burns by itself: the game's maneuver
+        // model, which Turn (SAS Maneuver mode) and BurnManeuver (ManeuverPlanSolver) follow, is
+        // wrong when the active stage is nearly empty. Any other node takes the usual
+        // Turn/Warp/Burn sequence. False when a registered node's burn was refused.
+        bool StartNodeRun()
+        {
+            PruneNodeTargets();
+            if (next_maneuver_node != null && NodeTargets.TryGet(next_maneuver_node.NodeID, out var target))
+                return StartTargetBurn(next_maneuver_node, target);
+
+            setMode(Mode.Turn);
+            return true;
+        }
+
+        bool StartTargetBurn(ManeuverNodeData node, TargetOrbit target)
+        {
+            target_burn.allow_warp = settings.auto_warp.V;
+            // The node's Time is already the start of its centered burn (see ManeuverCreator.CreateNodes).
+            target_burn.Start(target, node.Time);
+            if (target_burn.failure_reason != null)
+            {
+                target_error = target_burn.failure_reason;
+                target_error_node = node.NodeID;
+                return false;
+            }
+
+            target_error = null;
+            execute_node = node;
+            next_maneuver_node = node;
+            logger.LogInfo($"setMode {Mode.TargetOrbit}: node {node.NodeID} flown toward its target orbit");
+            mode = Mode.TargetOrbit;
+            current_executor.setController(target_burn);
+            return true;
+        }
+
+        void UpdateTargetOrbit()
+        {
+            base.Update();
+
+            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.O))
+                Stop();
+            else if (target_burn.failure_reason != null)
+            {
+                target_error = target_burn.failure_reason;
+                target_error_node = execute_node != null ? execute_node.NodeID : System.Guid.Empty;
+                Stop();
+            }
+            else if (target_burn.finished)
+                OnTargetBurnDone();
+
+            UpdateUI();
+        }
+
+        // A registered burn is done: its node is deleted, as after any node. When the next node of
+        // the plan is registered too, the run goes on with it, so an Orbit tab plan runs end to end
+        // from a single Start; otherwise the run ends as usual.
+        void OnTargetBurnDone()
+        {
+            ManeuverNodeData done = execute_node;
+            maneuver_creator.Update();
+            ManeuverNodeData next = null;
+            var nodes = current_vessel.GetManeuverNodes();
+            if (nodes != null)
+            {
+                // A copy: RemoveNode changes the game's list.
+                foreach (var node in new System.Collections.Generic.List<ManeuverNodeData>(nodes))
+                {
+                    if (done != null && node.NodeID == done.NodeID)
+                        maneuver_creator.RemoveNode(node);
+                    else if (next == null)
+                        next = node;
+                }
+            }
+            if (done != null)
+                NodeTargets.Remove(done.NodeID);
+
+            if (next != null && NodeTargets.TryGet(next.NodeID, out var target))
+            {
+                logger.LogInfo($"[NodeEx] node {done?.NodeID} done, going on with node {next.NodeID}");
+                if (!StartTargetBurn(next, target))
+                    Stop();
+                return;
+            }
+
+            Stop();
+            if (settings.pause_on_end.V)
+                TimeWarpTools.SetIsPaused(true);
+        }
+
+        // Drops the registered targets of nodes no longer on the plan (deleted by hand).
+        void PruneNodeTargets()
+        {
+            var nodes = current_vessel?.GetManeuverNodes();
+            if (nodes == null)
+                return;
+            var ids = new System.Collections.Generic.List<System.Guid>();
+            foreach (var node in nodes)
+                ids.Add(node.NodeID);
+            NodeTargets.Prune(ids);
+        }
+
         public override void Update()
         {
             if (mode == Mode.Circularize)
             {
                 UpdateCircularize();
+                return;
+            }
+            if (mode == Mode.TargetOrbit)
+            {
+                UpdateTargetOrbit();
                 return;
             }
 
@@ -380,8 +503,14 @@ namespace K2D2.Node
                     // reset controller to desactivate other controllers.
                     K2D2_Plugin.ResetControllers();
                     TimeWarpTools.SetIsPaused(false);
-                
-                    setMode(Mode.Turn);
+
+                    if (!StartNodeRun())
+                    {
+                        // Refused before anything ran: tell the UI (the button) it is not running.
+                        base.isRunning = true;
+                        base.isRunning = false;
+                        return;
+                    }
                 }
 
                 // send call backs
@@ -410,6 +539,8 @@ namespace K2D2.Node
 
             if (mode == Mode.Circularize)
                 return $"Circularizing: {current_executor.status_line}";
+            if (mode == Mode.TargetOrbit)
+                return $"Target orbit: {current_executor.status_line}";
 
             if (next_maneuver_node == null)
             {

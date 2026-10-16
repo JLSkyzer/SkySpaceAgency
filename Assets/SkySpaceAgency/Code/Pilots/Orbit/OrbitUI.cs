@@ -156,7 +156,7 @@ namespace K2D2.OrbitPlanning
             maneuver_creator.Update();
             maneuver_creator.CreateNodes(plan.Burns, count =>
                 summary.text = Summary(plan, c, count == plan.Burns.Count
-                    ? $"{count} node(s) created: run them one by one from the Node tab. After a burn you can press Create maneuvers again to re-plan from the actual orbit."
+                    ? $"{count} node(s) created: Start in the Node tab flies them all, one after the other, toward the planned orbits."
                     : $"Warning: the game holds {count} node(s) for {plan.Burns.Count} planned."));
         }
 

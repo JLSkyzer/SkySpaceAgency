@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using KSP.Game;
 using KSP.Sim;
 using KSP.Sim.impl;
@@ -111,15 +112,21 @@ namespace K2D2.KSPService
 
         public ManeuverNodeData GetNextManeuveurNode()
         {
+            var activeNodes = GetManeuverNodes();
+            ManeuverNodeData next_node = (activeNodes != null && activeNodes.Count > 0) ? activeNodes[0] : null;
+            return next_node;
+        }
+
+        // The vessel's maneuver plan, in the game's order (the next node first); null when unavailable.
+        public List<ManeuverNodeData> GetManeuverNodes()
+        {
             var maneuvers = Game.SpaceSimulation?.Maneuvers;
             if (maneuvers == null) return null;
 
             var current_vehicle = VesselVehicle;
             if (current_vehicle == null) return null;
 
-            var activeNodes = maneuvers.GetNodesForVessel(current_vehicle.Guid);
-            ManeuverNodeData next_node = (activeNodes.Count > 0) ? activeNodes[0] : null;
-            return next_node;
+            return maneuvers.GetNodesForVessel(current_vehicle.Guid);
         }
 
         public ManeuverPlanSolver GetPlanSolver()

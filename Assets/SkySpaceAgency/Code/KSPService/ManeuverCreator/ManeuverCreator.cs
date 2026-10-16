@@ -362,6 +362,9 @@ namespace K2D2.KSPService
         /// </summary>
         public void RemoveAllNodes()
         {
+            // Every node goes: so do their target orbits (also any left by nodes removed by hand).
+            NodeTargets.Clear();
+
             var maneuvers_component = _vesselComponent?.SimulationObject?.FindComponent<ManeuverPlanComponent>();
             if (maneuvers_component == null)
                 return;
@@ -395,6 +398,7 @@ namespace K2D2.KSPService
                 return;
 
             maneuvers_component.RemoveNodes(new List<ManeuverNodeData> { node });
+            NodeTargets.Remove(node.NodeID);
         }
 
         /// <summary>
@@ -569,8 +573,13 @@ namespace K2D2.KSPService
                         previousStart = nodeUT;
 
                         var node = CreateManeuverNodeAtUT(nodeUT, burn.Prograde, burn.Normal * GameNormalSign, burn.Radial, i > 0);
+                        // The Node tab flies this node toward the orbit planned right after it
+                        // (closed loop, see TargetOrbitBurn), not along the game's maneuver model.
+                        if (node != null)
+                            NodeTargets.Register(node.NodeID, burn.Target);
                         logger.LogInfo($"[ManeuverCreator] CreateNodes: node {i + 1}/{burns.Count} {node?.NodeID} at UT={nodeUT:n1} (impulse UT={burn.UT:n1}) " +
-                            $"prograde={burn.Prograde:n2} normal={burn.Normal:n2} radial={burn.Radial:n2} ({burn.Label})");
+                            $"prograde={burn.Prograde:n2} normal={burn.Normal:n2} radial={burn.Radial:n2} ({burn.Label}), " +
+                            $"target ra={burn.Target.Ra:n0} m rp={burn.Target.Rp:n0} m inc={burn.Target.InclinationRad * 180 / Math.PI:n2}°");
                     }
                     catch (System.Exception e)
                     {

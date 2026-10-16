@@ -327,6 +327,8 @@ namespace K2D2
             Game.Messages.Subscribe<VesselChangedMessage>(msg =>
             {
                 var message = (VesselChangedMessage)msg;
+                // The registry's nodes belonged to the previous vessel.
+                NodeTargets.Clear();
                 ResetControllers();
             });
         }
