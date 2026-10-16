@@ -35,7 +35,7 @@ namespace K2D2.Node
         // Above this angle (degrees) between the vessel's forward and the aim, the throttle is 0.
         const double MaxThrustAngle = 10;
         // Remaining Δv (m/s) under which the burn is done.
-        const double DoneDeltaV = 1.0;
+        const double DoneDeltaV = 0.2;
         // Once the remaining Δv has dropped under this (m/s), OvershootRises consecutive rises
         // mean the burn overshot: stop there.
         const double OvershootWatchDeltaV = 5;
@@ -44,6 +44,20 @@ namespace K2D2.Node
         // The throttle aims at burning the remaining Δv in this many seconds at full thrust.
         const double ThrottleTimeConstant = 1.0;
         const double Rad2Deg = 180 / Math.PI;
+
+        // Divergence guard: armed after DivergenceArmTime seconds of thrust while aligned, it
+        // aborts when |dv| exceeds ignition·DivergenceGrowth + DivergenceMargin, or has risen
+        // continuously for DivergenceRiseTime seconds of thrust.
+        const double DivergenceArmTime = 2;
+        const double DivergenceGrowth = 1.2;
+        const double DivergenceMargin = 20;
+        const double DivergenceRiseTime = 3;
+        // Stall: |dv| not dropping for this many seconds of thrust while aligned (empty stage).
+        const double StallTime = 3;
+        const string StallStatus = "No thrust — stage?";
+        // Below this |dot| between our normal axis and the game's orbit-normal marker, the frames
+        // are not what the aim assumes: abort.
+        const double MinNormalAxisDot = 0.9;
 
         // Warp toward the burn (the Node tab follows its own auto-warp setting).
         public bool allow_warp = true;
@@ -64,6 +78,15 @@ namespace K2D2.Node
         float throttle;
         bool normal_axis_checked;
 
+        // Sign of the target radial speed, fixed at ignition (0 = from the current state).
+        int radial_sign;
+        double last_burn_UT;
+        double thrust_time;      // seconds of thrust while aligned since ignition
+        double rising_time;      // seconds of thrust with |dv| rising, continuously
+        double best_dv;          // lowest |dv| since ignition
+        double stall_time;       // seconds of thrust while aligned without a new lowest |dv|
+        bool stalled;
+
         protected KSPVessel current_vessel;
         protected BurndV burn_dV = new BurndV();
         WarpTo warp = new WarpTo();
@@ -78,7 +101,7 @@ namespace K2D2.Node
         public TargetOrbit Target => target;
 
         // Log tag, extra words after it ("AP"), and the burn's name in the UI texts.
-        protected virtual string Tag => "TargetOrbit";
+        protected virtual string Tag => "TargetOrbitBurn";
         protected virtual string TagDetail => "";
         protected virtual string BurnLabel => "burn";
 
@@ -127,6 +150,13 @@ namespace K2D2.Node
             angle = 0;
             throttle = 0;
             normal_axis_checked = false;
+            radial_sign = 0;
+            last_burn_UT = double.NaN;
+            thrust_time = 0;
+            rising_time = 0;
+            best_dv = double.PositiveInfinity;
+            stall_time = 0;
+            stalled = false;
 
             current_vessel = K2D2_Plugin.Instance.current_vessel;
             if (current_vessel?.VesselComponent == null)
@@ -156,7 +186,7 @@ namespace K2D2.Node
         protected virtual void RefreshWhileWaiting(double now) { }
 
         protected virtual Vector3d GuidanceDeltaV(Vector3d r, Vector3d v, double mu) =>
-            OrbitGuidance.DeltaVToOrbit(r, v, mu, target);
+            OrbitGuidance.DeltaVToOrbit(r, v, mu, target, radial_sign);
 
         Vector3d CurrentDeltaV(double now)
         {
@@ -193,6 +223,11 @@ namespace K2D2.Node
             mode = Mode.Burn;
             burn_start_UT = now;
             ignition_dv = double.NaN;
+            // Fixed for the whole burn, so the target does not flip side when the radial speed
+            // crosses 0 mid-burn.
+            IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
+            radial_sign = OrbitGuidance.RadialSign(orbit.GetRelativePositionAtUTZup(now),
+                orbit.GetOrbitalVelocityAtUTZup(now), target.Ra, target.Rp);
             LogStart(now);
         }
 
@@ -241,6 +276,8 @@ namespace K2D2.Node
                 if (mode == Mode.Align)
                 {
                     Steer(out _);
+                    if (finished)
+                        return;
                     status_line = $"Ignition in {StrTool.DurationToString(BurnStartUT - now)}, {angle:n1}° off";
                     return;
                 }
@@ -252,6 +289,13 @@ namespace K2D2.Node
         void Burn(double now)
         {
             bool steering = Steer(out Vector3d dv);
+            if (finished)
+                return;   // frame check failed
+
+            double dt = double.IsNaN(last_burn_UT) ? 0 : Math.Max(0, now - last_burn_UT);
+            last_burn_UT = now;
+            // The throttle applied since the previous frame: did the engines push?
+            bool thrusted = throttle > 0;
 
             remaining_dv = dv.magnitude;
             if (double.IsNaN(remaining_dv))
@@ -276,11 +320,15 @@ namespace K2D2.Node
                 return;
             }
 
+            bool rose = !double.IsNaN(last_remaining_dv) && remaining_dv > last_remaining_dv;
+            bool aligned = angle <= MaxThrustAngle;
+
             if (remaining_dv < OvershootWatchDeltaV)
                 watching_overshoot = true;
-            if (watching_overshoot && !double.IsNaN(last_remaining_dv))
+            // Only frames with thrust count: a coasting frame says nothing about an overshoot.
+            if (watching_overshoot && thrusted && !double.IsNaN(last_remaining_dv))
             {
-                rises = remaining_dv > last_remaining_dv ? rises + 1 : 0;
+                rises = rose ? rises + 1 : 0;
                 if (rises >= OvershootRises)
                 {
                     Finish(now, "overshoot");
@@ -288,6 +336,46 @@ namespace K2D2.Node
                 }
             }
             last_remaining_dv = remaining_dv;
+
+            rising_time = thrusted && rose ? rising_time + dt : 0;
+            if (thrusted && aligned)
+            {
+                thrust_time += dt;
+                if (thrust_time >= DivergenceArmTime)
+                {
+                    string why = null;
+                    if (remaining_dv > ignition_dv * DivergenceGrowth + DivergenceMargin)
+                        why = $"dv {remaining_dv:n1} m/s > {DivergenceGrowth} x ignition {ignition_dv:n1} + {DivergenceMargin} m/s";
+                    else if (rising_time >= DivergenceRiseTime)
+                        why = $"dv rising for {rising_time:n1} s under thrust (now {remaining_dv:n1} m/s, ignition {ignition_dv:n1} m/s)";
+                    if (why != null)
+                    {
+                        set_throttle(0);
+                        logger.LogWarning($"[{Tag}] burn diverging, aborted: {why}");
+                        LogOrbit("abort (diverging)", now, remaining_dv, now - burn_start_UT);
+                        Fail($"Burn diverging: aborted (check the [{Tag}] log).");
+                        return;
+                    }
+                }
+            }
+
+            // Stall: thrust commanded while aligned, but |dv| no longer drops (empty stage). Only
+            // reported: auto-staging may fix it.
+            if (remaining_dv < best_dv)
+            {
+                best_dv = remaining_dv;
+                stall_time = 0;
+                stalled = false;
+            }
+            else if (thrusted && aligned)
+            {
+                stall_time += dt;
+                if (stall_time >= StallTime && !stalled)
+                {
+                    stalled = true;
+                    logger.LogWarning($"[{Tag}] no thrust: dv {remaining_dv:n1} m/s not dropping for {stall_time:n1} s (stage?)");
+                }
+            }
 
             burn_dV.Compute_Thrust();
             double accel = burn_dV.mass > 0 ? Thrust() / burn_dV.mass : 0;
@@ -297,7 +385,7 @@ namespace K2D2.Node
             else
                 set_throttle(Mathf.Clamp((float)(remaining_dv / (accel * ThrottleTimeConstant)), MinThrottle, 1));
 
-            status_line = BurningStatus(remaining_dv);
+            status_line = stalled ? StallStatus : BurningStatus(remaining_dv);
         }
 
         protected virtual string BurningStatus(double dv) => $"Target orbit: {dv:n1} m/s left";
@@ -342,7 +430,12 @@ namespace K2D2.Node
             if (!normal_axis_checked)
             {
                 normal_axis_checked = true;
-                LogNormalAxisCheck(telemetry.OrbitMovementNormal, HorizonUp.coordinateSystem, up, fwd);
+                if (!CheckNormalAxis(telemetry.OrbitMovementNormal, HorizonUp.coordinateSystem, up, fwd))
+                {
+                    set_throttle(0);
+                    Fail("Frame check failed: aborted.");
+                    return false;
+                }
             }
 
             var autopilot = current_vessel.Autopilot;
@@ -360,23 +453,35 @@ namespace K2D2.Node
             return true;
         }
 
-        // In-game check of the normal convention, once per run: our normal axis (forward × up, the
-        // image of the Zup r × v) against the game's own orbit-normal marker. +1 means the game's
-        // Normal is r × v, as ManeuverCreator.GameNormalSign = +1 assumes for the nodes it creates;
-        // -1 means GameNormalSign should be flipped (our aim does not depend on it).
-        void LogNormalAxisCheck(Vector gameNormal, ICoordinateSystem frame, Vector3d up, Vector3d fwd)
+        // Frame check, once per run: our normal axis (forward × up, the image of the Zup r × v)
+        // against the game's own orbit-normal marker. They must be parallel (|dot| ≥ 0.9),
+        // otherwise the frames are not what the aim assumes: false. +1 means the game's Normal is
+        // r × v, as ManeuverCreator.GameNormalSign = +1 assumes for the nodes it creates; -1 means
+        // GameNormalSign should be flipped (our aim does not depend on it). A check that cannot be
+        // made (exception, NaN) is logged and passes.
+        bool CheckNormalAxis(Vector gameNormal, ICoordinateSystem frame, Vector3d up, Vector3d fwd)
         {
             try
             {
                 gameNormal.Reframe(frame);
-                double dot = Vector3d.Dot(Vector3d.Cross(fwd, up), gameNormal.vector.normalized);
-                logger.LogInfo($"[{Tag}] normal axis check: (forward x up).OrbitMovementNormal = {dot:n3} " +
+                Vector3d ours = Vector3d.Cross(fwd, up).normalized;
+                Vector3d theirs = gameNormal.vector.normalized;
+                double dot = Vector3d.Dot(ours, theirs);
+                string values = $"ours ({ours.x:n3}, {ours.y:n3}, {ours.z:n3}), " +
+                    $"OrbitMovementNormal ({theirs.x:n3}, {theirs.y:n3}, {theirs.z:n3}), dot {dot:n3}";
+                if (Math.Abs(dot) < MinNormalAxisDot)
+                {
+                    logger.LogWarning($"[{Tag}] frame check failed: {values}");
+                    return false;
+                }
+                logger.LogInfo($"[{Tag}] normal axis check: {values} " +
                     $"(+1: the game's Normal is r x v, as GameNormalSign = {ManeuverCreator.GameNormalSign} assumes)");
             }
             catch (Exception e)
             {
-                logger.LogWarning($"[{Tag}] normal axis check failed: {e.GetType().Name}: {e.Message}");
+                logger.LogWarning($"[{Tag}] normal axis check could not be made: {e.GetType().Name}: {e.Message}");
             }
+            return true;
         }
 
         void Finish(double now, string reason)

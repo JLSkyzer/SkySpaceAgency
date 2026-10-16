@@ -167,16 +167,68 @@ public class OrbitGuidanceTests
     }
 
     [Test]
-    public void AboveTheTargetApoapsis_ClampsToTheApoapsis()
+    public void AboveTheTargetApoapsis_WidensTheApoapsisToTheCurrentRadius()
     {
         double target = R + 100000;
-        var r = new Vector3d(R + 200000, 0, 0);
+        double radius = R + 200000;
+        var r = new Vector3d(radius, 0, 0);
         var v = new Vector3d(-50, 2000, 0);
 
         Vector3d after = v + OrbitGuidance.DeltaVToOrbit(r, v, Mu, target, target, North);
 
+        // Apoapsis here, the periapsis kept at the target.
         Assert.That(Vector3d.Dot(after, r.normalized), Is.EqualTo(0).Within(1e-6));
-        Assert.That(after.magnitude, Is.EqualTo(Math.Sqrt(Mu * target) / target).Within(1e-6));
+        var el = OrbitMath.Elements(r, after, Mu);
+        Assert.That(el.ApoapsisRadius, Is.EqualTo(radius).Within(1e-3));
+        Assert.That(el.PeriapsisRadius, Is.EqualTo(target).Within(1e-3));
+    }
+
+    [Test]
+    public void BelowTheTargetPeriapsis_WidensThePeriapsisToTheCurrentRadius()
+    {
+        double rp = R + 100000, ra = R + 500000;
+        double radius = R + 80000;
+        var r = new Vector3d(radius, 0, 0);
+        var v = new Vector3d(-30, 2200, 0);
+
+        Vector3d after = v + OrbitGuidance.DeltaVToOrbit(r, v, Mu, ra, rp, North);
+
+        // Periapsis here, the apoapsis kept at the target.
+        Assert.That(Vector3d.Dot(after, r.normalized), Is.EqualTo(0).Within(1e-6));
+        var el = OrbitMath.Elements(r, after, Mu);
+        Assert.That(el.PeriapsisRadius, Is.EqualTo(radius).Within(1e-3));
+        Assert.That(el.ApoapsisRadius, Is.EqualTo(ra).Within(1e-3));
+    }
+
+    [Test]
+    public void FixedRadialSign_OverridesTheCurrentRadialSpeed()
+    {
+        double rp = R + 100000, ra = R + 500000;
+        StateAtPeriapsis(rp, ra, 0, out var r0, out var v0);
+        double period = OrbitMath.Elements(r0, v0, Mu).Period;
+        KeplerPropagator.Propagate(r0, v0, Mu, 0.7 * period, out var r, out var v);
+        Assert.That(Vector3d.Dot(r, v), Is.LessThan(-1), "sanity: descending");
+
+        Vector3d after = v + OrbitGuidance.DeltaVToOrbit(r, v, Mu, ra, rp, North, +1);
+
+        Assert.That(Vector3d.Dot(after, r.normalized), Is.GreaterThan(1), "climbing, as fixed");
+        var el = OrbitMath.Elements(r, after, Mu);
+        Assert.That(el.ApoapsisRadius, Is.EqualTo(ra).Within(1e-3));
+        Assert.That(el.PeriapsisRadius, Is.EqualTo(rp).Within(1e-3));
+        Assert.That((OrbitGuidance.DeltaVToOrbit(r, v, Mu, ra, rp, North, 0)).magnitude, Is.LessThan(1e-3),
+            "0 = from the current radial speed");
+    }
+
+    [Test]
+    public void RadialSign_FollowsTheRadialSpeed_OrTheCloserApsis()
+    {
+        double rp = R + 100000, ra = R + 500000;
+        var r = new Vector3d(rp + 50000, 0, 0);
+        Assert.AreEqual(-1, OrbitGuidance.RadialSign(r, new Vector3d(-5, 2000, 0), ra, rp));
+        Assert.AreEqual(1, OrbitGuidance.RadialSign(r, new Vector3d(5, 2000, 0), ra, rp));
+        Assert.AreEqual(1, OrbitGuidance.RadialSign(r, new Vector3d(0.5, 2000, 0), ra, rp), "near the periapsis");
+        Assert.AreEqual(-1, OrbitGuidance.RadialSign(new Vector3d(ra - 50000, 0, 0), new Vector3d(-0.5, 2000, 0), ra, rp),
+            "near the apoapsis");
     }
 
     [Test]

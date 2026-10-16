@@ -575,8 +575,9 @@ namespace K2D2.KSPService
                         var node = CreateManeuverNodeAtUT(nodeUT, burn.Prograde, burn.Normal * GameNormalSign, burn.Radial, i > 0);
                         // The Node tab flies this node toward the orbit planned right after it
                         // (closed loop, see TargetOrbitBurn), not along the game's maneuver model.
+                        // Its BurnVector and Time as created tell later whether the player edited it.
                         if (node != null)
-                            NodeTargets.Register(node.NodeID, burn.Target);
+                            NodeTargets.Register(node.NodeID, burn.Target, node.BurnVector, node.Time);
                         logger.LogInfo($"[ManeuverCreator] CreateNodes: node {i + 1}/{burns.Count} {node?.NodeID} at UT={nodeUT:n1} (impulse UT={burn.UT:n1}) " +
                             $"prograde={burn.Prograde:n2} normal={burn.Normal:n2} radial={burn.Radial:n2} ({burn.Label}), " +
                             $"target ra={burn.Target.Ra:n0} m rp={burn.Target.Rp:n0} m inc={burn.Target.InclinationRad * 180 / Math.PI:n2}°");

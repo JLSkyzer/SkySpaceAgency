@@ -327,10 +327,33 @@ namespace K2D2.Node
         bool StartNodeRun()
         {
             PruneNodeTargets();
-            if (next_maneuver_node != null && NodeTargets.TryGet(next_maneuver_node.NodeID, out var target))
+            if (TryGetPlannedTarget(next_maneuver_node, out var target))
                 return StartTargetBurn(next_maneuver_node, target);
 
             setMode(Mode.Turn);
+            return true;
+        }
+
+        // The registered target orbit of a node, unless the player edited the node since it was
+        // created (BurnVector or Time changed): that entry is dropped and the node takes the normal
+        // executor, which follows what the player set.
+        bool TryGetPlannedTarget(ManeuverNodeData node, out TargetOrbit target)
+        {
+            target = default;
+            if (node == null || !NodeTargets.TryGet(node.NodeID, out var entry))
+                return false;
+
+            Vector3d burn_vector = node.BurnVector;
+            if (entry.IsEdited(burn_vector, node.Time))
+            {
+                NodeTargets.Remove(node.NodeID);
+                logger.LogInfo($"[NodeExPilot] node edited by the player: using the normal executor " +
+                    $"(node {node.NodeID}: burn ({entry.BurnVector.x:n2}, {entry.BurnVector.y:n2}, {entry.BurnVector.z:n2}) -> " +
+                    $"({burn_vector.x:n2}, {burn_vector.y:n2}, {burn_vector.z:n2}) m/s, time {entry.Time:n1} -> {node.Time:n1})");
+                return false;
+            }
+
+            target = entry.Target;
             return true;
         }
 
@@ -396,12 +419,24 @@ namespace K2D2.Node
             if (done != null)
                 NodeTargets.Remove(done.NodeID);
 
-            if (next != null && NodeTargets.TryGet(next.NodeID, out var target))
+            if (next != null)
             {
-                logger.LogInfo($"[NodeEx] node {done?.NodeID} done, going on with node {next.NodeID}");
-                if (!StartTargetBurn(next, target))
-                    Stop();
-                return;
+                bool registered = NodeTargets.TryGet(next.NodeID, out _);
+                if (TryGetPlannedTarget(next, out var target))
+                {
+                    logger.LogInfo($"[NodeEx] node {done?.NodeID} done, going on with node {next.NodeID}");
+                    if (!StartTargetBurn(next, target))
+                        Stop();
+                    return;
+                }
+                if (registered)
+                {
+                    // An Orbit-tab node the player edited: the normal executor flies it.
+                    logger.LogInfo($"[NodeEx] node {done?.NodeID} done, going on with edited node {next.NodeID}");
+                    next_maneuver_node = next;
+                    setMode(Mode.Turn);
+                    return;
+                }
             }
 
             Stop();

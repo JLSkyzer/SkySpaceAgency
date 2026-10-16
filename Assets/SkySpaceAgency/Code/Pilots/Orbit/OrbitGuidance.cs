@@ -46,13 +46,15 @@ namespace K2D2.OrbitPlanning
         /// current radius: a = (ra + rp)/2, h = sqrt(mu·2·ra·rp/(ra + rp)), v_t = h/|r|,
         /// v_r = ±sqrt(v² − v_t²) with v² from vis-viva. t̂ = normalize(n × r̂), with n flipped when
         /// t̂ would point against the current horizontal velocity (the orbit keeps its direction of
-        /// motion). The sign of v_r follows the current radial speed; under 1 m/s, up when |r| is
-        /// closer to rp, down otherwise. A radius outside [rp, ra] by more than the tolerance (see
-        /// IsReachable) is clamped into it, where v_r = 0: the best effort from a place the target
-        /// orbit does not pass through. ra and rp may come in either order. NaN components when |r|
-        /// or n is zero.
+        /// motion). The sign of v_r is radialSign when it is ±1 (fixed by the caller, at ignition),
+        /// otherwise RadialSign of the current state. A radius outside [rp, ra] by more than the
+        /// tolerance (see IsReachable) widens the range to it (ra' = max(ra, |r|), rp' =
+        /// min(rp, |r|)): the vessel becomes an apsis there and the other apsis is kept, the best
+        /// effort from a place the target orbit does not pass through. ra and rp may come in
+        /// either order. NaN components when |r| or n is zero.
         /// </summary>
-        public static Vector3d DeltaVToOrbit(Vector3d r, Vector3d v, double mu, double ra, double rp, Vector3d planeNormal)
+        public static Vector3d DeltaVToOrbit(Vector3d r, Vector3d v, double mu, double ra, double rp, Vector3d planeNormal,
+            int radialSign = 0)
         {
             double rMag = r.magnitude;
             double nMag = planeNormal.magnitude;
@@ -78,7 +80,12 @@ namespace K2D2.OrbitPlanning
             if (Vector3d.Dot(tangent, horizontalVelocity) < 0)
                 tangent = -1.0 * tangent;
 
-            double radius = IsReachable(rMag, ra, rp) ? rMag : Math.Min(ra, Math.Max(rp, rMag));
+            if (!IsReachable(rMag, ra, rp))
+            {
+                ra = Math.Max(ra, rMag);
+                rp = Math.Min(rp, rMag);
+            }
+            double radius = rMag;
 
             double a = (ra + rp) / 2;
             double h = Math.Sqrt(mu * 2 * ra * rp / (ra + rp));
@@ -86,16 +93,29 @@ namespace K2D2.OrbitPlanning
             // v² − v_t² from vis-viva, rewritten as mu·(ra − r)(r − rp)/(a·r²): the same value,
             // exactly 0 at both apsides (no cancellation on a circular target).
             double vr2 = mu * (ra - radius) * (radius - rp) / (a * radius * radius);
-            double sign = Math.Abs(radialSpeed) >= MinRadialSpeed
-                ? Math.Sign(radialSpeed)
-                : (Math.Abs(radius - rp) <= Math.Abs(ra - radius) ? 1 : -1);
+            int sign = radialSign == 1 || radialSign == -1 ? radialSign : RadialSign(r, v, ra, rp);
             double vr = sign * Math.Sqrt(Math.Max(0, vr2));
 
             return vr * up + vt * tangent - v;
         }
 
-        public static Vector3d DeltaVToOrbit(Vector3d r, Vector3d v, double mu, TargetOrbit target) =>
-            DeltaVToOrbit(r, v, mu, target.Ra, target.Rp, target.PlaneNormal);
+        public static Vector3d DeltaVToOrbit(Vector3d r, Vector3d v, double mu, TargetOrbit target, int radialSign = 0) =>
+            DeltaVToOrbit(r, v, mu, target.Ra, target.Rp, target.PlaneNormal, radialSign);
+
+        /// <summary>
+        /// Sign of the target radial speed from the state: that of the current radial speed, or,
+        /// under 1 m/s, +1 when |r| is closer to rp than to ra (about to climb), −1 otherwise.
+        /// </summary>
+        public static int RadialSign(Vector3d r, Vector3d v, double ra, double rp)
+        {
+            double rMag = r.magnitude;
+            double radialSpeed = rMag > 0 ? Vector3d.Dot(v, r) / rMag : 0;
+            if (Math.Abs(radialSpeed) >= MinRadialSpeed)
+                return Math.Sign(radialSpeed);
+            double high = Math.Max(ra, rp);
+            double low = Math.Min(ra, rp);
+            return Math.Abs(rMag - low) <= Math.Abs(high - rMag) ? 1 : -1;
+        }
 
         /// <summary>
         /// True when the radius lies in [rp, ra] up to max(100 m, 0.1 %) (same tolerance as

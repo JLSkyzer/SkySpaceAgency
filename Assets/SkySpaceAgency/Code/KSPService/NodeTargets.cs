@@ -1,9 +1,31 @@
 using System;
 using System.Collections.Generic;
 using K2D2.OrbitPlanning;
+using KSP.Sim;
 
 namespace K2D2.KSPService
 {
+    /// <summary>
+    /// A registered node: the orbit planned right after it, and the node's BurnVector and Time
+    /// when it was created, to tell whether the player has edited it since.
+    /// </summary>
+    public struct NodeTarget
+    {
+        // Beyond these, the node no longer is the one planned: the player moved or resized it.
+        public const double BurnVectorTolerance = 0.5;   // m/s, per component
+        public const double TimeTolerance = 1.0;         // s
+
+        public TargetOrbit Target;
+        public Vector3d BurnVector;
+        public double Time;
+
+        public bool IsEdited(Vector3d burnVector, double time) =>
+            Math.Abs(burnVector.x - BurnVector.x) > BurnVectorTolerance
+            || Math.Abs(burnVector.y - BurnVector.y) > BurnVectorTolerance
+            || Math.Abs(burnVector.z - BurnVector.z) > BurnVectorTolerance
+            || Math.Abs(time - Time) > TimeTolerance;
+    }
+
     /// <summary>
     /// In-memory registry of the target orbit of each maneuver node the Orbit tab created, by
     /// NodeID. The Node tab flies a registered node with the closed-loop TargetOrbitBurn instead
@@ -13,13 +35,14 @@ namespace K2D2.KSPService
     /// </summary>
     public static class NodeTargets
     {
-        static readonly Dictionary<Guid, TargetOrbit> targets = new Dictionary<Guid, TargetOrbit>();
+        static readonly Dictionary<Guid, NodeTarget> targets = new Dictionary<Guid, NodeTarget>();
 
         public static int Count => targets.Count;
 
-        public static void Register(Guid nodeId, TargetOrbit target) => targets[nodeId] = target;
+        public static void Register(Guid nodeId, TargetOrbit target, Vector3d burnVector, double time) =>
+            targets[nodeId] = new NodeTarget { Target = target, BurnVector = burnVector, Time = time };
 
-        public static bool TryGet(Guid nodeId, out TargetOrbit target) => targets.TryGetValue(nodeId, out target);
+        public static bool TryGet(Guid nodeId, out NodeTarget entry) => targets.TryGetValue(nodeId, out entry);
 
         public static void Remove(Guid nodeId) => targets.Remove(nodeId);
 
