@@ -329,4 +329,39 @@ public class OrbitPlannerTests
         AssertRelative(R + 500000, final.ApoapsisRadius, 1e-3, "final ra");
         AssertRelative(R + 100000, final.PeriapsisRadius, 1e-3, "final rp");
     }
+    [Test]
+    public void Plan_ApAndPe_EachBurnTargetsTheOrbitRightAfterIt()
+    {
+        const double ut0 = 1000;
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, ut0, Kerbin, new OrbitTargets { ApAltitude = 300000, PeAltitude = 300000 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(2, plan.Burns.Count);
+
+        var first = plan.Burns[0].Target;
+        AssertRelative(R + 300000, first.Ra, 1e-6, "after burn 1: ra");
+        AssertRelative(R + 100000, first.Rp, 1e-6, "after burn 1: rp");
+        Assert.AreEqual(1.0, first.PlaneNormal.z, 1e-9, "after burn 1: equatorial plane");
+
+        var second = plan.Burns[1].Target;
+        AssertRelative(R + 300000, second.Ra, 1e-6, "after burn 2: ra");
+        AssertRelative(R + 300000, second.Rp, 1e-6, "after burn 2: rp");
+        AssertRelative(plan.Final.ApoapsisRadius, second.Ra, 1e-9, "last target is the final orbit");
+        AssertRelative(plan.Final.PeriapsisRadius, second.Rp, 1e-9, "last target is the final orbit");
+    }
+
+    [Test]
+    public void Plan_Inclination_TargetPlaneHasTheTargetInclination()
+    {
+        StateAtPeriapsis(100000, 100000, 0, out var r, out var v);
+        var plan = OrbitPlanner.Plan(r, v, 1000, Kerbin, new OrbitTargets { InclinationDeg = 10 });
+        Assert.IsTrue(plan.Ok, plan.Error.ToString());
+        Assert.AreEqual(1, plan.Burns.Count);
+
+        var target = plan.Burns[0].Target;
+        Assert.AreEqual(1.0, target.PlaneNormal.magnitude, 1e-9);
+        Assert.AreEqual(10.0, Math.Acos(target.PlaneNormal.z) / Deg, 1e-6);
+        AssertRelative(R + 100000, target.Ra, 1e-6, "ra unchanged");
+        AssertRelative(R + 100000, target.Rp, 1e-6, "rp unchanged");
+    }
 }

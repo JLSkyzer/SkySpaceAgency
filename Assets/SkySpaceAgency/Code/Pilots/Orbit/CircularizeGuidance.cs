@@ -17,7 +17,8 @@ namespace K2D2.OrbitPlanning
 
         /// <summary>
         /// v_circ · t̂ − v, where v_circ = sqrt(mu/|r|) and t̂ is the normalized horizontal part of v
-        /// (perpendicular to r). NaN components when |r| is not positive; zero when the horizontal
+        /// (perpendicular to r): OrbitGuidance.DeltaVToOrbit toward the circular orbit of radius |r|
+        /// in the current plane. NaN components when |r| is not positive; zero when the horizontal
         /// speed is below 1e-6 m/s (no defined direction: the caller treats the burn as done or refused).
         /// </summary>
         public static Vector3d DeltaVToCircular(Vector3d r, Vector3d v, double mu)
@@ -26,45 +27,22 @@ namespace K2D2.OrbitPlanning
             if (!(rMag > 0))
                 return new Vector3d(double.NaN, double.NaN, double.NaN);
 
-            if (!HorizontalDirection(r, v, out Vector3d up, out Vector3d tangent))
+            Vector3d up = r / rMag;
+            Vector3d horizontal = v - Vector3d.Dot(v, up) * up;
+            if (!(horizontal.magnitude >= MinHorizontalSpeed))
                 return Vector3d.zero;
 
-            double vCirc = Math.Sqrt(mu / rMag);
-            return vCirc * tangent - v;
+            return OrbitGuidance.DeltaVToOrbit(r, v, mu, rMag, rMag, Vector3d.Cross(r, v));
         }
 
         /// <summary>
         /// Components of dv along r̂ (radial, positive up) and along t̂ (horizontal, positive in the
-        /// direction of travel). Both NaN when |r| is not positive; horizontal is 0 when the
-        /// horizontal speed is undefined.
+        /// direction of travel); see OrbitGuidance.Split. Both NaN when |r| is not positive;
+        /// horizontal is 0 when the horizontal speed is undefined.
         /// </summary>
         public static void Split(Vector3d dv, Vector3d r, Vector3d v, out double radial, out double horizontal)
         {
-            if (!(r.magnitude > 0))
-            {
-                radial = double.NaN;
-                horizontal = double.NaN;
-                return;
-            }
-
-            bool hasTangent = HorizontalDirection(r, v, out Vector3d up, out Vector3d tangent);
-            radial = Vector3d.Dot(dv, up);
-            horizontal = hasTangent ? Vector3d.Dot(dv, tangent) : 0;
-        }
-
-        // up = r̂; tangent = normalized (v − (v·r̂) r̂). False when the horizontal speed is too small.
-        static bool HorizontalDirection(Vector3d r, Vector3d v, out Vector3d up, out Vector3d tangent)
-        {
-            up = r / r.magnitude;
-            Vector3d horizontal = v - Vector3d.Dot(v, up) * up;
-            double speed = horizontal.magnitude;
-            if (!(speed >= MinHorizontalSpeed))
-            {
-                tangent = Vector3d.zero;
-                return false;
-            }
-            tangent = horizontal / speed;
-            return true;
+            OrbitGuidance.Split(dv, r, v, out radial, out horizontal, out _);
         }
     }
 }

@@ -39,6 +39,8 @@ namespace K2D2.OrbitPlanning
         public double Normal;     // DeltaV along the orbit normal ĥ = (r × v)/|r × v|
         public double Prograde;   // DeltaV along v̂
         public string Label;
+        // The orbit right after this burn (apsis radii and plane), for the closed-loop executor.
+        public TargetOrbit Target;
     }
 
     public sealed class OrbitPlan
@@ -177,7 +179,7 @@ namespace K2D2.OrbitPlanning
             double errMinus = Math.Abs(OrbitMath.Elements(rb, vMinus, mu).InclinationRad - iTarget);
             Vector3d vNew = errPlus <= errMinus ? vPlus : vMinus;
 
-            AddBurn(plan, state.UT + dt, rb, vb, vNew - vb, $"Inclination {iTarget / Deg:n2}° {where}");
+            AddBurn(plan, mu, state.UT + dt, rb, vb, vNew - vb, $"Inclination {iTarget / Deg:n2}° {where}");
             state = new State { R = rb, V = vNew, UT = state.UT + dt };
         }
 
@@ -196,11 +198,11 @@ namespace K2D2.OrbitPlanning
             double rMag = rb.magnitude;
             double vNew = Math.Sqrt(mu * (2 / rMag - 2 / (rMag + oppositeRadius)));
             Vector3d dv = (vNew - vb.magnitude) * vb.normalized;
-            AddBurn(plan, state.UT + dt, rb, vb, dv, $"{label} {where}");
+            AddBurn(plan, mu, state.UT + dt, rb, vb, dv, $"{label} {where}");
             state = new State { R = rb, V = vb + dv, UT = state.UT + dt };
         }
 
-        static void AddBurn(OrbitPlan plan, double ut, Vector3d r, Vector3d v, Vector3d dv, string label)
+        static void AddBurn(OrbitPlan plan, double mu, double ut, Vector3d r, Vector3d v, Vector3d dv, string label)
         {
             Vector3d prograde = v.normalized;
             Vector3d normal = Vector3d.Cross(r, v).normalized;
@@ -212,7 +214,8 @@ namespace K2D2.OrbitPlanning
                 Prograde = Vector3d.Dot(dv, prograde),
                 Normal = Vector3d.Dot(dv, normal),
                 Radial = Vector3d.Dot(dv, radial),
-                Label = label
+                Label = label,
+                Target = TargetOrbit.FromState(r, v + dv, mu)
             });
         }
 
