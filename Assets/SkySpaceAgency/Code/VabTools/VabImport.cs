@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -53,6 +54,7 @@ namespace K2D2.VabTools
                 }
                 if (!(embedded is JObject assembly) || !(assembly["parts"] is JArray))
                     return Fail("This export has no game_assembly with a \"parts\" list.");
+                root["game_assembly"] = assembly;   // a string form is replaced by the parsed tree: Root and Assembly stay one
                 return Done(VabImportFormat.ModExport, root, assembly, new List<JObject> { assembly });
             }
             if (format == VabDump.Format)
@@ -194,5 +196,62 @@ namespace K2D2.VabTools
             $"Refused: {missing.Count} part(s) not available in this VAB: " +
             string.Join(", ", missing.Select(m => m.Name + (m.Known ? " (not unlocked)" : " (unknown part)"))) +
             ". Your rocket was not changed.";
+
+        // Spec, choix 2: lowers, in place, every resource amount above its capacity, and every
+        // capacity above the part definition's (deviation 3). The capacity is checked against the
+        // definition only for parts without variant or property overrides, whose definition
+        // capacity may not apply. Returns one line per correction, for the log and the status line.
+        public static List<string> ClampResources(JObject assembly, Func<string, string, double?> definitionCapacity)
+        {
+            var corrections = new List<string>();
+            if (!(assembly?["parts"] is JArray parts))
+                return corrections;
+            for (int i = 0; i < parts.Count; i++)
+            {
+                if (!(parts[i] is JObject part) || !(part["partState"] is JObject state) ||
+                    !(state["resources"] is JObject resources))
+                    continue;
+                string partName = VabJson.Str(part["partName"]) ?? "?";
+                bool overridden = HasContent(part["PartSwitchOverrides"]) || HasContent(state["partPropertyOverrides"]);
+                foreach (JProperty property in resources.Properties())
+                {
+                    if (!(property.Value is JObject resource))
+                        continue;
+                    string resourceName = VabJson.Str(resource["name"]) ?? property.Name;
+                    string where = $"{partName} (part #{i + 1}) {resourceName}";
+                    double? stored = VabJson.Num(resource["storedUnits"]);
+                    double? capacity = VabJson.Num(resource["capacityUnits"]);
+                    double? definition = overridden || definitionCapacity == null
+                        ? null
+                        : definitionCapacity(partName, resourceName);
+
+                    if (definition.HasValue && capacity.HasValue && capacity.Value > definition.Value + Tolerance(definition.Value))
+                    {
+                        corrections.Add($"{where}: capacity {VabNum.Text(capacity.Value)} -> {VabNum.Text(definition.Value)} (part definition)");
+                        resource["capacityUnits"] = definition.Value;
+                        capacity = definition;
+                    }
+
+                    double? limit = capacity ?? definition;
+                    if (stored.HasValue && limit.HasValue && stored.Value > limit.Value + Tolerance(limit.Value))
+                    {
+                        corrections.Add($"{where}: amount {VabNum.Text(stored.Value)} -> {VabNum.Text(limit.Value)} (capacity)");
+                        resource["storedUnits"] = limit.Value;
+                    }
+                    else if (stored.HasValue && stored.Value < 0)
+                    {
+                        corrections.Add($"{where}: amount {VabNum.Text(stored.Value)} -> 0");
+                        resource["storedUnits"] = 0.0;
+                    }
+                }
+            }
+            return corrections;
+        }
+
+        // Float noise between the file (single precision) and the definition (double) is not a correction.
+        static double Tolerance(double value) => 1e-6 * Math.Max(1.0, Math.Abs(value));
+
+        static bool HasContent(JToken token) =>
+            token != null && token.Type != JTokenType.Null && !(token is JContainer && !token.HasValues);
     }
 }
