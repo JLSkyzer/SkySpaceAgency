@@ -84,8 +84,8 @@ namespace K2D2.Landing
 
         // Not a real orbital period - a hyperbolic/unbound trajectory only ever passes periapsis
         // once, it doesn't repeat. This is just a sensible time SCALE to sweep across when
-        // looking for that one passage (see TimeToNextPeriapsis's caller in NodeExPilot.
-        // CreateCircularizeNode - the "Circularize at PE" button needs to work on an inbound SOI
+        // looking for that one passage (see TimeToNextPeriapsis's caller in Node's
+        // CircularizeBurn - the "Circularize at PE" button needs to work on an inbound SOI
         // capture trajectory, before any capture burn has happened). Same formula as
         // OrbitalPeriodFromStateVectors above, but taking the absolute value of the semi-major
         // axis (negative for a hyperbolic/unbound orbit - see OrbitalElementsFromStateVectors) so

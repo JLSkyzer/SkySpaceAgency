@@ -38,8 +38,8 @@ namespace K2D2.Node
             run_button = panel.Q<ToggleButton>("run");
             pause_button = panel.Q<ToggleButton>("pause");
 
-            panel.Q<Button>("circularize_ap").listenClick(() => pilot.CreateCircularizeNode(true));
-            panel.Q<Button>("circularize_pe").listenClick(() => pilot.CreateCircularizeNode(false));
+            panel.Q<Button>("circularize_ap").listenClick(() => pilot.StartCircularize(true));
+            panel.Q<Button>("circularize_pe").listenClick(() => pilot.StartCircularize(false));
 
             status_bar = new FullStatus(panel);
 
