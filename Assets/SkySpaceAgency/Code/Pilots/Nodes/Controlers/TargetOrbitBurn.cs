@@ -58,6 +58,14 @@ namespace K2D2.Node
         // Below this |dot| between our normal axis and the game's orbit-normal marker, the frames
         // are not what the aim assumes: abort.
         const double MinNormalAxisDot = 0.9;
+        // The frame check aborts only when the burn has a meaningful normal component at ignition:
+        // above max(this, FrameCheckNormalShare·|dv|). Radial and along-track components do not
+        // depend on the handedness the check is about.
+        const double FrameCheckMinNormal = 1.0;
+        const double FrameCheckNormalShare = 0.05;
+        // A frame counts for the rise and divergence guards only with this real (measured)
+        // acceleration, m/s²: a staging gap or a flamed-out engine never trips them.
+        const double MinRealAccel = 0.1;
 
         // Warp toward the burn (the Node tab follows its own auto-warp setting).
         public bool allow_warp = true;
@@ -77,6 +85,7 @@ namespace K2D2.Node
         double angle;
         float throttle;
         bool normal_axis_checked;
+        bool frame_check_strict;
 
         // Sign of the target radial speed, fixed at ignition (0 = from the current state).
         int radial_sign;
@@ -150,6 +159,7 @@ namespace K2D2.Node
             angle = 0;
             throttle = 0;
             normal_axis_checked = false;
+            frame_check_strict = false;
             radial_sign = 0;
             last_burn_UT = double.NaN;
             thrust_time = 0;
@@ -226,8 +236,16 @@ namespace K2D2.Node
             // Fixed for the whole burn, so the target does not flip side when the radial speed
             // crosses 0 mid-burn.
             IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
-            radial_sign = OrbitGuidance.RadialSign(orbit.GetRelativePositionAtUTZup(now),
-                orbit.GetOrbitalVelocityAtUTZup(now), target.Ra, target.Rp);
+            Vector3d r = orbit.GetRelativePositionAtUTZup(now);
+            Vector3d v = orbit.GetOrbitalVelocityAtUTZup(now);
+            radial_sign = OrbitGuidance.RadialSign(r, v, target.Ra, target.Rp);
+
+            // The frame check (first Steer from now on) may abort only a burn with a real normal part.
+            Vector3d dv = GuidanceDeltaV(r, v, orbit.referenceBody.gravParameter);
+            OrbitGuidance.Split(dv, r, v, out _, out _, out double normal);
+            frame_check_strict = Math.Abs(normal) > Math.Max(FrameCheckMinNormal, FrameCheckNormalShare * dv.magnitude);
+            logger.LogInfo($"[{Tag}] frame check {(frame_check_strict ? "can abort" : "log only")}: " +
+                $"normal component {normal:n1} of {dv.magnitude:n1} m/s");
             LogStart(now);
         }
 
@@ -296,6 +314,9 @@ namespace K2D2.Node
             last_burn_UT = now;
             // The throttle applied since the previous frame: did the engines push?
             bool thrusted = throttle > 0;
+            // And did they really (measured from the engines' final thrust)?
+            burn_dV.Compute_Thrust();
+            bool powered = thrusted && burn_dV.actual_dv > MinRealAccel;
 
             remaining_dv = dv.magnitude;
             if (double.IsNaN(remaining_dv))
@@ -337,8 +358,10 @@ namespace K2D2.Node
             }
             last_remaining_dv = remaining_dv;
 
-            rising_time = thrusted && rose ? rising_time + dt : 0;
-            if (thrusted && aligned)
+            // Frames without real thrust are not counted (neither a rise nor a break).
+            if (powered)
+                rising_time = rose ? rising_time + dt : 0;
+            if (powered && aligned)
             {
                 thrust_time += dt;
                 if (thrust_time >= DivergenceArmTime)
@@ -377,7 +400,6 @@ namespace K2D2.Node
                 }
             }
 
-            burn_dV.Compute_Thrust();
             double accel = burn_dV.mass > 0 ? Thrust() / burn_dV.mass : 0;
 
             if (angle > MaxThrustAngle || accel <= 0)
@@ -427,7 +449,7 @@ namespace K2D2.Node
             if (!(aim.magnitude > 0))
                 return false;
 
-            if (!normal_axis_checked)
+            if (!normal_axis_checked && mode == Mode.Burn)
             {
                 normal_axis_checked = true;
                 if (!CheckNormalAxis(telemetry.OrbitMovementNormal, HorizonUp.coordinateSystem, up, fwd))
@@ -453,9 +475,10 @@ namespace K2D2.Node
             return true;
         }
 
-        // Frame check, once per run: our normal axis (forward × up, the image of the Zup r × v)
-        // against the game's own orbit-normal marker. They must be parallel (|dot| ≥ 0.9),
-        // otherwise the frames are not what the aim assumes: false. +1 means the game's Normal is
+        // Frame check, once per run, at ignition: our normal axis (forward × up, the image of the
+        // Zup r × v) against the game's own orbit-normal marker. They must be parallel
+        // (|dot| ≥ 0.9), otherwise the frames are not what the aim assumes: false when the burn has
+        // a meaningful normal component (frame_check_strict), a warning only otherwise. +1 means the game's Normal is
         // r × v, as ManeuverCreator.GameNormalSign = +1 assumes for the nodes it creates; -1 means
         // GameNormalSign should be flipped (our aim does not depend on it). A check that cannot be
         // made (exception, NaN) is logged and passes.
@@ -471,8 +494,13 @@ namespace K2D2.Node
                     $"OrbitMovementNormal ({theirs.x:n3}, {theirs.y:n3}, {theirs.z:n3}), dot {dot:n3}";
                 if (Math.Abs(dot) < MinNormalAxisDot)
                 {
-                    logger.LogWarning($"[{Tag}] frame check failed: {values}");
-                    return false;
+                    if (frame_check_strict)
+                    {
+                        logger.LogWarning($"[{Tag}] frame check failed: {values}");
+                        return false;
+                    }
+                    logger.LogWarning($"[{Tag}] frame check failed, continuing (no meaningful normal component): {values}");
+                    return true;
                 }
                 logger.LogInfo($"[{Tag}] normal axis check: {values} " +
                     $"(+1: the game's Normal is r x v, as GameNormalSign = {ManeuverCreator.GameNormalSign} assumes)");
