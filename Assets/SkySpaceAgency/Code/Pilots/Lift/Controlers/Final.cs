@@ -51,6 +51,9 @@ namespace K2D2.Lift
 
             logger.LogInfo($"[FinalCircularize] now={GeneralTools.Current_UT:n1}: closed-loop circularize at apoapsis");
             circularize.allow_warp = true;
+            // Already past the apoapsis and falling (a late or slow ascent): burn at once instead
+            // of refusing; the closed-loop guidance also cancels the downward speed.
+            circularize.refuse_past_apoapsis = false;
             // A refusal is handled in Update, not here: ending the Lift pilot from inside its own
             // status setter (which calls this Start) would nest two status changes.
             circularize.Start(atApoapsis: true);
