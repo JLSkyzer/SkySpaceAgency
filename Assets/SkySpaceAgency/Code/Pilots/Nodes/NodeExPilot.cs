@@ -9,13 +9,13 @@ using KTools;
 // using KTools.UI;
 // using K2D2.InfosPages;
 using UnityEngine;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Node
 {
     public class NodeExPilot : Pilot
     {
-        public ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.NodeExecute");
+        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.NodeExecute");
 
         public static NodeExPilot Instance { get; set; }
 

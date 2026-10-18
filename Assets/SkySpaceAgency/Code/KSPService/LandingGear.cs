@@ -4,7 +4,7 @@ using KSP.Modules;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.KSPService
 {
@@ -23,7 +23,7 @@ namespace K2D2.KSPService
     {
         public const double RecheckDelay = 3; // s of game time
 
-        readonly ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.LandingGear");
+        readonly ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.LandingGear");
 
         bool requested = false;
         double recheck_ut = -1;   // < 0: no re-check pending

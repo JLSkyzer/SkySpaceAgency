@@ -8,7 +8,7 @@ using KSP.Sim;
 using KTools;
 using UnityEngine;
 using UnityEngine.UIElements;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Node
 {
@@ -104,7 +104,7 @@ namespace K2D2.Node
 
         protected TargetOrbitBurn(string loggerName)
         {
-            logger = ReduxLib.ReduxLib.GetLogger(loggerName);
+            logger = SpaceWarp2.API.Logging.LogManager.GetLogger(loggerName);
         }
 
         public TargetOrbit Target => target;

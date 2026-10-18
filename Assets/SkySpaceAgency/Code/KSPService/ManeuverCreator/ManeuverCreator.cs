@@ -10,7 +10,7 @@ using K2D2.OrbitPlanning;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using UnityEngine;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 
 namespace K2D2.KSPService
@@ -30,7 +30,7 @@ namespace K2D2.KSPService
 
         public KSPVessel kspVessel { get; set; }
 
-        public ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.CircleController");
+        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.CircleController");
 
         public ManeuverCreator()
         {

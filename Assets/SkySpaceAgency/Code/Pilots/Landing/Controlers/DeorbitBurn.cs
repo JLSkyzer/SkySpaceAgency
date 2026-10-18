@@ -8,7 +8,7 @@ using K2D2.UI;
 using K2D2.Controller;
 using K2D2.KSPService;
 using K2D2.Node;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Landing
 {
@@ -27,7 +27,7 @@ namespace K2D2.Landing
     // without touching NodeExPilot at all.
     public class DeorbitBurn : ExecuteController
     {
-        public ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.DeorbitBurn");
+        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.DeorbitBurn");
 
         public enum Mode
         {

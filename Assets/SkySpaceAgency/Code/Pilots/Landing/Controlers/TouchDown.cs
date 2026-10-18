@@ -10,14 +10,14 @@ using K2D2.Controller;
 using K2D2.Landing.Braking;
 
 using KTools;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Landing
 {
     /// apply the wanted speed in the good direction
     public class TouchDown : ExecuteController
     {
-        public ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.TouchDown");
+        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.TouchDown");
 
         public bool gravity_compensation;
         public float max_speed = 0;

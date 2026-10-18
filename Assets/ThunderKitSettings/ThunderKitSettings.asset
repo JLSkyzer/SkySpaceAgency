@@ -16,7 +16,7 @@ MonoBehaviour:
   ShowOnStartup: 1
   GameExecutable: KSP2_x64.exe
   GamePath: I:\SteamLibrary\steamapps\common\Kerbal Space Program 2
-  Is64Bit: 0
+  Is64Bit: 1
   DateTimeFormat: HH:mm:ss:fff
   CreatedDateFormat: MMM/dd HH:mm:ss
   ShowLogWindow: 1

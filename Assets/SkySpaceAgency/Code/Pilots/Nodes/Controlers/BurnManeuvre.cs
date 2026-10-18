@@ -9,7 +9,7 @@ using K2D2.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 using K2D2.Controller;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Node
 {
@@ -32,7 +32,7 @@ namespace K2D2.Node
 
     public class BurnManeuver : ExecuteController
     {
-        public ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.BurnManeuver");
+        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.BurnManeuver");
 
         BurndV burn_dV = new BurndV();
         KSPVessel current_vessel;

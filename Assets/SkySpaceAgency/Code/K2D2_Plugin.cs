@@ -18,7 +18,7 @@ using K2D2.Landing;
 using K2D2.Node;
 using Redux.ExtraModTypes;
 using UnityEngine.ResourceManagement.AsyncOperations;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2
 {
@@ -229,6 +229,15 @@ namespace K2D2
             // Update/FixedUpdate/LateUpdate run before OnInitialized, while the game instance exists
             // but its state machine is not set up yet: both used to throw NullReferenceException here.
             if (!loaded || GeneralTools.Game == null) return false;
+
+            // Since Redux 26w42a a mod is installed but disabled in every campaign that does not
+            // enable its default feature (and in the main menu). Redux hides our AppBar button
+            // then, but Alt-O and the pilots run from Update, so they must check Enabled.
+            if (Instance == null || !Instance.Enabled)
+            {
+                ResetControllers();
+                return false;
+            }
 
             // GameStateMachine has no GetState() method on Redux's current assemblies; the current
             // GameState comes from GetGameState().GameState instead.

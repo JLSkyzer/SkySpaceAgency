@@ -2,7 +2,7 @@ using K2D2.Controller;
 using K2D2.KSPService;
 using K2D2.Landing.Braking;
 using KSP.Sim;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Landing
 {
@@ -13,7 +13,7 @@ namespace K2D2.Landing
     // 4. LandingPilot ends the run on LandedOrSplashed: this controller never sets finished.
     public class ParachuteDescent : ExecuteController
     {
-        readonly ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.ParachuteDescent");
+        readonly ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.ParachuteDescent");
 
         readonly LandingPilot landing;
 

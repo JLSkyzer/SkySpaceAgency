@@ -9,13 +9,13 @@ using KTools;
 using K2D2.Controller;
 using K2D2.Node;
 using K2D2.Landing.Braking;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Landing
 {
     public class LandingPilot : Pilot
     {
-        public ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.LandingController");
+        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.LandingController");
 
         // Atmo/Vacuum profile split - see LandingSettings.cs's class comment. Two independent
         // instances, each backed by its own settings file (k2d2_landing_atmo.json /

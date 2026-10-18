@@ -4,7 +4,7 @@ using K2D2.UI;
 using K2D2.Controller;
 using K2D2.Node;
 using K2D2.KSPService;
-using ILogger = ReduxLib.Logging.ILogger;
+using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Lift
 {
@@ -17,7 +17,7 @@ namespace K2D2.Lift
     // circularizing work to do.
     public class FinalCircularize : ExecuteController
     {
-        public ILogger logger = ReduxLib.ReduxLib.GetLogger("SkySpaceAgency.Lift.FinalCircularize");
+        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Lift.FinalCircularize");
 
         LiftSettings lift_settings = null;
         KSPVessel current_vessel;
