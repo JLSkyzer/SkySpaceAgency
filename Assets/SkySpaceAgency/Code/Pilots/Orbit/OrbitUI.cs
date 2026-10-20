@@ -34,6 +34,8 @@ namespace K2D2.OrbitPlanning
         readonly ManeuverCreator maneuver_creator = new ManeuverCreator();
         FloatField ap_field, pe_field, inc_field;
         Label summary;
+        // The plan as made by "Create maneuvers"; the progress line of OrbitPlanRun goes under it.
+        string plan_summary;
 
         public OrbitUI()
         {
@@ -67,6 +69,8 @@ namespace K2D2.OrbitPlanning
             ShowTarget(ap_field, OrbitSettings.ap_enabled.V, hasOrbit, hasOrbit ? Math.Round(c.ApKm, 1) : 0);
             ShowTarget(pe_field, OrbitSettings.pe_enabled.V, hasOrbit, hasOrbit ? Math.Round(c.PeKm, 1) : 0);
             ShowTarget(inc_field, OrbitSettings.inc_enabled.V, hasOrbit, hasOrbit ? Math.Round(c.IncDeg, 2) : 0);
+            if (plan_summary != null)
+                summary.text = plan_summary + OrbitPlanRun.Status;
             return true;
         }
 
@@ -81,27 +85,50 @@ namespace K2D2.OrbitPlanning
         static bool TryReadCurrent(out Current c)
         {
             c = default;
+            if (!TryReadState(out c.R, out c.V, out c.UT, out c.Body, out c.GameInclinationRad))
+                return false;
+            c.El = OrbitMath.Elements(c.R, c.V, c.Body.Mu);
+            return c.El.IsClosed;
+        }
+
+        /// <summary>
+        /// The active vessel's state now (Zup frame, relative to its body) and its body, as the
+        /// planner takes them. Also used by the Node tab to plan the next step of a plan in progress.
+        /// </summary>
+        public static bool TryReadState(out Vector3d r, out Vector3d v, out double ut, out BodyInfo body)
+        {
+            return TryReadState(out r, out v, out ut, out body, out _);
+        }
+
+        static bool TryReadState(out Vector3d r, out Vector3d v, out double ut, out BodyInfo body,
+            out double gameInclination)
+        {
+            r = default;
+            v = default;
+            ut = 0;
+            body = default;
+            gameInclination = 0;
             var vessel = K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
             IKeplerPatch orbit = vessel?.Orbit;
             if (orbit == null)
                 return false;
-            var body = orbit.referenceBody;
-            c.UT = GeneralTools.Current_UT;
-            c.R = orbit.GetRelativePositionAtUTZup(c.UT);
-            c.V = orbit.GetOrbitalVelocityAtUTZup(c.UT);
-            c.Body = new BodyInfo
+            var reference = orbit.referenceBody;
+            ut = GeneralTools.Current_UT;
+            r = orbit.GetRelativePositionAtUTZup(ut);
+            v = orbit.GetOrbitalVelocityAtUTZup(ut);
+            body = new BodyInfo
             {
-                Mu = body.gravParameter,
-                Radius = body.radius,
-                AtmosphereDepth = body.hasAtmosphere ? body.atmosphereDepth : 0
+                Mu = reference.gravParameter,
+                Radius = reference.radius,
+                AtmosphereDepth = reference.hasAtmosphere ? reference.atmosphereDepth : 0
             };
-            c.El = OrbitMath.Elements(c.R, c.V, c.Body.Mu);
-            c.GameInclinationRad = orbit.inclination;
-            return c.El.IsClosed;
+            gameInclination = orbit.inclination;
+            return true;
         }
 
         void CreateManeuvers()
         {
+            plan_summary = null;
             if (!TryReadCurrent(out var c))
             {
                 summary.text = "No closed orbit to plan from: be in flight, in orbit around a body.";
@@ -151,16 +178,32 @@ namespace K2D2.OrbitPlanning
                 return;
             }
 
-            summary.text = Summary(plan, c, "Creating nodes...");
+            // Only the first burn gets a node: the game dropped the later nodes of a multi-node
+            // plan (2026-10-18). The Node tab plans each next step from the orbit actually reached
+            // (OrbitPlanSequence) and creates its node once the previous burn is done.
+            var sequence = new OrbitPlanSequence(targets, c.Body, plan.Burns.Count);
+            var first = sequence.Next(c.R, c.V, c.UT, c.Body);
+            if (first.Outcome != OrbitPlanStepOutcome.Burn)
+            {
+                summary.text = $"Could not plan the first step ({first.Outcome}).";
+                return;
+            }
+
+            plan_summary = Summary(plan, c);
             K2D2_Plugin.ResetControllers(); // CreateNodes wipes every node: stop any pilot flying one
+            OrbitPlanRun.Start(sequence, $"Step 1/{plan.Burns.Count}: creating the node for '{first.Burn.Label}'...");
             maneuver_creator.Update();
-            maneuver_creator.CreateNodes(plan.Burns, count =>
-                summary.text = Summary(plan, c, count == plan.Burns.Count
-                    ? $"{count} node(s) created: Start in the Node tab flies them all, one after the other, toward the planned orbits."
-                    : $"Warning: the game holds {count} node(s) for {plan.Burns.Count} planned."));
+            maneuver_creator.CreateNodes(new[] { first.Burn }, count =>
+            {
+                if (count == 1)
+                    OrbitPlanRun.Status = $"Step 1/{plan.Burns.Count}: node created for '{first.Burn.Label}'. " +
+                        "Start in the Node tab flies the whole plan: each next step is planned from the orbit actually reached.";
+                else
+                    OrbitPlanRun.End($"Warning: the game holds {count} node(s), 1 expected. Plan cancelled.");
+            });
         }
 
-        static string Summary(OrbitPlan plan, Current c, string status)
+        static string Summary(OrbitPlan plan, Current c)
         {
             var text = new StringBuilder();
             for (int i = 0; i < plan.Burns.Count; i++)
@@ -172,7 +215,6 @@ namespace K2D2.OrbitPlanning
             text.AppendLine($"Final orbit: Ap {(plan.Final.ApoapsisRadius - c.Body.Radius) / 1000:n1} km, " +
                 $"Pe {(plan.Final.PeriapsisRadius - c.Body.Radius) / 1000:n1} km, " +
                 $"inclination {plan.Final.InclinationRad * Rad2Deg:n2}°");
-            text.Append(status);
             return text.ToString();
         }
 

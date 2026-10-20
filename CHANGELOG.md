@@ -19,6 +19,10 @@
 
 ### Changed
 
+- **Orbit tab plans run one step at a time** (2026-10-20). The game dropped the later nodes of a multi-node plan ("the game holds 1 node(s) for 2 planned"), so the Node tab could not run the whole plan.
+  - "Create maneuvers" now creates the node of the first step only. The tab lists every step and shows which one is in progress.
+  - After each step, the Node tab plans the next one again with the same targets, from the orbit actually reached and with the vessel's real mass. It then creates the next node, warps and burns. The whole plan still runs from a single Start, and a small error of one burn is corrected by the next.
+  - The plan stops with a message when the target becomes unreachable, when the vessel leaves the body, after two correction steps beyond the plan, or when its node is edited by hand (the normal executor then flies that node). Stop interrupts it, and Start resumes with the node on the plan.
 - **KSP2 Redux 26w42 compatibility** (2026-10-18). Redux 0.2.9 compiles the game into a single `Ksp2Redux` assembly, merges Space Warp and UITK for KSP2 into it, and removes Redux-Lib. The previous build referenced `ReduxLib`, `SpaceWarp2` and `SpaceWarp2.UI`, so it no longer loaded.
   - Template upgraded to 26w42c (SDK package `ksp2redux.sdk#26w42c`), which replaces the `8ed8010` pin.
   - Loggers now come from `SpaceWarp2.API.Logging.LogManager`.

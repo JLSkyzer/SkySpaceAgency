@@ -363,8 +363,9 @@ namespace K2D2
             Game.Messages.Subscribe<VesselChangedMessage>(msg =>
             {
                 var message = (VesselChangedMessage)msg;
-                // The registry's nodes belonged to the previous vessel.
+                // The registry's nodes, and the Orbit plan in progress, belonged to the previous vessel.
                 NodeTargets.Clear();
+                OrbitPlanRun.Clear();
                 ResetControllers();
             });
         }

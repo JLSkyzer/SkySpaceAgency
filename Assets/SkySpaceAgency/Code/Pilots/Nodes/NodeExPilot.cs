@@ -76,7 +76,9 @@ namespace K2D2.Node
             // "Circularize at AP/PE": closed-loop CircularizeBurn, no node.
             Circularize,
             // A node with a registered target orbit (Orbit tab plan): closed-loop TargetOrbitBurn.
-            TargetOrbit
+            TargetOrbit,
+            // Between two burns of an Orbit tab plan: the next step's node is being created.
+            NextStep
         }
 
         public Mode mode = Mode.Off;
@@ -190,7 +192,9 @@ namespace K2D2.Node
                 {
                     // Only worth showing while still true - a node plotted some other way since
                     // (e.g. by hand on the map) makes the old refusal moot.
-                    if (circularize_error != null)
+                    if (plan_message != null)
+                        st.Warning(plan_message);
+                    else if (circularize_error != null)
                         st.Warning(circularize_error);
                     else
                         st.Status("No Node Created");
@@ -198,6 +202,7 @@ namespace K2D2.Node
                 }
 
                 circularize_error = null;
+                plan_message = null;
 
                 if (target_error != null && target_error_node == next_maneuver_node.NodeID)
                 {
@@ -220,6 +225,8 @@ namespace K2D2.Node
 
                 st.Status("Ready to execute node!");
             }
+            else if (mode == Mode.NextStep)
+                st.Status("Planning the next step of the Orbit plan...");
             else
                 current_executor.updateUI(page.panel, st);
         }
@@ -233,6 +240,9 @@ namespace K2D2.Node
         // shown while that node is still the next one. Cleared on the next successful start.
         public string target_error = null;
         System.Guid target_error_node;
+
+        // Set when an Orbit tab plan stops before its end; shown while no node is left.
+        public string plan_message = null;
 
         public bool valid_maneuver = false;
 
@@ -347,6 +357,8 @@ namespace K2D2.Node
             if (entry.IsEdited(burn_vector, node.Time))
             {
                 NodeTargets.Remove(node.NodeID);
+                if (OrbitPlanRun.Active)
+                    OrbitPlanRun.End("Plan stopped: its node was edited by hand, the normal executor flies it.");
                 logger.LogInfo($"[NodeExPilot] node edited by the player: using the normal executor " +
                     $"(node {node.NodeID}: burn ({entry.BurnVector.x:n2}, {entry.BurnVector.y:n2}, {entry.BurnVector.z:n2}) -> " +
                     $"({burn_vector.x:n2}, {burn_vector.y:n2}, {burn_vector.z:n2}) m/s, time {entry.Time:n1} -> {node.Time:n1})");
@@ -419,6 +431,12 @@ namespace K2D2.Node
             if (done != null)
                 NodeTargets.Remove(done.NodeID);
 
+            if (OrbitPlanRun.Active)
+            {
+                ContinueOrbitPlan();
+                return;
+            }
+
             if (next != null)
             {
                 bool registered = NodeTargets.TryGet(next.NodeID, out _);
@@ -444,6 +462,89 @@ namespace K2D2.Node
                 TimeWarpTools.SetIsPaused(true);
         }
 
+        // Next step of the Orbit tab plan in progress, planned from the orbit the burn just reached
+        // (see OrbitPlanSequence): its node is created, then flown like the first one. The plan
+        // ends here when the target is reached, or with a message when it cannot go on.
+        void ContinueOrbitPlan()
+        {
+            var sequence = OrbitPlanRun.Sequence;
+            if (!OrbitUI.TryReadState(out var r, out var v, out var ut, out var body))
+            {
+                EndOrbitPlan("Plan stopped: no orbit to plan the next step from.");
+                return;
+            }
+
+            var step = sequence.Next(r, v, ut, body);
+            var reached = OrbitMath.Elements(r, v, body.Mu);
+            string orbit = $"Ap {(reached.ApoapsisRadius - body.Radius) / 1000:n1} km, " +
+                $"Pe {(reached.PeriapsisRadius - body.Radius) / 1000:n1} km, inclination {reached.InclinationRad * 180 / System.Math.PI:n2}°";
+            logger.LogInfo($"[NodeEx] orbit plan: step done, reached {orbit}, next: {step.Outcome}" +
+                (step.Outcome == OrbitPlanStepOutcome.Burn ? $" ({step.Burn.Label}, {step.Burn.DeltaV.magnitude:n1} m/s)" : ""));
+
+            switch (step.Outcome)
+            {
+                case OrbitPlanStepOutcome.Burn:
+                    break;
+                case OrbitPlanStepOutcome.Done:
+                    EndOrbitPlan($"Plan complete: {orbit}.", success: true);
+                    return;
+                case OrbitPlanStepOutcome.Error:
+                    EndOrbitPlan($"Plan stopped: the next step cannot be planned ({step.Error}). Reached {orbit}.");
+                    return;
+                case OrbitPlanStepOutcome.BodyChanged:
+                    EndOrbitPlan("Plan stopped: the vessel is no longer around the body of the plan.");
+                    return;
+                default:
+                    EndOrbitPlan($"Plan stopped after {sequence.StepsStarted} steps: the target is still out of reach. Reached {orbit}.");
+                    return;
+            }
+
+            int total = System.Math.Max(sequence.PlannedSteps, step.Step + step.RemainingBurns - 1);
+            OrbitPlanRun.Status = $"Step {step.Step}/{total}: creating the node for '{step.Burn.Label}'...";
+            logger.LogInfo($"setMode {Mode.NextStep}");
+            mode = Mode.NextStep;
+            execute_node = null;
+            current_executor.setController(null);
+            maneuver_creator.Update();
+            maneuver_creator.CreateNodes(new[] { step.Burn }, count => OnNextStepNode(count, step, total));
+        }
+
+        void OnNextStepNode(int count, OrbitPlanStep step, int total)
+        {
+            // Stopped (or replaced) while the node was being created.
+            if (mode != Mode.NextStep || !OrbitPlanRun.Active)
+                return;
+
+            var node = current_vessel.GetNextManeuveurNode();
+            if (count != 1 || node == null || !TryGetPlannedTarget(node, out var target))
+            {
+                EndOrbitPlan($"Plan stopped: the game did not take the node of step {step.Step} ({count} node(s) on the plan).");
+                return;
+            }
+
+            OrbitPlanRun.Status = $"Step {step.Step}/{total}: {step.Burn.Label}, {step.Burn.DeltaV.magnitude:n1} m/s.";
+            next_maneuver_node = node;
+            if (!StartTargetBurn(node, target))
+                EndOrbitPlan($"Plan stopped: step {step.Step} refused ({target_error}).");
+        }
+
+        void EndOrbitPlan(string message, bool success = false)
+        {
+            OrbitPlanRun.End(message);
+            plan_message = success ? null : message;
+            Stop();
+            if (success && settings.pause_on_end.V)
+                TimeWarpTools.SetIsPaused(true);
+        }
+
+        void UpdateNextStep()
+        {
+            base.Update();
+            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.O))
+                Stop();
+            UpdateUI();
+        }
+
         // Drops the registered targets of nodes no longer on the plan (deleted by hand).
         void PruneNodeTargets()
         {
@@ -466,6 +567,11 @@ namespace K2D2.Node
             if (mode == Mode.TargetOrbit)
             {
                 UpdateTargetOrbit();
+                return;
+            }
+            if (mode == Mode.NextStep)
+            {
+                UpdateNextStep();
                 return;
             }
 
@@ -576,6 +682,8 @@ namespace K2D2.Node
                 return $"Circularizing: {current_executor.status_line}";
             if (mode == Mode.TargetOrbit)
                 return $"Target orbit: {current_executor.status_line}";
+            if (mode == Mode.NextStep)
+                return "Orbit plan: preparing the next step";
 
             if (next_maneuver_node == null)
             {
