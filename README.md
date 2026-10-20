@@ -18,6 +18,7 @@ K2-D2 gives you one panel (`Alt-O` or the AppBar icon) with a set of autopilots:
 - **Landing** - automated descent, braking, and touchdown (propulsive with automatic legs, or parachute on bodies with an atmosphere), with an optional Precision Landing mode (currently bodies with no atmosphere only) that targets a specific site via Redux's waypoint system
 - **Docking** - automated final approach and docking
 - **Attitude** - point-and-hold attitude control (a simple plane autopilot)
+- **VAB tools** - in the VAB: export the rocket to JSON for an AI (summary with Δv per stage), import a corrected rocket (only unlocked parts, with an automatic backup), and dump the parts of the campaign
 
 ## Status
 
@@ -35,12 +36,14 @@ This is a from-scratch port of the original code onto Redux's APIs, not a compat
 **Known limitations:**
 - Precision Landing on atmospheric bodies is still a work in progress and isn't exposed in the UI yet - only bodies with no atmosphere have a player-facing Precision Landing option for now.
 - Landing's braking plan ignores atmospheric drag (which only helps) and assumes the active engines stay as they are: auto-staging during the landing burn is not planned for.
+- VAB tools: the import replaces the main rocket through the game's workspace restore (or, as a fallback, its assembly loader); it is not an undo step - the `before_import_…` backup in `vab/exports/` is the way back. Engine Isp in the parts dump comes from the part definitions and may differ from the VAB's figures.
 
 ## Installation
 
 1. Install [Redux](https://ksp2redux.org) for Kerbal Space Program 2.
-2. Make sure you're on KSP2 beta snapshot 26w33a or newer (Redux Launcher: Settings [gear icon to the right of the "Mods" tab] > Release Channel > Beta, then update to the latest beta).
+2. Make sure you're on KSP2 beta snapshot 26w42a or newer (Redux Launcher: Settings [gear icon to the right of the "Mods" tab] > Release Channel > Beta, then update to the latest beta). Older snapshots cannot load this build.
 3. Download the latest SkySpaceAgency release and extract it into a `SkySpaceAgency` folder inside your KSP2 `mods` folder.
+4. Enable SkySpaceAgency in your campaign: since 26w42, installed mods are off in new campaigns. Tick it in "New Mod Features" when an existing save loads, in Edit Pack on the campaign screen, or under Default Features in the mods menu.
 
 ## Credits
 

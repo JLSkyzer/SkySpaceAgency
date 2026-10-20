@@ -4,6 +4,19 @@
 
 ### Added
 
+- **VAB tools** (VAB AppBar → "SkySpaceAgency VAB tools"), a small window that only opens in the VAB. Files go to `mods/SkySpaceAgency/vab/`.
+  - **Export** writes `vab/exports/<vessel>_<date>.json`, made to be handed to an AI:
+    - a readable summary: per stage, Δv (vacuum, sea level, actual), TWR, Isp, thrust, masses and burn time; every part with its parent, stage, symmetry group, resources and modules; the resource totals;
+    - instructions for the AI;
+    - the game's own JSON of the rocket.
+  - **Import** loads a file from `vab/imports/` (or `vab/exports/`) as the main rocket. It accepts a SkySpaceAgency export, the game's assembly JSON, or a VAB workspace file.
+    - **Refusals**: before touching anything, it refuses a file with a part this VAB does not offer (the parts are listed), a broken structure, or JSON the game cannot read.
+    - **Resources**: amounts above a part's capacity are lowered and reported.
+    - **Backup**: the whole workspace is first saved to `vab/exports/before_import_….json`, which can be imported back. If loading fails, the previous rocket is restored: the workspace first, else the main rocket alone (detached assemblies may then be missing, the message says so).
+    - The wait for the game to finish loading grows with the part count (10 s to 60 s).
+  - **Dump parts** writes `vab/dumps/parts_<campaign>_<date>.json`: every part, unlocked or not, its tech node, characteristics, engine figures, raw definition, plus an example assembly and instructions for building a rocket from scratch.
+  - **Open folder** opens `vab/` in the Explorer.
+
 - **Landing modes**: on bodies with an atmosphere, the Land tab has a mode selector, **Propulsive** or **Parachute**. Airless bodies are always propulsive.
   - **Propulsive (legs)**:
     - Landing legs deploy on their own when Touch Down starts, or from Brake with "Deploy legs early". 3 s later every leg is re-read, and any leg still retracted is extended one by one.
