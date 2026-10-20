@@ -215,13 +215,15 @@ namespace K2D2.Landing
             var body = pilot.current_vessel?.currentBody();
             var choices = new List<string>();
 
-            if (body != null && ReduxWaypoints.available)
+            if (body != null)
             {
-                foreach (var waypoint in ReduxWaypoints.GetWaypointsForBody(body.Name))
+                // The player's own waypoints, then the game's (missions that need a precise point
+                // create one when they activate): see WaypointChoices.
+                var player = ReduxWaypoints.available ? ReduxWaypoints.GetWaypointsForBody(body.Name) : new List<ReduxWaypoint>();
+                foreach (var choice in WaypointChoices.Build(player, ReduxWaypoints.GetGameWaypoints(), body.Name))
                 {
-                    string label = $"{waypoint.name} ({waypoint.latitude:n2}, {waypoint.longitude:n2})";
-                    waypoint_choices[label] = waypoint;
-                    choices.Add(label);
+                    waypoint_choices[choice.Label] = choice.Waypoint;
+                    choices.Add(choice.Label);
                 }
             }
 

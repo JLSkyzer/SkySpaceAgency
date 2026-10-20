@@ -25,11 +25,16 @@ namespace K2D2.Landing
         public string body_name;
         public double latitude;
         public double longitude;
+        // Not one of the player's own waypoints: a waypoint of the game, set by a mission (or a mod).
+        public bool from_mission;
     }
 
     public static class ReduxWaypoints
     {
-        const string manager_type_name = "Redux.UI.Waypoints.PlayerWaypointManager, Assembly-CSharp";
+        // Looked up in the game's own assembly: Ksp2Redux since Redux 26w42, Assembly-CSharp before.
+        // A name qualified with "Assembly-CSharp" no longer resolves, because the facade that
+        // keeps the old assembly name only forwards public types and this one is internal.
+        const string manager_type_name = "Redux.UI.Waypoints.PlayerWaypointManager";
 
         static Type _manager_type;
         static bool _type_lookup_failed;
@@ -40,7 +45,7 @@ namespace K2D2.Landing
             {
                 if (_manager_type == null && !_type_lookup_failed)
                 {
-                    _manager_type = Type.GetType(manager_type_name);
+                    _manager_type = typeof(KSP.Sim.impl.WaypointComponent).Assembly.GetType(manager_type_name);
                     if (_manager_type == null)
                         _type_lookup_failed = true;
                 }
@@ -93,6 +98,61 @@ namespace K2D2.Landing
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Every waypoint of the simulation (UniverseModel.GetAllWaypoints): the ones missions create
+        /// for a precise destination, those of other mods, and the player's own ones as well (the
+        /// caller drops those, see WaypointChoices). Destroyed waypoints are skipped.
+        /// </summary>
+        public static List<ReduxWaypoint> GetGameWaypoints()
+        {
+            // The Land tab rebuilds its list every UI tick: read the simulation once a second.
+            float now = UnityEngine.Time.realtimeSinceStartup;
+            if (_game_waypoints != null && now - _game_waypoints_time < 1f)
+                return _game_waypoints;
+
+            var result = new List<ReduxWaypoint>();
+            _game_waypoints = result;
+            _game_waypoints_time = now;
+            var universe = KTools.GeneralTools.Game?.UniverseModel;
+            if (universe == null)
+                return result;
+
+            foreach (var component in universe.GetAllWaypoints())
+            {
+                if (component == null || component.IsDestroyedOrBeingDestroyed)
+                    continue;
+                try
+                {
+                    var handle = new Redux.ApiImpls.ReduxWaypoint(component);
+                    string name = string.IsNullOrEmpty(component.DisplayName) ? handle.Name : component.DisplayName;
+                    result.Add(new ReduxWaypoint
+                    {
+                        name = name,
+                        body_name = handle.BodyName,
+                        latitude = handle.Latitude,
+                        longitude = handle.Longitude,
+                        from_mission = true,
+                    });
+                }
+                catch (Exception e)
+                {
+                    LogOnce($"[Landing] could not read waypoint {component.Name}: {e.Message}");
+                }
+            }
+            return result;
+        }
+
+        static List<ReduxWaypoint> _game_waypoints;
+        static float _game_waypoints_time;
+
+        static readonly HashSet<string> _logged = new HashSet<string>();
+
+        static void LogOnce(string message)
+        {
+            if (_logged.Add(message))
+                K2D2_Plugin.logger.LogWarning(message);
         }
     }
 }
