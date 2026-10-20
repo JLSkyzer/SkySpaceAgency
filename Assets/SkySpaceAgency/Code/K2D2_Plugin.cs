@@ -146,8 +146,61 @@ namespace K2D2
             // controllerManager.AddController(new WarpController());
             // pilots_manager.AddPilot(new DockingAssist());
 
-            // Load the UI from the asset bundle
+            // The window is created lazily: since Redux 26w42 the mod is disabled in the main menu,
+            // where OnInitialized runs, and the game then refuses to load our Addressables. A window
+            // created from that null UXML stays empty forever. OnCampaignLoaded (enabled campaigns
+            // only), the AppBar button and Alt-O all go through EnsureWindow.
+            if (Enabled)
+                EnsureWindow();
+
+            // Register Flight AppBar button
+            Appbar.RegisterAppButton(
+                SWMetadata.Name,
+                ToolbarFlightButtonID,
+                AssetsLoader.LoadIcon("icon.png"),
+                isOpen =>
+                {
+                    if (EnsureWindow())
+                        main_window.IsWindowOpen = isOpen;
+                }
+            );
+
+            // Register OAB AppBar Button
+            // Appbar.RegisterOABAppButton(
+            //     ModName,
+            //     ToolbarOabButtonID,
+            //     AssetManager.GetAsset<Texture2D>($"{ModGuid}/images/icon.png"),
+            //     isOpen => myFirstWindowController.IsWindowOpen = isOpen
+            // );
+
+            // Register KSC AppBar Button
+            // Appbar.RegisterKSCAppButton(
+            //     ModName,
+            //     ToolbarKscButtonID,
+            //     AssetManager.GetAsset<Texture2D>($"{ModGuid}/images/icon.png"),
+            //     () => myFirstWindowController.IsWindowOpen = !myFirstWindowController.IsWindowOpen
+            // );
+
+            loaded = true;
+        }
+
+        public override void OnCampaignLoaded()
+        {
+            EnsureWindow();
+        }
+
+        // Creates the main window once its UXML can be loaded. Returns false, without creating an
+        // empty window, while the game still refuses our Addressables (mod disabled).
+        private bool EnsureWindow()
+        {
+            if (main_window != null) return true;
+
             var myFirstWindowUxml = AssetsLoader.LoadUxml("K2D2_Window.uxml");
+            if (myFirstWindowUxml == null)
+            {
+                logger.LogWarning($"[K2D2_Plugin] Main window not created yet (mod enabled: {Enabled}).");
+                return false;
+            }
 
             // Create the window options object
             var windowOptions = new WindowOptions
@@ -175,33 +228,7 @@ namespace K2D2
             // Add a controller for the UI to the window's game object
             main_window = k2d2_window.gameObject.AddComponent<K2D2Window>();
 
-            // Register Flight AppBar button
-            Appbar.RegisterAppButton(
-                SWMetadata.Name,
-                ToolbarFlightButtonID,
-                AssetsLoader.LoadIcon("icon.png"),
-                isOpen => main_window.IsWindowOpen = isOpen
-            );
-
-            // Register OAB AppBar Button
-            // Appbar.RegisterOABAppButton(
-            //     ModName,
-            //     ToolbarOabButtonID,
-            //     AssetManager.GetAsset<Texture2D>($"{ModGuid}/images/icon.png"),
-            //     isOpen => myFirstWindowController.IsWindowOpen = isOpen
-            // );
-
-            // Register KSC AppBar Button
-            // Appbar.RegisterKSCAppButton(
-            //     ModName,
-            //     ToolbarKscButtonID,
-            //     AssetManager.GetAsset<Texture2D>($"{ModGuid}/images/icon.png"),
-            //     () => myFirstWindowController.IsWindowOpen = !myFirstWindowController.IsWindowOpen
-            // );
-
-
-
-            loaded = true;
+            return true;
         }
 
         public override void OnPostInitialized()
@@ -271,7 +298,7 @@ namespace K2D2
             if (ValidScene())
             {
                 // Debug.developerConsoleVisible = false;
-                if (Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.O))
+                if (Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.O) && EnsureWindow())
                     main_window.IsWindowOpen = !main_window.IsWindowOpen;
 
                 StagingPilot.Instance.Update();
