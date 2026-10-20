@@ -3814,3 +3814,19 @@ Ask them to send back these log lines:
 - A silent or half import is ruled out: every refusal happens before the backup. The backup is written before the first game call. Every method is checked after it runs, and a failure re-applies the backup snapshot. When even the restore fails, the status line names the backup to import.
 - Unlocked parts only: the import checks the VAB's own `AvailableParts`, then the game's `AreAllAssemblyPartsUnlocked`.
 - An export readable by an AI: summary, titles, Δv per stage, instructions.
+
+## Deferred after review (2026-10-20)
+
+Minor findings left for after the in-game test, from the per-task and final reviews:
+
+- Task 1: SafeName surrogate cut; reserved device names; Num/Parse edge tests
+- Task 2: NaN resource mass in part sum untested; null resource name "?" vs null
+- Task 3: Build(null meta) NRE; instructions test checks substrings only; ToJson(true) untested
+- Task 4: PartJson no null guards on lists; unnamed parts dropped; template may be string (undocumented in instructions)
+- Task 7: silent catches in VabReader (techOf, CampaignUnlocked, UnlockedTechNodes) leave nulls without a log line
+- Task 7: ReadAllParts/KnownPartNames/CapacityLookup assume a non-null builder (callers must check Builder())
+- Task 8: Parse/CheckStructure/ClampResources/Plan not wrapped (no data loss, no status line); awkward "(and N more, see the log)." punctuation; truncated before_import file on failed write shows in import list; `builder == null` on a captured non-UnityEngine.Object local
+- Task 8: stale-main check assumes VabReader.MainAssembly returns a stable object (total count still guards); ReportOnce state shared by Settled/Describe
+- Task 9: setter forced to false outside the VAB returns early without syncing the AppBar toggle (inherited from brief); GameObject.Find on each toggle; em dash in title / "x" close glyph unverified in game font
+- Final: M1 node pairs not checked symmetric / GUID duplicates across assemblies; M3 part mass_t is the definition dry mass; M4 AppBar toggle stays on when EnsureVabWindow fails; M5 import while a part is grabbed
+- Final: restoredByB OR-ed across attempts (cautious message); window error message says "newest before_import" not the exact name; "Cannot read {file}" lacks the Refused wording
