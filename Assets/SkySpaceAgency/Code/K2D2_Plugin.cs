@@ -78,6 +78,8 @@ namespace K2D2
 
         K2D2Window main_window = null;
 
+        VabToolsWindow vab_window = null;
+
         public override void OnPreInitialized()
         {
             logger = SWLogger;
@@ -168,13 +170,20 @@ namespace K2D2
                 }
             );
 
-            // Register OAB AppBar Button
-            // Appbar.RegisterOABAppButton(
-            //     ModName,
-            //     ToolbarOabButtonID,
-            //     AssetManager.GetAsset<Texture2D>($"{ModGuid}/images/icon.png"),
-            //     isOpen => myFirstWindowController.IsWindowOpen = isOpen
-            // );
+            // Register OAB AppBar Button: the VAB tools window (export, import, parts dump). A separate
+            // window that only opens in the VAB (VabToolsWindow closes itself elsewhere); the flight
+            // window above keeps its own scene gating (validScenes). It is created on first use and
+            // borrows the main window's style sheets, so it needs no Addressables entry of its own.
+            Appbar.RegisterOABAppButton(
+                SWMetadata.Name + " VAB tools",
+                ToolbarOabButtonID,
+                AssetsLoader.LoadIcon("icon.png"),
+                isOpen =>
+                {
+                    if (EnsureVabWindow())
+                        vab_window.IsWindowOpen = isOpen;
+                }
+            );
 
             // Register KSC AppBar Button
             // Appbar.RegisterKSCAppButton(
@@ -231,6 +240,22 @@ namespace K2D2
             // Add a controller for the UI to the window's game object
             main_window = k2d2_window.gameObject.AddComponent<K2D2Window>();
 
+            return true;
+        }
+
+        // Creates the VAB tools window on first use, like EnsureWindow (same Addressables caveat).
+        private bool EnsureVabWindow()
+        {
+            if (vab_window != null) return true;
+
+            var styleSource = AssetsLoader.LoadUxml("K2D2_Window.uxml");
+            if (styleSource == null)
+            {
+                logger.LogWarning($"[K2D2_Plugin] VAB tools window not created yet (mod enabled: {Enabled}).");
+                return false;
+            }
+
+            vab_window = VabToolsWindow.Create(styleSource);
             return true;
         }
 
