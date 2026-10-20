@@ -20,7 +20,7 @@
 ### Changed
 
 - **Mission waypoints in the Land tab** (2026-10-20). The precision-landing waypoint list now also shows every waypoint of the game on the current body, marked `[Mission]`, after the player's own waypoints. A mission that needs a precise point (the Mun's mysterious signal, for example) creates such a waypoint when it activates, so it appears in the list by itself. A player waypoint is listed once. Coordinates in the list use a decimal point on every Windows locale.
-- Fixed: the player's own waypoints no longer appeared in that list since Redux 26w42, which moved the game's code from `Assembly-CSharp` to `Ksp2Redux`.
+- The player's waypoints are read from the game's own assembly (`Ksp2Redux` since Redux 26w42) instead of through the `Assembly-CSharp` name.
 - **Orbit tab plans run one step at a time** (2026-10-20). The game dropped the later nodes of a multi-node plan ("the game holds 1 node(s) for 2 planned"), so the Node tab could not run the whole plan.
   - "Create maneuvers" now creates the node of the first step only. The tab lists every step and shows which one is in progress.
   - After each step, the Node tab plans the next one again with the same targets, from the orbit actually reached and with the vessel's real mass. It then creates the next node, warps and burns. The whole plan still runs from a single Start, and a small error of one burn is corrected by the next.

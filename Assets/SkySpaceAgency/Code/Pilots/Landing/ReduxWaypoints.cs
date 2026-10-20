@@ -31,9 +31,8 @@ namespace K2D2.Landing
 
     public static class ReduxWaypoints
     {
-        // Looked up in the game's own assembly: Ksp2Redux since Redux 26w42, Assembly-CSharp before.
-        // A name qualified with "Assembly-CSharp" no longer resolves, because the facade that
-        // keeps the old assembly name only forwards public types and this one is internal.
+        // Looked up in the game's own assembly (Ksp2Redux since Redux 26w42, Assembly-CSharp before)
+        // instead of by assembly name, so it does not depend on the Assembly-CSharp facade.
         const string manager_type_name = "Redux.UI.Waypoints.PlayerWaypointManager";
 
         static Type _manager_type;
