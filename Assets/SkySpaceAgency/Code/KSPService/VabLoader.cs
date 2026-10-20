@@ -14,8 +14,6 @@ namespace K2D2.KSPService
     // against the JSON's part count, so a silently misread file can never clear the workspace.
     public static class VabLoader
     {
-        public const float SettleTimeout = 3f;   // s of real time for the VAB to show the loaded rocket
-
         public static JObject CurrentSnapshot(ObjectAssemblyBuilder builder)
         {
             OABHistoricalSnapshot snapshot = builder.Historian.GenerateSnapshot(OABActionType.None);
@@ -69,14 +67,18 @@ namespace K2D2.KSPService
         }
 
         // Method B: delete the main rocket, then load the assembly as the main one. Deleting first
-        // keeps the two copies from sharing GUIDs when a rocket is re-imported.
-        public static void LoadAsMain(ObjectAssemblyBuilder builder, JObject assemblyJson)
+        // keeps the two copies from sharing GUIDs when a rocket is re-imported. Returns the workspace
+        // part count to expect afterwards, read from the VAB as it is now: B is also the fallback of
+        // the restore, when the workspace may be half-cleared by a failed method A.
+        public static int LoadAsMain(ObjectAssemblyBuilder builder, JObject assemblyJson)
         {
             SerializedAssembly assembly = ToAssembly(assemblyJson);
             IObjectAssembly oldMain = VabReader.MainAssembly(builder);
+            int others = builder.ActivePartTracker.PartsMasterList.Count - (oldMain?.Anchor != null ? oldMain.Parts?.Count ?? 0 : 0);
             if (oldMain?.Anchor != null)
                 builder.ActivePartTracker.DeletePart(oldMain.Anchor);
             builder.UtilFileIO.LoadSerializedAssembly(assembly);
+            return others + VabSnapshot.PartCount(assemblyJson);
         }
 
         // Main rocket with expectedMainParts parts and expectedTotalParts in the workspace; with

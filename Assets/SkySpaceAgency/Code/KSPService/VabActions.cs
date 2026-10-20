@@ -119,6 +119,7 @@ namespace K2D2.KSPService
         class Attempt
         {
             public string Name;
+            public string Outcome;              // first sentence of the status line on success
             public Action<ObjectAssemblyBuilder> Run;
             public int ExpectedMain;
             public int ExpectedTotal;
@@ -128,6 +129,15 @@ namespace K2D2.KSPService
         class SettleResult
         {
             public bool Settled;
+            public bool VabClosed;
+            public float Seconds;
+        }
+
+        class RestoreResult
+        {
+            public string Error;      // null: restored
+            public bool ByMethodB;    // only the main rocket came back, detached assemblies may be lost
+            public bool VabClosed;
         }
 
         static string TryRun(Action action)
@@ -144,22 +154,47 @@ namespace K2D2.KSPService
             }
         }
 
+        // A step before the backup threw (e.g. a hand-edited number too large for its type): nothing
+        // changed yet, so it is a refusal like the others.
+        static string Unexpected(string step, string error)
+        {
+            Log($"import: refused: unexpected error while {step}: {error}");
+            return $"Refused: unexpected error while {step} ({error})." + Unchanged;
+        }
+
+        static string ClosedMessage(string backupPath) =>
+            "The VAB was closed during the import, so nothing was restored. " +
+            $"Your previous workspace is saved in exports/{Path.GetFileName(backupPath)}: import it in the VAB if needed.";
+
         static IEnumerator WaitSettled(ObjectAssemblyBuilder builder, int expectedMain, int expectedTotal, SettleResult result,
                                        IObjectAssembly staleMain = null)
         {
-            float deadline = Time.realtimeSinceStartup + VabLoader.SettleTimeout;
+            int parts = Math.Max(expectedMain, expectedTotal);
+            float timeout = VabSettle.TimeoutS(parts);
+            float start = Time.realtimeSinceStartup;
             while (true)
             {
                 yield return null;
-                if (builder == null)
+                result.Seconds = Time.realtimeSinceStartup - start;
+                // The captured builder is a plain object, never null: ask the game whether this VAB
+                // is still the open one. A restore on a shutting-down VAB would do harm, not good.
+                if (!ReferenceEquals(VabReader.Builder(), builder))
+                {
+                    result.VabClosed = true;
+                    Log($"import: the VAB was closed after {result.Seconds:0.0} s of waiting");
                     yield break;
+                }
                 if (VabLoader.Settled(builder, expectedMain, expectedTotal, staleMain))
                 {
                     result.Settled = true;
+                    Log($"import: settled in {result.Seconds:0.0} s");
                     yield break;
                 }
-                if (Time.realtimeSinceStartup > deadline)
+                if (result.Seconds > timeout)
+                {
+                    Log($"import: not settled after {result.Seconds:0.0} s (timeout {timeout:0.0} s for {parts} part(s))");
                     yield break;
+                }
             }
         }
 
@@ -169,55 +204,120 @@ namespace K2D2.KSPService
             catch (Exception) { return -1; }
         }
 
-        // The loader table of the plan.
+        // Method B for one assembly. The workspace total to expect is read when it runs, since the
+        // workspace may then be the restored one or a half-cleared one.
+        static Attempt MethodB(string name, string outcome, JObject assembly, int estimatedTotal)
+        {
+            var attempt = new Attempt
+            {
+                Name = name,
+                Outcome = outcome,
+                ExpectedMain = VabSnapshot.PartCount(assembly),
+                ExpectedTotal = estimatedTotal,
+            };
+            attempt.Run = b =>
+            {
+                attempt.StaleMain = VabReader.MainAssembly(b);
+                attempt.ExpectedTotal = VabLoader.LoadAsMain(b, assembly);
+            };
+            return attempt;
+        }
+
+        // The loader table of the plan, plus method B as the fallback for a workspace file: method A
+        // (ApplySnapshot) is unverified in game, and the before_import backups are workspace files.
         static List<Attempt> Plan(VabImportFile file, JObject original)
         {
             var attempts = new List<Attempt>();
+            int othersNow = VabSnapshot.TotalPartCount(original) - VabSnapshot.MainPartCount(original);
             if (file.Format == VabImportFormat.WorkspaceSnapshot)
             {
                 attempts.Add(new Attempt
                 {
                     Name = "A (whole workspace from the file: ClearAll + ApplySnapshot)",
+                    Outcome = "Workspace loaded from the file",
                     Run = b => VabLoader.ApplyWorkspace(b, file.Root),
                     ExpectedMain = VabSnapshot.MainPartCount(file.Root),
                     ExpectedTotal = VabSnapshot.TotalPartCount(file.Root),
                 });
+                if (VabSnapshot.MainEntry(file.Root)?["Assembly"] is JObject fileMain && VabSnapshot.PartCount(fileMain) > 0)
+                    attempts.Add(MethodB(
+                        "B (fallback: the file's main rocket only; main rocket deleted, then LoadSerializedAssembly; " +
+                        "the file's detached assemblies are not loaded)",
+                        $"Main rocket of the workspace file loaded ({VabSnapshot.PartCount(fileMain)} parts), " +
+                        "without its detached assemblies",
+                        fileMain, othersNow + VabSnapshot.PartCount(fileMain)));
                 return attempts;
             }
             int imported = VabSnapshot.PartCount(file.Assembly);
+            string outcome = $"Imported as the main rocket ({imported} parts)";
             var swapped = (JObject)original.DeepClone();
             if (VabSnapshot.ReplaceMain(swapped, file.Assembly))
                 attempts.Add(new Attempt
                 {
                     Name = "A (main rocket swapped in the workspace snapshot: ClearAll + ApplySnapshot)",
+                    Outcome = outcome,
                     Run = b => VabLoader.ApplyWorkspace(b, swapped),
                     ExpectedMain = imported,
                     ExpectedTotal = VabSnapshot.TotalPartCount(swapped),
                 });
-            var viaB = new Attempt
-            {
-                Name = "B (main rocket deleted, then LoadSerializedAssembly)",
-                ExpectedMain = imported,
-                ExpectedTotal = VabSnapshot.TotalPartCount(original) - VabSnapshot.MainPartCount(original) + imported,
-            };
-            viaB.Run = b =>
-            {
-                viaB.StaleMain = VabReader.MainAssembly(b);
-                VabLoader.LoadAsMain(b, file.Assembly);
-            };
-            attempts.Add(viaB);
+            attempts.Add(MethodB("B (main rocket deleted, then LoadSerializedAssembly)", outcome, file.Assembly, othersNow + imported));
             return attempts;
         }
 
-        static string SuccessMessage(VabImportFile file, List<string> clamps, string backupPath)
+        static string SuccessMessage(string outcome, List<string> clamps, string backupPath)
         {
-            string what = file.Format == VabImportFormat.WorkspaceSnapshot
-                ? "Workspace loaded from the file"
-                : $"Imported as the main rocket ({VabSnapshot.PartCount(file.Assembly)} parts)";
             string clampNote = clamps.Count == 0
                 ? ""
                 : $" {clamps.Count} resource value(s) lowered to capacity, first: {clamps[0]}.";
-            return $"{what}. Previous workspace saved to exports/{Path.GetFileName(backupPath)}.{clampNote}";
+            return $"{outcome}. Previous workspace saved to exports/{Path.GetFileName(backupPath)}.{clampNote}";
+        }
+
+        // Puts the original workspace back: method A (the whole snapshot), and if that fails, method B
+        // with the original main rocket alone, so a broken ApplySnapshot cannot lose the rocket.
+        static IEnumerator Restore(ObjectAssemblyBuilder builder, JObject original, RestoreResult result)
+        {
+            int originalMain = VabSnapshot.MainPartCount(original);
+            int originalTotal = VabSnapshot.TotalPartCount(original);
+            var settle = new SettleResult();
+            string errorA = TryRun(() => VabLoader.ApplyWorkspace(builder, original));
+            if (errorA == null)
+            {
+                yield return WaitSettled(builder, originalMain, originalTotal, settle);
+                if (settle.VabClosed) { result.VabClosed = true; yield break; }
+                if (settle.Settled) yield break;
+                errorA = $"after {settle.Seconds:0.0} s the VAB shows {VabLoader.Describe(builder)}";
+            }
+            Log("import: restore by method A failed: " + errorA);
+
+            if (!(VabSnapshot.MainEntry(original)?["Assembly"] is JObject mainAssembly) || VabSnapshot.PartCount(mainAssembly) == 0)
+            {
+                result.Error = errorA + "; no main rocket to restore by method B";
+                yield break;
+            }
+            Log("import: restoring the original main rocket by method B (main rocket deleted, then " +
+                "LoadSerializedAssembly); detached assemblies of the workspace may be lost");
+            IObjectAssembly stale = null;
+            int expectedTotal = 0;
+            string errorB = TryRun(() =>
+            {
+                stale = VabReader.MainAssembly(builder);
+                expectedTotal = VabLoader.LoadAsMain(builder, mainAssembly);
+            });
+            if (errorB == null)
+            {
+                settle = new SettleResult();
+                yield return WaitSettled(builder, originalMain, expectedTotal, settle, stale);
+                if (settle.VabClosed) { result.VabClosed = true; yield break; }
+                if (settle.Settled)
+                {
+                    result.ByMethodB = true;
+                    Log("import: original main rocket restored by method B, detached assemblies may be lost: " +
+                        VabLoader.Describe(builder));
+                    yield break;
+                }
+                errorB = $"after {settle.Seconds:0.0} s the VAB shows {VabLoader.Describe(builder)}";
+            }
+            result.Error = $"method A: {errorA}; method B: {errorB}";
         }
 
         public static IEnumerator Import(string path, Action<string> report)
@@ -226,7 +326,8 @@ namespace K2D2.KSPService
             if (builder == null) { report("The VAB is not ready yet."); yield break; }
             string fileName = Path.GetFileName(path);
 
-            // 1. Read and recognize the file.
+            // 1. Read and recognize the file. Steps 1 to 4 run through TryRun: a throw there (e.g. a
+            // number too large in a hand-edited file) is a refusal, never a stuck window.
             string text = null;
             string error = TryRun(() => text = File.ReadAllText(path, Encoding.UTF8));
             if (error != null)
@@ -235,7 +336,9 @@ namespace K2D2.KSPService
                 report($"Cannot read {fileName}: {error}");
                 yield break;
             }
-            VabImportResult parsed = VabImport.Parse(text);
+            VabImportResult parsed = null;
+            error = TryRun(() => parsed = VabImport.Parse(text));
+            if (error != null) { report(Unexpected("reading the file", error)); yield break; }
             if (!parsed.Ok)
             {
                 Log($"import: {fileName}: refused: {parsed.Error}");
@@ -247,7 +350,9 @@ namespace K2D2.KSPService
                 $"{file.Assemblies.Sum(a => VabSnapshot.PartCount(a))} part(s)");
 
             // 2. Structure: GUIDs, root, node pairs.
-            List<string> problems = file.Assemblies.SelectMany(a => VabImport.CheckStructure(a)).ToList();
+            List<string> problems = null;
+            error = TryRun(() => problems = file.Assemblies.SelectMany(a => VabImport.CheckStructure(a)).ToList());
+            if (error != null) { report(Unexpected("checking the structure", error)); yield break; }
             Log($"import: structure check: {problems.Count} problem(s)" + (problems.Count > 0 ? ": " + string.Join(" | ", problems) : ""));
             if (problems.Count > 0)
             {
@@ -257,9 +362,16 @@ namespace K2D2.KSPService
             }
 
             // 3. Parts: every part must be offered by this VAB (spec: refuse and list them).
-            List<string> names = VabImport.PartNames(file.Assemblies);
-            var available = new HashSet<string>(builder.Stats.AvailableParts.Where(p => p?.Name != null).Select(p => p.Name));
-            List<VabMissingPart> missing = VabImport.MissingParts(names, available, VabReader.KnownPartNames(builder));
+            List<string> names = null;
+            HashSet<string> available = null;
+            List<VabMissingPart> missing = null;
+            error = TryRun(() =>
+            {
+                names = VabImport.PartNames(file.Assemblies);
+                available = new HashSet<string>(builder.Stats.AvailableParts.Where(p => p?.Name != null).Select(p => p.Name));
+                missing = VabImport.MissingParts(names, available, VabReader.KnownPartNames(builder));
+            });
+            if (error != null) { report(Unexpected("checking the parts", error)); yield break; }
             Log($"import: parts checked: {names.Count} distinct name(s), {available.Count} available in this VAB, " +
                 $"{missing.Count} missing" +
                 (missing.Count > 0 ? ": " + string.Join(", ", missing.Select(m => m.Name + (m.Known ? " (not unlocked)" : " (unknown)"))) : ""));
@@ -270,8 +382,13 @@ namespace K2D2.KSPService
             }
 
             // 4. Resource amounts above capacity are lowered (spec, choix 2).
-            Func<string, string, double?> capacity = VabReader.CapacityLookup(builder);
-            List<string> clamps = file.Assemblies.SelectMany(a => VabImport.ClampResources(a, capacity)).ToList();
+            List<string> clamps = null;
+            error = TryRun(() =>
+            {
+                Func<string, string, double?> capacity = VabReader.CapacityLookup(builder);
+                clamps = file.Assemblies.SelectMany(a => VabImport.ClampResources(a, capacity)).ToList();
+            });
+            if (error != null) { report(Unexpected("checking the resources", error)); yield break; }
             Log($"import: resources: {clamps.Count} value(s) lowered");
             foreach (string c in clamps)
                 Log("import: clamped " + c);
@@ -317,49 +434,60 @@ namespace K2D2.KSPService
             int originalTotal = VabSnapshot.TotalPartCount(original);
             Log($"import: backup of the whole workspace (main {originalMain} part(s), {originalTotal} in all) -> {backupPath}");
             int historyBefore = HistoryCount(builder);
+            List<Attempt> attempts = null;
+            error = TryRun(() => attempts = Plan(file, original));
+            if (error != null) { report(Unexpected("preparing the load", error)); yield break; }
 
             // 7. Load, method by method; after a failure, restore the original before going on.
             string failure = null;
-            foreach (Attempt attempt in Plan(file, original))
+            bool restoredByB = false;
+            foreach (Attempt attempt in attempts)
             {
-                Log($"import: method {attempt.Name}: expecting main {attempt.ExpectedMain} part(s), {attempt.ExpectedTotal} in all");
+                Log($"import: method {attempt.Name}: trying");
                 string attemptError = TryRun(() => attempt.Run(builder));
                 if (attemptError == null)
                 {
+                    Log($"import: method {attempt.Name}: expecting main {attempt.ExpectedMain} part(s), {attempt.ExpectedTotal} in all");
                     var settle = new SettleResult();
                     yield return WaitSettled(builder, attempt.ExpectedMain, attempt.ExpectedTotal, settle, attempt.StaleMain);
+                    if (settle.VabClosed)
+                    {
+                        report(ClosedMessage(backupPath));
+                        yield break;
+                    }
                     if (!settle.Settled)
-                        attemptError = $"after {VabLoader.SettleTimeout:0} s the VAB shows {VabLoader.Describe(builder)}";
+                        attemptError = $"after {settle.Seconds:0.0} s the VAB shows {VabLoader.Describe(builder)}";
                 }
                 if (attemptError == null)
                 {
                     Log($"import: result: success with method {attempt.Name}; {VabLoader.Describe(builder)}; " +
                         $"undo history {historyBefore} -> {HistoryCount(builder)} snapshot(s)");
-                    report(SuccessMessage(file, clamps, backupPath));
+                    report(SuccessMessage(attempt.Outcome, clamps, backupPath));
                     yield break;
                 }
 
                 failure = attemptError;
                 Log($"import: method {attempt.Name} failed: {attemptError}");
-                string restoreError = TryRun(() => VabLoader.ApplyWorkspace(builder, original));
-                if (restoreError == null)
+                var restore = new RestoreResult();
+                yield return Restore(builder, original, restore);
+                if (restore.VabClosed)
                 {
-                    var settle = new SettleResult();
-                    yield return WaitSettled(builder, originalMain, originalTotal, settle);
-                    if (!settle.Settled)
-                        restoreError = "the VAB shows " + VabLoader.Describe(builder);
+                    report(ClosedMessage(backupPath));
+                    yield break;
                 }
-                if (restoreError != null)
+                if (restore.Error != null)
                 {
-                    Log("import: restore failed: " + restoreError);
+                    Log("import: restore failed: " + restore.Error);
                     report($"Import failed ({attemptError}) and the previous rocket could not be restored. " +
                            $"Choose exports/{Path.GetFileName(backupPath)} in the list and import it.");
                     yield break;
                 }
+                restoredByB |= restore.ByMethodB;
                 Log("import: previous workspace restored: " + VabLoader.Describe(builder));
             }
             Log("import: result: failed: " + failure);
-            report($"Import failed: {failure}. Your previous rocket was restored (backup: exports/{Path.GetFileName(backupPath)}).");
+            report($"Import failed: {failure}. Your previous rocket was restored (backup: exports/{Path.GetFileName(backupPath)})." +
+                   (restoredByB ? " Only the main rocket came back: detached parts may be missing, they are in the backup." : ""));
         }
     }
 }

@@ -45,7 +45,18 @@ namespace K2D2.KSPService
         public static string VesselName(ObjectAssemblyBuilder builder)
         {
             try { return builder.Stats.GetCurrentWorkspaceVehicleDisplayName; }
-            catch (Exception) { return null; }
+            catch (Exception e) { LogOnce("the vessel name could not be read", e); return null; }
+        }
+
+        static readonly HashSet<string> Logged = new HashSet<string>();
+
+        // The reads below fall back to null rather than fail a whole export or dump; each fallback is
+        // logged once per message, not once per part.
+        static void LogOnce(string what, Exception e)
+        {
+            string line = $"[VabTools] {what}: {e.GetType().Name}: {e.Message}";
+            if (Logged.Add(line))
+                K2D2_Plugin.logger.LogInfo(line);
         }
 
         // The game's own JSON of the assembly (SerializedAssembly), parsed losslessly.
@@ -190,7 +201,7 @@ namespace K2D2.KSPService
             var available = new HashSet<string>(builder.Stats.AvailableParts.Where(p => p?.Name != null).Select(p => p.Name));
             IReadOnlyDictionary<string, string> techOf = null;
             try { techOf = game.ScienceManager?.TechNodeDataStore?.PartIDLookup; }
-            catch (Exception) { }
+            catch (Exception e) { LogOnce("dump: the tech node lookup could not be read, tech_node left null", e); }
 
             var list = new List<VabDumpPart>();
             foreach (PartCore core in game.Parts.AllParts())
@@ -239,7 +250,7 @@ namespace K2D2.KSPService
         static bool? CampaignUnlocked(GameInstance game, string name)
         {
             try { return game.SessionManager?.IsPartUnlocked(name); }
-            catch (Exception) { return null; }
+            catch (Exception e) { LogOnce("dump: IsPartUnlocked failed, campaign_unlocked left null", e); return null; }
         }
 
         // Definition values of the current engine mode. Isp = atmosphereCurve at 0 and 1 atm (not
@@ -269,16 +280,19 @@ namespace K2D2.KSPService
         {
             GameInstance game = GeneralTools.Game;
             var campaign = new VabCampaign();
-            try { campaign.Name = game?.SessionManager?.ActiveCampaignName; } catch (Exception) { }
-            try { campaign.Mode = GameManager.Instance?.GameModeManager?.GetCurrentGameModeId(); } catch (Exception) { }
-            try { campaign.UnlockAllParts = game != null && game.CheatSystem != null && game.CheatSystem.GetUnlockAllParts(); } catch (Exception) { }
+            try { campaign.Name = game?.SessionManager?.ActiveCampaignName; }
+            catch (Exception e) { LogOnce("the campaign name could not be read", e); }
+            try { campaign.Mode = GameManager.Instance?.GameModeManager?.GetCurrentGameModeId(); }
+            catch (Exception e) { LogOnce("the game mode could not be read", e); }
+            try { campaign.UnlockAllParts = game != null && game.CheatSystem != null && game.CheatSystem.GetUnlockAllParts(); }
+            catch (Exception e) { LogOnce("the unlock-all-parts cheat could not be read", e); }
             try
             {
                 HashSet<string> nodes = game?.SessionManager?.GetMyAgencyUnlockedTechNodes();
                 if (nodes != null)
                     campaign.UnlockedTechNodes = nodes.OrderBy(n => n, StringComparer.Ordinal).ToList();
             }
-            catch (Exception) { }
+            catch (Exception e) { LogOnce("the unlocked tech nodes could not be read", e); }
             return campaign;
         }
 
@@ -294,7 +308,7 @@ namespace K2D2.KSPService
         static string ModVersion()
         {
             try { return K2D2_Plugin.Instance.SWMetadata.SWInfo.Version; }
-            catch (Exception) { return null; }
+            catch (Exception e) { LogOnce("the mod version could not be read", e); return null; }
         }
     }
 }

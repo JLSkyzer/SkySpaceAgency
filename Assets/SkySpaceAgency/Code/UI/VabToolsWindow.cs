@@ -250,12 +250,46 @@ namespace K2D2.UI
             StartCoroutine(RunImport(Path.Combine(VabActions.Folder(), choice)));
         }
 
+        // Drives the import (and the coroutines it yields) step by step instead of handing it to
+        // Unity: an exception that escapes it then ends here with a status line, and the buttons
+        // always come back, instead of a window stuck on "Importing..." until a restart.
         IEnumerator RunImport(string path)
         {
             SetBusy(true);
             SetStatus($"Importing {Path.GetFileName(path)}...");
-            yield return VabActions.Import(path, SetStatus);
-            SetBusy(false);
+            var stack = new Stack<IEnumerator>();
+            stack.Push(VabActions.Import(path, SetStatus));
+            try
+            {
+                while (stack.Count > 0)
+                {
+                    object current = null;
+                    bool moved;
+                    try
+                    {
+                        moved = stack.Peek().MoveNext();
+                        if (moved)
+                            current = stack.Peek().Current;
+                    }
+                    catch (Exception e)
+                    {
+                        K2D2_Plugin.logger.LogError("[VabTools] import: stopped by an unexpected error: " + e);
+                        SetStatus($"Import stopped by an unexpected error ({e.GetType().Name}: {e.Message}). " +
+                                  "See the log. If the rocket changed, import the newest before_import file from vab/exports.");
+                        break;
+                    }
+                    if (!moved)
+                        stack.Pop();
+                    else if (current is IEnumerator nested)
+                        stack.Push(nested);
+                    else
+                        yield return current;
+                }
+            }
+            finally
+            {
+                SetBusy(false);
+            }
             RefreshFiles();
         }
 
