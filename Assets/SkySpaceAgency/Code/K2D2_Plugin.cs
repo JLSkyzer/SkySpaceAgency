@@ -58,6 +58,9 @@ namespace K2D2
         private static string VacLandingSettingsPath =>
             _vacLandingSettingsPath ??= Path.Combine(AssemblyFolder, "skyspaceagency_landing_vac.json");
 
+        // VAB tools files (exports/, imports/, dumps/), next to the DLL like the settings files above.
+        internal static string VabFolder => Path.Combine(AssemblyFolder, "vab");
+
 
         /// Singleton instance of the plugin class
         [PublicAPI] public static K2D2_Plugin Instance { get; set; }
