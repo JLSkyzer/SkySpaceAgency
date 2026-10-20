@@ -79,27 +79,62 @@ namespace K2D2.KSPService
             builder.UtilFileIO.LoadSerializedAssembly(assembly);
         }
 
-        // Main rocket with expectedMainParts parts, or (expectedMainParts <= 0) expectedTotalParts in the workspace.
-        public static bool Settled(ObjectAssemblyBuilder builder, int expectedMainParts, int expectedTotalParts)
+        // Main rocket with expectedMainParts parts and expectedTotalParts in the workspace; with
+        // expectedMainParts <= 0 only the total counts. staleMain (method B): the old main object must be gone.
+        // Never throws: the tracker is read in the middle of a transition, and a throw would leave the
+        // workspace half-cleared with no restore. A failed read is "not settled".
+        public static bool Settled(ObjectAssemblyBuilder builder, int expectedMainParts, int expectedTotalParts,
+                                   IObjectAssembly staleMain = null)
         {
             if (builder == null)
                 return false;
-            if (expectedMainParts > 0)
+            try
             {
-                IObjectAssembly main = VabReader.MainAssembly(builder);
-                return main?.Parts != null && main.Parts.Count == expectedMainParts;
+                if (expectedMainParts > 0)
+                {
+                    IObjectAssembly main = VabReader.MainAssembly(builder);
+                    if (main?.Parts == null || main.Parts.Count != expectedMainParts)
+                        return false;
+                    if (staleMain != null && ReferenceEquals(main, staleMain))
+                        return false;
+                }
+                bool settled = builder.ActivePartTracker.PartsMasterList.Count == expectedTotalParts;
+                _reported = false;
+                return settled;
             }
-            return builder.ActivePartTracker.PartsMasterList.Count == expectedTotalParts;
+            catch (Exception e)
+            {
+                ReportOnce("Settled", e);
+                return false;
+            }
         }
 
         public static string Describe(ObjectAssemblyBuilder builder)
         {
             if (builder == null)
                 return "the VAB is closed";
-            IObjectAssembly main = VabReader.MainAssembly(builder);
-            ObjectAssemblyPartTracker tracker = builder.ActivePartTracker;
-            return $"main {main?.Parts?.Count ?? 0} part(s), workspace {tracker.PartsMasterList.Count} part(s) " +
-                   $"in {tracker.PartAssemblyCount()} assembly(ies)";
+            try
+            {
+                IObjectAssembly main = VabReader.MainAssembly(builder);
+                ObjectAssemblyPartTracker tracker = builder.ActivePartTracker;
+                return $"main {main?.Parts?.Count ?? 0} part(s), workspace {tracker.PartsMasterList.Count} part(s) " +
+                       $"in {tracker.PartAssemblyCount()} assembly(ies)";
+            }
+            catch (Exception e)
+            {
+                ReportOnce("Describe", e);
+                return "unknown (the VAB state could not be read)";
+            }
+        }
+
+        static bool _reported;
+
+        static void ReportOnce(string where, Exception e)
+        {
+            if (_reported)
+                return;
+            _reported = true;
+            K2D2_Plugin.logger.LogInfo($"[VabTools] import: {where} could not read the VAB state: {e.Message}");
         }
     }
 }

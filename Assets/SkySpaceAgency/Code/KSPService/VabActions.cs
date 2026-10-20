@@ -122,6 +122,7 @@ namespace K2D2.KSPService
             public Action<ObjectAssemblyBuilder> Run;
             public int ExpectedMain;
             public int ExpectedTotal;
+            public IObjectAssembly StaleMain;   // method B: the main object that must be gone
         }
 
         class SettleResult
@@ -143,7 +144,8 @@ namespace K2D2.KSPService
             }
         }
 
-        static IEnumerator WaitSettled(ObjectAssemblyBuilder builder, int expectedMain, int expectedTotal, SettleResult result)
+        static IEnumerator WaitSettled(ObjectAssemblyBuilder builder, int expectedMain, int expectedTotal, SettleResult result,
+                                       IObjectAssembly staleMain = null)
         {
             float deadline = Time.realtimeSinceStartup + VabLoader.SettleTimeout;
             while (true)
@@ -151,7 +153,7 @@ namespace K2D2.KSPService
                 yield return null;
                 if (builder == null)
                     yield break;
-                if (VabLoader.Settled(builder, expectedMain, expectedTotal))
+                if (VabLoader.Settled(builder, expectedMain, expectedTotal, staleMain))
                 {
                     result.Settled = true;
                     yield break;
@@ -192,13 +194,18 @@ namespace K2D2.KSPService
                     ExpectedMain = imported,
                     ExpectedTotal = VabSnapshot.TotalPartCount(swapped),
                 });
-            attempts.Add(new Attempt
+            var viaB = new Attempt
             {
                 Name = "B (main rocket deleted, then LoadSerializedAssembly)",
-                Run = b => VabLoader.LoadAsMain(b, file.Assembly),
                 ExpectedMain = imported,
                 ExpectedTotal = VabSnapshot.TotalPartCount(original) - VabSnapshot.MainPartCount(original) + imported,
-            });
+            };
+            viaB.Run = b =>
+            {
+                viaB.StaleMain = VabReader.MainAssembly(b);
+                VabLoader.LoadAsMain(b, file.Assembly);
+            };
+            attempts.Add(viaB);
             return attempts;
         }
 
@@ -320,7 +327,7 @@ namespace K2D2.KSPService
                 if (attemptError == null)
                 {
                     var settle = new SettleResult();
-                    yield return WaitSettled(builder, attempt.ExpectedMain, attempt.ExpectedTotal, settle);
+                    yield return WaitSettled(builder, attempt.ExpectedMain, attempt.ExpectedTotal, settle, attempt.StaleMain);
                     if (!settle.Settled)
                         attemptError = $"after {VabLoader.SettleTimeout:0} s the VAB shows {VabLoader.Describe(builder)}";
                 }
