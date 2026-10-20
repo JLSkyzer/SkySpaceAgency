@@ -23,6 +23,7 @@
   - Template upgraded to 26w42c (SDK package `ksp2redux.sdk#26w42c`), which replaces the `8ed8010` pin.
   - Loggers now come from `SpaceWarp2.API.Logging.LogManager`.
   - Campaign features: the mod is off in campaigns that do not enable it. Alt-O and the autopilots now stay inactive there, as the AppBar button already does.
+  - Fixed (2026-10-20): the window stayed invisible although its AppBar button showed it open. The mod is off in the main menu, where it used to load its UI, so the game refused the UXML and the window was created empty. The window is now created when a campaign that enables the mod loads, or on the first click or Alt-O.
 - Project remixed as SkySpaceAgency, starting from IanMealworm's K2D2Redux 1.3.0 (commit `7ea025c`). README, `NOTICE.md` and `LICENSE.md` now credit the upstream port and state the remix's CC BY-SA 4.0 terms.
 - The mod is now **SkySpaceAgency**: mod id `SkySpaceAgency`, assembly `SkySpaceAgency.dll`, window title, AppBar button, About page, Addressables groups and labels, log names and settings files (`skyspaceagency_*.json`). Toolbar button and window ids no longer clash with K2-D2. Settings from K2-D2 are not migrated. Internal C# namespaces and class names still use `K2D2`.
 - Release size cut from ~92 MB to ~6.3 MB, based on LeoMarinDev's analysis in [PR #2 of IanMealworm/K2D2Redux](https://github.com/IanMealworm/K2D2Redux/pull/2):
