@@ -50,6 +50,13 @@ namespace K2D2.Landing.Precision
         public const double ImpactPrecision = 0.1;    // s
         public const double MaxCoast = 20000;         // s, cap for very long orbits
 
+        /// <summary>
+        /// Predicts where the descent stops when braking starts at the latest safe time.
+        /// <para>A vessel already at or below the terrain at t0 (after the impulse) gets
+        /// impactUT = t0: FindStart then reports TooLate or Impossible, so Ok is false.</para>
+        /// <para>A hyperbolic (escape) trajectory is refused, even one that would hit the body.
+        /// Callers searching trial Δv should treat that as "no solution".</para>
+        /// </summary>
         public static StopPrediction Predict(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Impulse? impulse)
         {
             if (!(vehicle.ThrustKN > 0) || !(vehicle.MassT > 0))

@@ -152,4 +152,65 @@ public class StopPointPredictorTests
         Assert.IsFalse(p.Ok);
         Assert.That(p.Reason, Is.Not.Null.And.Not.Empty);
     }
+
+    [Test]
+    public void BurnInThePast_IsRefused()
+    {
+        Impulse burn = Deorbit(UT);
+        burn.UT = UT - 10;
+
+        StopPrediction p = StopPointPredictor.Predict(R0Vec, V0Vec, UT, Mun(false), Lander(), burn);
+
+        Assert.IsFalse(p.Ok);
+        Assert.AreEqual("The burn is in the past", p.Reason);
+    }
+
+    [Test]
+    public void ThrustTooLowToStop_IsNotOkWithTheSafetyReason()
+    {
+        StopPrediction p = StopPointPredictor.Predict(R0Vec, V0Vec, UT, Mun(false), Lander(0.5), Deorbit(UT));
+
+        Assert.IsFalse(p.Ok);
+        TestContext.Out.WriteLine($"low thrust: reason '{p.Reason}'");
+        Assert.That(new[] { "Cannot stop before the ground!", "Too late: braking now stops below the safe altitude" },
+            Does.Contain(p.Reason));
+    }
+
+    // Terrain frame. A 5 km plateau covers the body-fixed half y < 0, in the body's orientation at
+    // the prediction UT. The burn is half an orbit after UT (inertial x < 0, so the wrapper from
+    // t0 to UT runs) and lowers the periapsis to only 2 km, on the +x side. With +omega, an
+    // inertial point at x > 0 has body-fixed y = -x sin(omega dt) < 0 at UT: over the plateau. So
+    // the coast reaches the ground only if the impact search turns positions back the right way,
+    // and the stop is 50 m above the plateau only if the braking terrain does too. With the
+    // t0 -> UT turn reversed, the braking reads flat ground and dives to ~113 m above the radius,
+    // inside the plateau (StopAltitude ~113 m): hence the tight upper bound.
+    const double Plateau = 5000;
+    static double HalfPlateau(Vector3d p) => p.y < 0 ? Plateau : 0;
+
+    [Test]
+    public void RotatingTerrain_IsReadInTheBodyOrientationAtUT()
+    {
+        double period = 2 * Math.PI * Math.Sqrt(R0 * R0 * R0 / Mu);
+        double tBurn = UT + period / 2;
+        KeplerPropagator.Propagate(R0Vec, V0Vec, Mu, tBurn - UT, out var rb, out var vb);
+        double rp = R + 2000;
+        double va = Math.Sqrt(2 * Mu * rp / (R0 * (R0 + rp)));
+        var burn = new Impulse { UT = tBurn, DeltaV = vb / vb.magnitude * (va - vb.magnitude) };
+        Assert.That(rb.x, Is.LessThan(-0.99 * R0), "burn on the -x side");
+
+        Body flat = Mun(true);
+        StopPrediction overFlat = StopPointPredictor.Predict(R0Vec, V0Vec, UT, flat, Lander(), burn);
+        Assert.IsFalse(overFlat.Ok, "periapsis 2 km: flat ground is never reached");
+
+        Body plateau = Mun(true);
+        plateau.TerrainHeight = HalfPlateau;
+        StopPrediction p = StopPointPredictor.Predict(R0Vec, V0Vec, UT, plateau, Lander(), burn);
+
+        TestContext.Out.WriteLine($"plateau: ok {p.Ok} '{p.Reason}', stop alt {p.StopAltitude:F1}, stop dir {p.StopDirNow}, " +
+            $"brake {p.BrakeStartUT - UT:F0} -> {p.StopUT - UT:F0} s after UT");
+        Assert.IsTrue(p.Ok, p.Reason);
+        Assert.AreEqual(Plateau, HalfPlateau(p.StopDirNow * R), "stop over the plateau");
+        Assert.That(p.StopAltitude, Is.InRange(BrakeSimulator.SafeAltitude - 1, BrakeSimulator.SafeAltitude + 30),
+            "stops just above the plateau");
+    }
 }
