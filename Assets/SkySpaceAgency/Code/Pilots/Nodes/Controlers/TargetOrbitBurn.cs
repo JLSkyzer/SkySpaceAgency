@@ -22,27 +22,29 @@ namespace K2D2.Node
     /// This controller instead re-evaluates OrbitGuidance.DeltaVToOrbit from the current orbit
     /// every frame and steers along it until it vanishes, so staging mid-burn does not matter.
     ///
-    /// Sequence: warp until AlignLead seconds before the burn start, align during those seconds,
-    /// burn from the start time. Refusals go through Fail(). CircularizeBurn derives from it with
-    /// its own target (circular at the current radius) and start time (centered on the apsis).
+    /// Sequence: steer toward the burn aim from the start (also while warping), warp until the
+    /// alignment lead before the burn start (BurnWarp.AlignmentLead from the angle still to turn
+    /// and the measured turn rate, 20 to 120 s), stop the warp instantly there, and ignite at the
+    /// start time once within 10° (a late alignment delays the ignition, the closed loop corrects
+    /// the orbit). While burning the warp is managed (BurnWarp.MaxBurnRate) and the throttle is
+    /// frame-aware (BurnWarp.Throttle). Refusals go through Fail(). CircularizeBurn derives from it
+    /// with its own target (circular at the current radius) and start time (centered on the apsis).
     /// </summary>
     public class TargetOrbitBurn : ExecuteController
     {
         public ILogger logger;
 
-        // Seconds of attitude alignment, with no warp, before the burn starts.
-        public const double AlignLead = 20;
+        // Minimum seconds of attitude alignment, with no warp, before the burn starts (the lead
+        // grows with the angle to turn, see BurnWarp.AlignmentLead).
+        public const double AlignLead = BurnWarp.MinLead;
         // Above this angle (degrees) between the vessel's forward and the aim, the throttle is 0.
         const double MaxThrustAngle = 10;
-        // Remaining Δv (m/s) under which the burn is done.
-        const double DoneDeltaV = 0.2;
+        // Default remaining Δv (m/s) under which the burn is done.
+        public const double DefaultDoneDeltaV = 0.2;
         // Once the remaining Δv has dropped under this (m/s), OvershootRises consecutive rises
         // mean the burn overshot: stop there.
         const double OvershootWatchDeltaV = 5;
         const int OvershootRises = 10;
-        const float MinThrottle = 0.05f;
-        // The throttle aims at burning the remaining Δv in this many seconds at full thrust.
-        const double ThrottleTimeConstant = 1.0;
         const double Rad2Deg = 180 / Math.PI;
 
         // Divergence guard: armed after DivergenceArmTime seconds of thrust while aligned, it
@@ -67,8 +69,14 @@ namespace K2D2.Node
         // acceleration, m/s²: a staging gap or a flamed-out engine never trips them.
         const double MinRealAccel = 0.1;
 
-        // Warp toward the burn (the Node tab follows its own auto-warp setting).
+        // Warp toward the burn and raise the warp during long aligned burns (the Node tab follows
+        // its own auto-warp setting). False: the player's warp is only lowered when needed.
         public bool allow_warp = true;
+
+        /// <summary>Remaining Δv (m/s) under which the burn is done. Start(target, startUT,
+        /// doneDeltaV) sets it for its run (default 0.2); CircularizeBurn.Start keeps the value
+        /// set here (default 0.2).</summary>
+        public double DoneDeltaV { get; set; } = DefaultDoneDeltaV;
 
         public enum Mode { Warp, Align, Burn }
         public Mode mode = Mode.Warp;
@@ -96,6 +104,18 @@ namespace K2D2.Node
         double stall_time;       // seconds of thrust while aligned without a new lowest |dv|
         bool stalled;
 
+        // Alignment lead (s) in use, lengthened only, and the turn rate (°/s of real time).
+        double align_lead;
+        double turn_rate;
+        double last_angle;       // NaN until a first aim was applied
+        float last_angle_real;
+        bool warp_stopped;       // the warp was stopped at WarpEndUT
+        bool late_logged;
+        // Warp while burning: the rate levels, whether a change was already logged, the last index.
+        float[] warp_rates;
+        bool burn_warp_logged;
+        int burn_warp_index;
+
         protected KSPVessel current_vessel;
         protected BurndV burn_dV = new BurndV();
         WarpTo warp = new WarpTo();
@@ -118,9 +138,10 @@ namespace K2D2.Node
         /// Burns toward the target orbit from startUT (warping and aligning before it, see the
         /// class summary). A start time already past means burning now.
         /// </summary>
-        public void Start(TargetOrbit target, double startUT)
+        public void Start(TargetOrbit target, double startUT, double doneDeltaV = DefaultDoneDeltaV)
         {
             this.target = target;
+            DoneDeltaV = doneDeltaV;
             start_UT = startUT;
             if (!BeginRun())
                 return;
@@ -167,6 +188,15 @@ namespace K2D2.Node
             best_dv = double.PositiveInfinity;
             stall_time = 0;
             stalled = false;
+            align_lead = BurnWarp.MinLead;
+            turn_rate = BurnWarp.DefaultTurnRate;
+            last_angle = double.NaN;
+            last_angle_real = 0;
+            warp_stopped = false;
+            late_logged = false;
+            warp_rates = null;
+            burn_warp_logged = false;
+            burn_warp_index = -1;
 
             current_vessel = K2D2_Plugin.Instance.current_vessel;
             if (current_vessel?.VesselComponent == null)
@@ -178,19 +208,69 @@ namespace K2D2.Node
             return true;
         }
 
-        // Burns now when the start time has come, otherwise warps (if allowed) or aligns.
+        // Burns now when the start time has come, otherwise turns toward the aim and warps (if
+        // allowed) or aligns.
         protected void BeginWaiting(double now)
         {
             if (now >= BurnStartUT)
+            {
                 StartBurning(now);
-            else if (allow_warp && now < WarpEndUT)
+                return;
+            }
+            // A first aim gives the angle to turn, hence the lead before the warp ends.
+            if (Steer(out _))
+                RefreshLead(false);
+            logger.LogInfo($"{BurnLogTag} lead {align_lead:n1} s for " +
+                $"{(double.IsNaN(last_angle) ? "an unknown angle" : $"{last_angle:n1}°")} at {turn_rate:n1}°/s (default), " +
+                $"warp ends in {WarpEndUT - now:n1} s");
+            if (allow_warp && now < WarpEndUT)
                 warp.Start_Ut(WarpEndUT);
             else
-                StartAligning();
+                StartAligning(now);
         }
 
         protected virtual double BurnStartUT => start_UT;
-        double WarpEndUT => BurnStartUT - AlignLead;
+        double WarpEndUT => BurnStartUT - align_lead;
+
+        // "[TargetOrbitBurn]", with the subclass's tag after it ("[TargetOrbitBurn] Circularize AP").
+        string BurnLogTag => Tag == "TargetOrbitBurn" ? "[TargetOrbitBurn]" : $"[TargetOrbitBurn] {Tag}{TagDetail}";
+
+        // After a Steer: measures the turn rate in real time, only while still turning.
+        void UpdateTurnRate()
+        {
+            float real = Time.realtimeSinceStartup;
+            if (!double.IsNaN(last_angle) && last_angle > MaxThrustAngle)
+                turn_rate = BurnWarp.MeasuredTurnRate(turn_rate, last_angle, angle, real - last_angle_real);
+            last_angle = angle;
+            last_angle_real = real;
+        }
+
+        // After a Steer: lengthens the lead (never shortens it) while the angle is not yet small.
+        void RefreshLead(bool log = true)
+        {
+            UpdateTurnRate();
+            if (angle <= MaxThrustAngle)
+                return;
+            double lead = BurnWarp.AlignmentLead(angle, turn_rate);
+            if (lead > align_lead)
+            {
+                // Logged only for a real change before the warp stop (it no longer matters after).
+                if (log && !warp_stopped && lead > align_lead + 5)
+                    logger.LogInfo($"{BurnLogTag} lead lengthened to {lead:n1} s: {angle:n1}° to turn at {turn_rate:n1}°/s");
+                align_lead = lead;
+            }
+        }
+
+        // Stops the warp, instantly, once WarpEndUT has come (the player's own warp too).
+        void StopWarpAtLead(double now)
+        {
+            if (warp_stopped || now < WarpEndUT)
+                return;
+            warp_stopped = true;
+            TimeWarpTools.SetRateIndex(0, true);
+            logger.LogInfo($"{BurnLogTag} warp stopped {BurnStartUT - now:n1} s before the burn: lead {align_lead:n1} s, " +
+                $"{angle:n1}° off, turn rate {turn_rate:n1}°/s");
+        }
 
         // Called while waiting, every frame, before the start time is checked.
         protected virtual void RefreshWhileWaiting(double now) { }
@@ -221,17 +301,18 @@ namespace K2D2.Node
             return BurnTiming.Duration(deltaV, Thrust(), burn_dV.mass, burn_dV.active_isp);
         }
 
-        void StartAligning()
+        void StartAligning(double now)
         {
-            TimeWarpTools.SetRateIndex(0, false);
             mode = Mode.Align;
+            StopWarpAtLead(now);
         }
 
         void StartBurning(double now)
         {
-            TimeWarpTools.SetRateIndex(0, false);
+            // The warp is managed frame by frame from now on (ManageBurnWarp).
             mode = Mode.Burn;
             burn_start_UT = now;
+            logger.LogInfo($"{BurnLogTag} ignition at T{now - BurnStartUT:+0.0;-0.0;+0.0}s vs planned, {angle:n1}° off");
             ignition_dv = double.NaN;
             // Fixed for the whole burn, so the target does not flip side when the radial speed
             // crosses 0 mid-burn.
@@ -270,32 +351,53 @@ namespace K2D2.Node
                 RefreshWhileWaiting(now);
                 set_throttle(0);
 
+                // Turn toward the aim at the planned start while time passes (SAS target only).
+                bool steering = Steer(out _);
+                if (finished)
+                    return;
+                if (steering)
+                    RefreshLead();
+
                 if (now >= BurnStartUT)
                 {
+                    // Late alignment: wait (no throttle) until within MaxThrustAngle. Without an
+                    // aim the burn starts and Burn() holds the throttle at 0, as before.
+                    if (steering && angle > MaxThrustAngle)
+                    {
+                        if (mode == Mode.Warp)
+                            StartAligning(now);
+                        StopWarpAtLead(now);
+                        if (!late_logged)
+                        {
+                            late_logged = true;
+                            logger.LogInfo($"{BurnLogTag} late ignition: {now - BurnStartUT:n1} s, {angle:n1}° off " +
+                                $"(lead {align_lead:n1} s, turn rate {turn_rate:n1}°/s)");
+                        }
+                        status_line = $"Late ignition: +{StrTool.DurationToString(now - BurnStartUT)}, {angle:n1}° off";
+                        return;
+                    }
                     StartBurning(now);
                 }
                 else if (mode == Mode.Warp)
                 {
                     if (!allow_warp || now >= WarpEndUT)
                     {
-                        StartAligning();
+                        StartAligning(now);
                     }
                     else
                     {
                         warp.UT = WarpEndUT;
                         warp.Update();
-                        status_line = $"Burn in {StrTool.DurationToString(BurnStartUT - now)} - {warp.status_line}";
+                        status_line = $"Burn in {StrTool.DurationToString(BurnStartUT - now)}, {angle:n1}° off - {warp.status_line}";
                         if (warp.finished)
-                            StartAligning();
+                            StartAligning(now);
                         return;
                     }
                 }
 
                 if (mode == Mode.Align)
                 {
-                    Steer(out _);
-                    if (finished)
-                        return;
+                    StopWarpAtLead(now);
                     status_line = $"Ignition in {StrTool.DurationToString(BurnStartUT - now)}, {angle:n1}° off";
                     return;
                 }
@@ -338,6 +440,7 @@ namespace K2D2.Node
             if (!steering)
             {
                 set_throttle(0);
+                ManageBurnWarp(remaining_dv, 0, false);
                 return;
             }
 
@@ -374,6 +477,7 @@ namespace K2D2.Node
                     if (why != null)
                     {
                         set_throttle(0);
+                        TimeWarpTools.SetRateIndex(0, true);
                         logger.LogWarning($"[{Tag}] burn diverging, aborted: {why}");
                         LogOrbit("abort (diverging)", now, remaining_dv, now - burn_start_UT);
                         Fail($"Burn diverging: aborted (check the [{Tag}] log).");
@@ -402,12 +506,74 @@ namespace K2D2.Node
 
             double accel = burn_dV.mass > 0 ? Thrust() / burn_dV.mass : 0;
 
-            if (angle > MaxThrustAngle || accel <= 0)
+            ManageBurnWarp(remaining_dv, accel, aligned);
+            if (!aligned || accel <= 0)
                 set_throttle(0);
             else
-                set_throttle(Mathf.Clamp((float)(remaining_dv / (accel * ThrottleTimeConstant)), MinThrottle, 1));
+                set_throttle(BurnWarp.Throttle(remaining_dv, accel, Time.unscaledDeltaTime,
+                    Math.Max(1, TimeWarpTools.CurrentRate)));
 
             status_line = stalled ? StallStatus : BurningStatus(remaining_dv);
+        }
+
+        // Warp while burning: capped by BurnWarp.MaxBurnRate (5 % of the remaining Δv per frame,
+        // at least 10 s of real time left), 1x when not aligned or under 10 s of burn left. With
+        // allow_warp the warp is raised to the cap, otherwise the player's warp is only lowered.
+        void ManageBurnWarp(double remainingDv, double accel, bool aligned)
+        {
+            int current = TimeWarpTools.CurrentRateIndex;
+            double frame = Time.unscaledDeltaTime;
+            double burnLeft = accel > 0 ? remainingDv / accel : double.PositiveInfinity;
+            double cap = 1;
+            if (aligned && accel > 0 && burnLeft >= BurnWarp.MinRealBurnTime)
+                cap = BurnWarp.MaxBurnRate(remainingDv, accel, frame);
+            if (warp_rates == null || warp_rates.Length == 0)
+                warp_rates = WarpRates();
+            int capIndex = BurnWarp.HighestIndexAtOrBelow(warp_rates, cap);
+
+            int wanted = current;
+            if (current > capIndex)
+                wanted = capIndex;
+            else if (allow_warp && current < capIndex)
+                wanted = capIndex;
+            if (wanted == current)
+                return;
+
+            // Lowering is instant (safety), raising goes through the game's ramp.
+            TimeWarpTools.SetRateIndex(wanted, wanted < current);
+            if (!burn_warp_logged || (wanted == 0 && burn_warp_index != 0))
+            {
+                burn_warp_logged = true;
+                string why = !aligned ? "not aligned" : accel <= 0 ? "no thrust"
+                    : burnLeft < BurnWarp.MinRealBurnTime ? $"{burnLeft:n1} s of burn left" : $"cap x{cap:n0}";
+                logger.LogInfo($"{BurnLogTag} burn warp: x{RateText(current)} -> x{RateText(wanted)} ({why}; " +
+                    $"dv {remainingDv:n1} m/s, accel {accel:n2} m/s2, burn left {burnLeft:n1} s, frame {frame * 1000:n0} ms)");
+            }
+            burn_warp_index = wanted;
+        }
+
+        string RateText(int index) =>
+            warp_rates != null && index >= 0 && index < warp_rates.Length ? $"{warp_rates[index]:0.##}" : $"[{index}]";
+
+        // The game's warp levels in ascending order (TimeWarpTools.indexToRatio is 0 past the end).
+        static float[] WarpRates()
+        {
+            var rates = new System.Collections.Generic.List<float>();
+            try
+            {
+                for (int i = 0; i < 32; i++)
+                {
+                    float r = TimeWarpTools.indexToRatio(i);
+                    if (!(r > 0))
+                        break;
+                    rates.Add(r);
+                }
+            }
+            catch (Exception)
+            {
+                // No time warp object (scene change): no level above 1x is allowed.
+            }
+            return rates.ToArray();
         }
 
         protected virtual string BurningStatus(double dv) => $"Target orbit: {dv:n1} m/s left";
@@ -515,6 +681,7 @@ namespace K2D2.Node
         void Finish(double now, string reason)
         {
             set_throttle(0);
+            TimeWarpTools.SetRateIndex(0, true);
             finished = true;
             status_line = DoneStatus(remaining_dv);
             LogOrbit($"finish ({reason})", now, remaining_dv, now - burn_start_UT);
@@ -558,7 +725,7 @@ namespace K2D2.Node
                     st.Status($"Warping to the {BurnLabel}...");
                     break;
                 case Mode.Align:
-                    st.Warning($"Aligning for the {BurnLabel}...");
+                    st.Warning(late_logged ? $"Late ignition: aligning for the {BurnLabel}..." : $"Aligning for the {BurnLabel}...");
                     break;
                 case Mode.Burn:
                     st.Warning("Burning!");
@@ -571,7 +738,8 @@ namespace K2D2.Node
             if (K2D2Settings.debug_mode.V)
             {
                 st.Console(DebugLine(GeneralTools.Current_UT));
-                st.Console($"angle {angle:n2}° throttle {throttle:n2}");
+                st.Console($"angle {angle:n2}° throttle {throttle:n2}, turn {turn_rate:n2}°/s, lead {align_lead:n1} s, " +
+                    $"warp x{TimeWarpTools.CurrentRate:0.##}");
             }
         }
     }
