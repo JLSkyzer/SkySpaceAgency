@@ -9,6 +9,7 @@ public class TerminalGuidanceTests
     const double MunG = 1.63;
     const double TouchDown = 2;
     const double SafeContact = TouchDown + 0.5;
+    const double MaxContactDrift = 1.5;
 
     // 1500 m up, the target 800 m ahead, 40 m/s toward it (it would overshoot by ~500 m
     // without guidance), 60 m/s down, max accel 6 m/s².
@@ -20,7 +21,12 @@ public class TerminalGuidanceTests
         Assert.IsFalse(r.HasNaN, "NaN command");
         Assert.IsTrue(r.Landed, "landed: " + r);
         Assert.LessOrEqual(-r.FinalVerticalSpeed, SafeContact, "vertical speed at contact: " + r);
-        Assert.LessOrEqual(r.FinalHorizontalSpeed, 3, "horizontal speed at contact: " + r);
+        // Hand-over: at most TerminalGuidance.GateSpeed of drift at FinalHeight.
+        Assert.IsFalse(double.IsNaN(r.GateHorizontalSpeed), "crossed FinalHeight: " + r);
+        Assert.LessOrEqual(r.GateHorizontalSpeed, TerminalGuidance.GateSpeed, "horizontal speed at FinalHeight: " + r);
+        // 1.5 m/s at contact: half the gate speed, below the 2 m/s touch-down speed (legs take
+        // the vertical part; a sideways slide on top of it is what tips a lander over).
+        Assert.LessOrEqual(r.FinalHorizontalSpeed, MaxContactDrift, "horizontal speed at contact: " + r);
     }
 
     [Test]
@@ -88,9 +94,12 @@ public class TerminalGuidanceTests
     }
 
     [Test]
-    public void UnreachableOffset_WithAttitudeLag_StillLandsSafely()
+    public void UnreachableOffset_Moving_WithAttitudeLag_StillLandsSafely()
     {
-        var r = PointMassSim.Run(new Vector3d(3000, 0, 300), new Vector3d(-30, 0, -25), MunG, 3, TouchDown, attitudeLag: 1.5);
+        // 30 m/s toward a target 3 km away, 600 m up. (From 300 m no law can hand over at
+        // 3 m/s: max accel 3 leaves at most 2.12 m/s² lateral, 12.7 s to cancel 27 m/s, while
+        // the descent from 25 m/s with at most 0.49 m/s² net braking covers 250 m in ~11 s.)
+        var r = PointMassSim.Run(new Vector3d(3000, 0, 600), new Vector3d(-30, 0, -25), MunG, 3, TouchDown, attitudeLag: 1.5);
         TestContext.WriteLine("3 km, moving, lag 1.5 s: " + r);
         AssertSafe(r);
         Assert.IsTrue(r.EverDropped, r.ToString());

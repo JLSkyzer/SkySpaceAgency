@@ -7,7 +7,9 @@ using KSP.Sim;
 // frame x east, y north, z up, constant gravity, explicit Euler at a fixed step. The thrust
 // points along an attitude that follows the commanded direction with a first-order lag (as
 // SAS does in game) and is scaled by FinalDescent.ThrustFactor of the pointing error, as the
-// game's throttle is. Shared test helper (Task 7 reuses it).
+// game's throttle is. Below FinalDescent.FinalHeight the game's FinalDescent is modelled: the
+// thrust leans at most FinalDescent.MaxTiltDegrees against the drift (AimDirection) and keeps
+// the vertical part the guidance commands. Shared test helper (Task 7 reuses it).
 public static class PointMassSim
 {
     public struct Result
@@ -17,8 +19,8 @@ public static class PointMassSim
         public double FinalOffsetM;       // horizontal distance to the target at contact
         public double FinalVerticalSpeed; // m/s, negative = down
         public double FinalHorizontalSpeed;
-        public double MaxCommandTiltDeg;  // largest commanded tilt from vertical
-        public double MaxCommandAccel;    // largest commanded |Accel|
+        public double MaxCommandTiltDeg;  // largest commanded tilt from vertical, above FinalHeight
+        public double MaxCommandAccel;    // largest commanded |Accel|, above FinalHeight
         public double DeltaV;             // m/s of thrust actually applied
         public bool EverDropped;
         public bool DroppedAboveGate;     // dropped while above FinalDescent.FinalHeight
@@ -70,14 +72,24 @@ public static class PointMassSim
                     r.DroppedAboveGate = true;
             }
             double magnitude = a.magnitude;
-            r.MaxCommandAccel = Math.Max(r.MaxCommandAccel, magnitude);
-            Vector3d wanted = attitude;
-            if (magnitude > 1e-9)
+            if (p.z > FinalDescent.FinalHeight)
             {
-                wanted = a * (1 / magnitude);
-                double tilt = Math.Atan2(Math.Sqrt(a.x * a.x + a.y * a.y), a.z) * 180 / Math.PI;
-                r.MaxCommandTiltDeg = Math.Max(r.MaxCommandTiltDeg, tilt);
+                r.MaxCommandAccel = Math.Max(r.MaxCommandAccel, magnitude);
+                if (magnitude > 1e-9)
+                {
+                    double tilt = Math.Atan2(Math.Sqrt(a.x * a.x + a.y * a.y), a.z) * 180 / Math.PI;
+                    r.MaxCommandTiltDeg = Math.Max(r.MaxCommandTiltDeg, tilt);
+                }
             }
+            else
+            {
+                // The game hands over to FinalDescent here: it leans at most 15° against the
+                // drift and keeps the vertical part of the thrust (the guidance's a.z).
+                Vector3d aim = FinalDescent.AimDirection(new Vector3d(0, 0, 1), v, gravity);
+                magnitude = Math.Min(maxAccel, Math.Max(0, a.z) / aim.z);
+                a = aim * magnitude;
+            }
+            Vector3d wanted = magnitude > 1e-9 ? a * (1 / magnitude) : attitude;
             attitude = attitudeLag > 0 ? (attitude + (wanted - attitude) * Math.Min(1, dt / attitudeLag)).normalized : wanted;
             double error = Math.Acos(Math.Max(-1, Math.Min(1, Vector3d.Dot(attitude, wanted)))) * 180 / Math.PI;
             double applied = magnitude * (attitudeLag > 0 ? FinalDescent.ThrustFactor(error) : 1);

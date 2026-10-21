@@ -40,6 +40,12 @@ namespace K2D2.Landing.Precision
         // rest being kept to brake.
         public const int AimBisections = 12;
         public const double BrakeReserve = 0.5;
+        // Horizontal speed allowed at FinalHeight (m/s), the speed the give-way aims at below
+        // it, and the share of lateral room × time to FinalHeight it may count on before the
+        // vertical channel gives way.
+        public const double GateSpeed = 3;
+        public const double GateSpeedAim = 2;
+        public const double GiveWayReserve = 0.7;
         // The profile blends from coast (ratio 0.9) to full braking (ratio 1) of speed over profile speed.
         const double BlendStart = 0.9;
         const double MinHeight = 0.1;   // m, keeps the vertical demand finite at the ground
@@ -132,6 +138,21 @@ namespace K2D2.Landing.Precision
                 }
                 else
                     ah = zem * (6 / (t * t)) + v * (2 / t);
+
+                // Hand-over at FinalHeight with at most GateSpeed of drift (FinalDescent only
+                // leans 15°): when the lateral room of the profile cannot cancel it in the time
+                // left, the vertical channel gives way: it thrusts at maxAccel·cos(tilt), where
+                // the lateral room is largest, which also slows the descent (more time), and only
+                // holds the descent (g) once it is down to the touch-down speed. CanStop still
+                // guards below.
+                double timeToGate = Math.Max(0, coast + brake - lastLeg);
+                double drift = v.magnitude;
+                if (drift - GateSpeedAim > GiveWayReserve * Lateral(g + d, maxAccel, tanTilt) * timeToGate)
+                {
+                    if (dropped && drift > 0)
+                        ah = v * (-maxAccel / drift);
+                    az = Math.Max(az, s > vf ? Math.Max(g, maxAccel * Math.Cos(tilt)) : g);
+                }
             }
             else
                 ah = v * (-1 / DriftNullTime);
