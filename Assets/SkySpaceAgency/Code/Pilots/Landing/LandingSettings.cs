@@ -21,9 +21,9 @@ namespace K2D2.Landing
     // panel) and setupBasicUI (a smaller subset for the Atmo panel: warp timing, brake timing, and
     // touchdown speed profile - the settings that are actually meaningful on an atmospheric body
     // today), plus the target lat/lon and a disabled, always-off precision landing toggle. Plane
-    // trim and RCS fine correction still exist as real, independently-persisted settings on the
-    // Atmo profile too - they're just not wired to a visible control yet, since atmospheric
-    // precision landing isn't built.
+    // trim still exists as a real, independently-persisted setting on the Atmo profile too -
+    // it's just not wired to a visible control yet, since atmospheric precision landing isn't
+    // built.
     // TouchDown's own tunables (touch_down_max_angle etc.) are bound from TouchDown.cs's own
     // SetupFullUI/SetupBasicUI, not here.
     public class LandingSettings
@@ -58,35 +58,6 @@ namespace K2D2.Landing
         public Setting<float> target_latitude;
         public Setting<float> target_longitude;
 
-        // RCS fine correction (vacuum precision landing). The engine-steered correction above can
-        // get target_error_m down close, then a "fine" correction can actually make it WORSE,
-        // because closing the last bit needs the burn direction to keep adjusting and the vessel
-        // can't physically turn fast enough to keep up - by the time SAS gets the ship to the
-        // newly-aimed direction, the target's moved again. RCS sidesteps that: it translates the
-        // vessel directly, without reorienting it, so there's no turn-rate lag to chase.
-        //
-        // Once active, RCS takes the heading-correction job over from the engine entirely (see
-        // TouchDown.RCSHandlingHeading) - the engine still brakes and still does its own arc
-        // extend/shorten correction (undershoot/overshoot), just not the left/right heading tilt -
-        // and hands heading back once target_error_m grows past the threshold again. Tilting the
-        // braking burn sideways to fix heading is an inherently wasteful way to move sideways next
-        // to RCS doing it directly. Off by default and a player-facing toggle, since not every
-        // vessel carries RCS/monopropellant for this.
-        public Setting<bool> use_rcs_fine_correction;
-
-        // How close the miss needs to be before RCS takes over heading correction - deliberately a
-        // short-range "close the last bit efficiently" tool, not a replacement for the engine's
-        // own much larger working range (nor for the engine's braking or arc correction, which
-        // stay running regardless of this threshold).
-        public ClampSetting<float> rcs_fine_correction_threshold_m;
-
-        // How hard RCS pushes once active, as a fraction of full RCS authority (see TouchDown.
-        // ApplyRCSFineCorrection - this scales the translation input the same way Docking's own
-        // rcs_power setting scales FinalApproach's). Fades in from 0 as target_error_m approaches
-        // the threshold above up to this at target_error_m = 0, rather than snapping to full
-        // power the instant the threshold is crossed.
-        public ClampSetting<float> rcs_fine_correction_power;
-
         // Landing mode. Atmo profile only: null on the vacuum profile, where the landing is
         // always propulsive (see LandingPilot.parachute_mode).
         public EnumSetting<LandingMethod> mode;
@@ -108,10 +79,6 @@ namespace K2D2.Landing
             precision_landing = new("land.precision_landing", false, file);
             target_latitude = new("land.target_latitude", 0f, file);
             target_longitude = new("land.target_longitude", 0f, file);
-
-            use_rcs_fine_correction = new("land.use_rcs_fine_correction", false, file);
-            rcs_fine_correction_threshold_m = new("land.rcs_fine_correction_threshold_m", 1000, 100, 5000, file);
-            rcs_fine_correction_power = new("land.rcs_fine_correction_power", 0.5f, 0.05f, 1f, file);
 
             deploy_legs_early = new("land.deploy_legs_early", false, file);
             if (atmospheric)
@@ -162,20 +129,13 @@ namespace K2D2.Landing
             root.Q<K2Slider>("touch_down_ratio_vac").Bind(touch_down_ratio);
             root.Q<K2Slider>("touch_down_speed_vac").Bind(touch_down_speed);
 
-            // PRECISION LANDING - the steering caps live on TouchDown (see its SetupFullUI). The
+            // PRECISION LANDING - the guidance tilt limit lives on TouchDown (see its SetupFullUI). The
             // plane change is planned by the pilot (Precision/PlaneChange), no trim slider.
-
-            // RCS fine correction - see TouchDown.ApplyRCSFineCorrection
-            root.Q<K2Toggle>("use_rcs_fine_correction_vac").Bind(use_rcs_fine_correction);
-            var rcs_fine_correction_settings = root.Q<VisualElement>("rcs_fine_correction_settings_vac");
-            use_rcs_fine_correction.listen(v => rcs_fine_correction_settings.Show(v));
-            rcs_fine_correction_settings.Q<K2Slider>("rcs_fine_correction_threshold_m_vac").Bind(rcs_fine_correction_threshold_m);
-            rcs_fine_correction_settings.Q<K2Slider>("rcs_fine_correction_power_vac").Bind(rcs_fine_correction_power);
         }
 
         // Reduced binding - Atmo panel. Only the settings that are actually meaningful on an
         // atmospheric body today: warp timing, brake timing, and touchdown speed profile, plus the
-        // target (saved for atmospheric precision landing). No plane trim/RCS controls here (see
+        // target (saved for atmospheric precision landing). No plane trim controls here (see
         // class comment).
         public void setupBasicUI(VisualElement root)
         {

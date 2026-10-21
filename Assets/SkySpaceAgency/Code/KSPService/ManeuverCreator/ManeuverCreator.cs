@@ -296,12 +296,12 @@ namespace K2D2.KSPService
         }
 
         /// <summary>
-        /// New for precision landing (LandingTargeting.cs / DeorbitBurn.cs): creates a real,
+        /// Creates a real,
         /// visible maneuver node at a specific UT with a pure prograde/retrograde burn, rather
-        /// than deriving the UT from a TrueAnomaly like CreateManeuverNode_Co above does. The
-        /// deorbit/phasing burn needs to happen at a UT we've already computed ourselves (the
-        /// resonance search in LandingTargeting.DeltaVToShiftNodeLongitude), not one implied by
-        /// a true anomaly.
+        /// than deriving the UT from a TrueAnomaly like CreateManeuverNode_Co above does. For
+        /// a burn that has to happen at a UT already computed by the caller, not one implied by
+        /// a true anomaly. (The precision landing no longer uses maneuver nodes: its burns are
+        /// flown by closed-loop TargetOrbitBurn phases, see PrecisionPhase.)
         ///
         /// Unlike CreateManeuverNode_Co, this does not cast the vessel's Orbit to
         /// PatchedConicsOrbit: under Redux, the actively-flown vessel's Orbit is a
@@ -315,13 +315,11 @@ namespace K2D2.KSPService
         /// ManeuverPlanComponent.UpdateNodeDetails (called from AddNode/AddNodeToVessel) requires.
         ///
         /// Unlike CreateManeuverNode_Co, this returns the created ManeuverNodeData synchronously
-        /// so the caller (DeorbitBurn) can hand it straight to its own TurnTo/WarpTo/BurnManeuver
+        /// so the caller can hand it straight to its own TurnTo/WarpTo/BurnManeuver
         /// instances without waiting a frame - only the map/gizmo bookkeeping is deferred to a
         /// coroutine, same as the original.
         /// </summary>
-        // normalDeltaV added for precision landing's optional small plane trim (see
-        // LandingTargeting.FindBestDeorbitBurn) - defaults to 0 so every existing caller
-        // (Circularize.cs, Final.cs) keeps behaving exactly as before, pure prograde/retrograde.
+        // normalDeltaV (plane trim) defaults to 0: pure prograde/retrograde unless a caller asks.
         // radialDeltaV and onManeuverTrajectory added for the Orbit tab's multi-node plans: a node
         // after the first lies on the trajectory produced by the previous node, which the
         // ManeuverNodeData constructor's isOnManeuverTrajectory flag declares (API doc:
@@ -356,8 +354,8 @@ namespace K2D2.KSPService
         /// Removes every maneuver node currently on the vessel's plan. Needed before creating a
         /// new node via CreateManeuverNodeAtUT above, since AddNodeToVessel only ever appends (see
         /// that method's own comment) - calling it while a node from a previous phase is still on
-        /// the plan (e.g. precision landing's Circularize node, once its burn finishes and
-        /// DeorbitBurn starts) would add a second node instead of replacing it, and the vessel
+        /// the plan (e.g. a node left by an earlier burn, once that burn finishes and the
+        /// next one starts) would add a second node instead of replacing it, and the vessel
         /// would turn to align with whichever node the game picks instead of the new one.
         /// </summary>
         public void RemoveAllNodes()
@@ -382,7 +380,7 @@ namespace K2D2.KSPService
         /// <summary>
         /// Removes a single maneuver node from the plan, leaving every other node alone - unlike
         /// RemoveAllNodes above, which assumes the whole plan belongs to whichever pilot is
-        /// calling it (true for Circularize/DeorbitBurn/FinalCircularize, which own the node they
+        /// calling it (true for Circularize/FinalCircularize, which own the node they
         /// create start to finish). Added for auto-deleting a node once it's been executed (Lift's
         /// FinalCircularize, and the Node tab's own executor) without also wiping out anything
         /// else the player - or a multi-node Flight Plan - might have queued up behind it. Same

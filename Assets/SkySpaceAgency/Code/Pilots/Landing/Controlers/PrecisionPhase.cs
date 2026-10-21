@@ -26,6 +26,7 @@ namespace K2D2.Landing
             public TargetOrbit Target;
             public double StartUT;                // burn start (TargetOrbitBurn aligns before it)
             public double PlannedDeltaV;          // m/s, for the log
+            public double DoneDeltaV;             // TargetOrbitBurn end threshold; 0 = its default
         }
 
         public string Name { get; private set; } = "";
@@ -93,7 +94,16 @@ namespace K2D2.Landing
                 }
 
                 planned = true;
-                Plan plan = planner();
+                Plan plan;
+                try
+                {
+                    plan = planner();
+                }
+                catch (Exception e)
+                {
+                    Fail($"{Name}: {e.Message}");
+                    return;
+                }
                 if (plan.Error != null)
                 {
                     Fail(plan.Error);
@@ -116,7 +126,10 @@ namespace K2D2.Landing
                 else
                 {
                     orbit_burn.allow_warp = allow_warp;
-                    orbit_burn.Start(plan.Target, plan.StartUT);
+                    if (plan.DoneDeltaV > 0)
+                        orbit_burn.Start(plan.Target, plan.StartUT, plan.DoneDeltaV);
+                    else
+                        orbit_burn.Start(plan.Target, plan.StartUT);
                     active = orbit_burn;
                 }
                 if (active.failure_reason != null)

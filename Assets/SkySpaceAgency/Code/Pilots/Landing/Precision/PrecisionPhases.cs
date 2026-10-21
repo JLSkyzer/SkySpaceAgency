@@ -18,12 +18,13 @@ namespace K2D2.Landing.Precision
     // pure so they are tested in EditMode.
     public static class PrecisionPhases
     {
-        // Smallest correction worth flying (m/s), and TargetOrbitBurn's fixed end threshold
-        // (its private DoneDeltaV): a smaller burn ends before it starts.
+        // Smallest correction worth flying (m/s), also the end threshold given to the mid-course
+        // TargetOrbitBurn (its DoneDeltaV), so that a burn of this size does not end before it starts.
         public const double MinCorrection = 0.05;
-        public const double BurnEndDeltaV = 0.2;
-        // Seconds between planning a burn and its impulse: TargetOrbitBurn.AlignLead plus a margin.
-        public const double PlanLead = 30;
+        public const double CorrectionDoneDeltaV = MinCorrection;
+        // Seconds between planning a burn and its impulse: the longest alignment lead of
+        // TargetOrbitBurn (BurnWarp.MaxLead) plus a margin.
+        public const double PlanLead = K2D2.Node.BurnWarp.MaxLead + 10;
         // Seconds between two predicted-distance readouts outside the burns.
         public const double ReadoutInterval = 2;
         // Hand-over to terminal guidance below this share of the hand-over height while still
@@ -136,6 +137,9 @@ namespace K2D2.Landing.Precision
             double y = offset.y + velocity.y * TerminalGuidance.DriftNullTime;
             return Math.Sqrt(x * x + y * y);
         }
+
+        public const string BelowHandOverMessage =
+            "Braking ends below the hand-over height: the approach to the target will be short.";
 
         public static string OutOfReachMessage(double distanceM) =>
             string.Format(System.Globalization.CultureInfo.InvariantCulture,

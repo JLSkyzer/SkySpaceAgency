@@ -143,6 +143,18 @@ public class PrecisionFlightTests
     }
 
     [Test]
+    public void PlanLead_CoversTheLongestAlignmentLeadPlusAMargin()
+    {
+        Assert.GreaterOrEqual(PrecisionPhases.PlanLead, K2D2.Node.BurnWarp.MaxLead + 10);
+    }
+
+    [Test]
+    public void CorrectionBurn_EndsAtTheMinimumCorrection()
+    {
+        Assert.AreEqual(PrecisionPhases.MinCorrection, PrecisionPhases.CorrectionDoneDeltaV);
+    }
+
+    [Test]
     public void EarliestDeorbit_LeavesTheLeadAndHalfTheBurn_AfterThePlaneChange()
     {
         Assert.AreEqual(1000 + PrecisionPhases.PlanLead + 5, PrecisionPhases.EarliestDeorbitUT(1000, double.NaN, 10), 1e-9);

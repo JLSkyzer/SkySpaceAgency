@@ -26,6 +26,8 @@ namespace K2D2.Landing.Precision
             public double PlaneChangeDeltaV;  // m/s, shown apart
             public bool WithinLimit;          // both plans Ok and PrecisionDeltaV ≤ MaxRatio × BaselineDeltaV
             public string Reason;             // why not WithinLimit; null otherwise
+            public bool OverBudget;           // both plans Ok but the precision Δv exceeds MaxRatio × baseline
+            public string RefusalMessage;     // what the pilot tells the player when OverBudget; null otherwise
             public string Summary;
         }
 
@@ -49,6 +51,7 @@ namespace K2D2.Landing.Precision
                 reason = string.Format(c, "precision costs {0:0} % more than the landing without target (limit {1:0} %)",
                     pct, (MaxRatio - 1) * 100);
 
+            bool over = baseline.Ok && precision.Ok && b > 0 && p > MaxRatio * b;
             string summary = string.Format(c,
                 "Δv: landing {0:0} m/s (no target {1:0}, {2} %), plane change {3:0} m/s, orbit preparation {4:0} m/s",
                 p, b, double.IsNaN(pct) ? "+?" : pct.ToString("+0;-0;+0", c), planeChangeDeltaV, preparationDeltaV);
@@ -61,10 +64,17 @@ namespace K2D2.Landing.Precision
                 PreparationDeltaV = preparationDeltaV,
                 PlaneChangeDeltaV = planeChangeDeltaV,
                 WithinLimit = reason == null,
+                OverBudget = over,
+                RefusalMessage = over ? OverBudgetMessage(pct) : null,
                 Reason = reason,
                 Summary = summary,
             };
         }
+
+        public static string OverBudgetMessage(double pct) =>
+            string.Format(CultureInfo.InvariantCulture,
+                "Precision would cost {0} % Δv (limit {1:0} %): land without a target, or pick a closer target.",
+                pct.ToString("+0;-0;+0", CultureInfo.InvariantCulture), (MaxRatio - 1) * 100);
 
         /// <summary>
         /// Δv of a vertical descent from rest at heightM to the ground, flown as TerminalGuidance's

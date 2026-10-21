@@ -152,6 +152,13 @@ namespace K2D2.Landing
                 return false;
             }
 
+            if (plan.Budget.OverBudget)
+            {
+                precision_run = false;
+                last_error = plan.Budget.RefusalMessage;
+                return false;
+            }
+
             double surface_gravity = body.gravParameter / (body.radius * body.radius);
             var delta_v = vessel.VesselDeltaV;
             double dv_remaining = delta_v != null ? delta_v.TotalDeltaVActual : double.NaN;
@@ -178,8 +185,8 @@ namespace K2D2.Landing
                 $" | predicted miss {F(plan.Deorbit.AlongMissM)} m along, {F(plan.Deorbit.CrossMissM)} m across";
             if (ctx.TargetSlopeDeg > PrecisionContext.MaxSlopeDeg)
                 Warn(PrecisionPhases.SlopeMessage(ctx.TargetSlopeDeg));
-            if (!plan.Budget.WithinLimit)
-                Warn($"Over the Δv budget: {plan.Budget.Reason}.");
+            if (plan.Deorbit.Stop.BelowHandOver)
+                Warn(PrecisionPhases.BelowHandOverMessage);
             precision_run = true;
             precision_calibrating = false;
             return true;
@@ -424,13 +431,9 @@ namespace K2D2.Landing
             Correction c = CourseCorrection.Solve(rc, vc, ut_c, bodyC, ctx.Vehicle, targetC, PrecisionStart.CorrectionReserve);
             timer.Stop();
             bool fly = PrecisionPhases.ShouldFly(c);
-            // TargetOrbitBurn ends a burn under its fixed 0.2 m/s: a smaller correction would end
-            // before it starts. Not flown (the terminal guidance corrects the rest).
-            bool below_end = fly && c.DeltaV.magnitude < PrecisionPhases.BurnEndDeltaV;
-            fly = fly && !below_end;
             logger.LogInfo($"[Landing] precision: plan mid-course correction at +{lead:n0} s: ok {c.Ok}, Δv {c.DeltaV.magnitude:n3} m/s, " +
                 $"predicted miss {c.MissBeforeM:n0} -> {c.MissAfterM:n0} m, clipped {c.Clipped}, {c.PredictCalls} predictions, " +
-                $"{timer.Elapsed.TotalMilliseconds:n0} ms -> {(fly ? "flown" : below_end ? $"not flown (under TargetOrbitBurn's {PrecisionPhases.BurnEndDeltaV} m/s end threshold)" : "not flown")}" + (c.Reason != null ? $" ({c.Reason})" : ""));
+                $"{timer.Elapsed.TotalMilliseconds:n0} ms -> {(fly ? "flown" : "not flown")}" + (c.Reason != null ? $" ({c.Reason})" : ""));
             if (!c.Ok)
                 Warn("Mid-course correction refused: the terminal guidance corrects the rest.");
             if (!fly)
@@ -443,6 +446,7 @@ namespace K2D2.Landing
                 Target = TargetOrbit.FromState(rc, vc + c.DeltaV, mu),
                 StartUT = BurnTiming.CenteredStart(ut_c, BurnTiming.Duration(dv, vehicle.ThrustKN, vehicle.MassT, vehicle.Isp), ctx.UT),
                 PlannedDeltaV = dv,
+                DoneDeltaV = PrecisionPhases.CorrectionDoneDeltaV,
             };
         }
 

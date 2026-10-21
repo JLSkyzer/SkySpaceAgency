@@ -34,6 +34,35 @@ public class PrecisionBudgetTests
     }
 
     [Test]
+    public void OverBudget_IsRefusedWithTheNumbers()
+    {
+        // 726 = 1.21 × 600.
+        PrecisionBudget.Budget b = PrecisionBudget.Evaluate(Plan(20, 580), Plan(21, 600), 50, 55, 0, 0);
+
+        Assert.IsTrue(b.OverBudget);
+        Assert.AreEqual("Precision would cost +21 % Δv (limit 20 %): land without a target, or pick a closer target.", b.RefusalMessage);
+    }
+
+    [Test]
+    public void WithinBudget_HasNoRefusal()
+    {
+        PrecisionBudget.Budget b = PrecisionBudget.Evaluate(Plan(20, 580), Plan(21, 600), 50, 43, 0, 0);
+
+        Assert.IsFalse(b.OverBudget);
+        Assert.IsNull(b.RefusalMessage);
+    }
+
+    [Test]
+    public void RefusedPlans_AreNotOverBudget()
+    {
+        DeorbitPlan refused = Plan(21, 500);
+        refused.Ok = false;
+
+        Assert.IsFalse(PrecisionBudget.Evaluate(Plan(20, 580), refused, 0, 0, 0, 0).OverBudget);
+        Assert.IsFalse(PrecisionBudget.Evaluate(default, Plan(21, 600), 0, 0, 0, 0).OverBudget);
+    }
+
+    [Test]
     public void Summary_ShowsLandingBaselinePlaneChangeAndPreparation()
     {
         PrecisionBudget.Budget b = PrecisionBudget.Evaluate(Plan(20, 580), Plan(21, 600), 50, 43, 12.4, 74.6);
