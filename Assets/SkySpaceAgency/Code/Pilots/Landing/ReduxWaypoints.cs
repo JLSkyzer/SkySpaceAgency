@@ -38,7 +38,7 @@ namespace K2D2.Landing
         static Type _manager_type;
         static bool _type_lookup_failed;
 
-        static Type manager_type
+        internal static Type manager_type
         {
             get
             {
@@ -57,7 +57,7 @@ namespace K2D2.Landing
         // renames/removes this internally between versions.
         public static bool available => GetManagerInstance() != null;
 
-        static object GetManagerInstance()
+        internal static object GetManagerInstance()
         {
             var type = manager_type;
             if (type == null)
@@ -148,7 +148,7 @@ namespace K2D2.Landing
 
         static readonly HashSet<string> _logged = new HashSet<string>();
 
-        static void LogOnce(string message)
+        internal static void LogOnce(string message)
         {
             if (_logged.Add(message))
                 K2D2_Plugin.logger.LogWarning(message);
