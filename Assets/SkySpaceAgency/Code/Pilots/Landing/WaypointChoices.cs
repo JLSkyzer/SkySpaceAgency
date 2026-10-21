@@ -24,11 +24,28 @@ namespace K2D2.Landing
         // Two waypoints closer than this (degrees) with the same name are the same one.
         const double SameSpotDeg = 1e-3;
 
+        public const string KscName = "KSC";
+        public const string PickedName = "Picked point";
+
         public static List<WaypointChoice> Build(IEnumerable<ReduxWaypoint> player, IEnumerable<ReduxWaypoint> game,
-            string bodyName)
+            string bodyName) => Build(player, game, bodyName, null, null);
+
+        /// <summary>Same, with the launch pad (KSC) and the point picked on the map listed first, when on this body.</summary>
+        public static List<WaypointChoice> Build(IEnumerable<ReduxWaypoint> player, IEnumerable<ReduxWaypoint> game,
+            string bodyName, ReduxWaypoint? ksc, ReduxWaypoint? picked)
         {
             var result = new List<WaypointChoice>();
             var labels = new HashSet<string>();
+
+            foreach (var special in new[] { ksc, picked })
+            {
+                if (special == null || special.Value.body_name != bodyName)
+                    continue;
+                var entry = special.Value;
+                entry.from_mission = false;
+                Add(result, labels, Label(entry, ""), entry);
+            }
+
             var playerOnBody = new List<ReduxWaypoint>();
 
             foreach (var waypoint in player)
