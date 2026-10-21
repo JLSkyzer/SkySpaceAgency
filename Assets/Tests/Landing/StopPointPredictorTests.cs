@@ -232,4 +232,54 @@ public class StopPointPredictorTests
         Assert.That(p.StopAltitude, Is.InRange(1500, 1550));
         Assert.Less(p.BrakeStartUT, low.BrakeStartUT);
     }
+
+    [Test]
+    public void BelowTheHandOverButAboveSafeAltitude_IsOkWithAFlag()
+    {
+        Impulse burn = Deorbit(UT);
+        Vehicle high = Lander();
+        high.StopHeight = 1500;
+        StopPrediction low = StopPointPredictor.Predict(R0Vec, V0Vec, UT, Mun(true), Lander(), burn);
+        StopPrediction p = StopPointPredictor.Predict(R0Vec, V0Vec, UT, Mun(true), high, burn);
+        Assert.IsTrue(low.Ok && p.Ok, low.Reason + " / " + p.Reason);
+        Assert.IsFalse(p.BelowHandOver);
+
+        // The vessel right after the deorbit, coasted to between the two brake starts: braking now
+        // stops between SafeAltitude and 1500 m.
+        KeplerPropagator.Propagate(R0Vec, V0Vec + burn.DeltaV, Mu, 0.5 * (p.BrakeStartUT + low.BrakeStartUT) - UT, out var rm, out var vm);
+        double tm = 0.5 * (p.BrakeStartUT + low.BrakeStartUT);
+        StopPrediction mid = StopPointPredictor.Predict(rm, vm, tm, Mun(true), high, null);
+        StopPrediction midLow = StopPointPredictor.Predict(rm, vm, tm, Mun(true), Lander(), null);
+
+        TestContext.Out.WriteLine($"mid: ok {mid.Ok} below {mid.BelowHandOver} ({mid.Reason}) stop {mid.StopAltitude:F0} m");
+        Assert.IsTrue(mid.Ok, mid.Reason);
+        Assert.IsTrue(mid.BelowHandOver);
+        Assert.That(mid.Reason, Does.Contain("below the hand-over altitude"));
+        Assert.That(mid.StopAltitude, Is.InRange(BrakeSimulator.SafeAltitude, 1500));
+        Assert.AreEqual(tm, mid.BrakeStartUT, 1e-9);  // brake now
+        Assert.IsTrue(midLow.Ok, midLow.Reason);
+        Assert.IsFalse(midLow.BelowHandOver);
+
+        // Past the 50 m brake start: below SafeAltitude stays a refusal.
+        double tl = low.BrakeStartUT + 5;
+        KeplerPropagator.Propagate(R0Vec, V0Vec + burn.DeltaV, Mu, tl - UT, out var rl, out var vl);
+        StopPrediction late = StopPointPredictor.Predict(rl, vl, tl, Mun(true), high, null);
+        TestContext.Out.WriteLine($"late: ok {late.Ok} below {late.BelowHandOver} ({late.Reason}) stop {late.StopAltitude:F0} m");
+        Assert.IsFalse(late.Ok);
+        Assert.IsFalse(late.BelowHandOver);
+    }
+
+    [Test]
+    public void Impulse_LightensTheBrake()
+    {
+        Impulse burn = Deorbit(UT);
+        StopPrediction withImpulse = StopPointPredictor.Predict(R0Vec, V0Vec, UT, Mun(false), Lander(), burn);
+        Vehicle lighter = Lander();
+        lighter.MassT *= Math.Exp(-burn.DeltaV.magnitude / (lighter.Isp * BrakeSimulator.G0));
+        StopPrediction applied = StopPointPredictor.Predict(R0Vec, V0Vec + burn.DeltaV, UT, Mun(false), lighter, null);
+
+        Assert.IsTrue(withImpulse.Ok && applied.Ok);
+        Assert.AreEqual(applied.BrakeStartUT, withImpulse.BrakeStartUT, 1e-6);
+        Assert.AreEqual(applied.BrakeDeltaV, withImpulse.BrakeDeltaV, 1e-6);
+    }
 }

@@ -47,6 +47,8 @@ public class PrecisionEndToEndTests
     {
         MassT = massT, ThrustKN = ThrustKN, Isp = Isp, StopHeight = StartTouchdownAltitude,
     };
+    // The landing without target as LandingPilot flies it: brake to BrakeSimulator.SafeAltitude.
+    static Vehicle NoTarget(double massT) => new Vehicle { MassT = massT, ThrustKN = ThrustKN, Isp = Isp };
     static double AfterBurn(double massT, double dv) => massT * Math.Exp(-dv / (Isp * G0));
 
     static readonly double R0 = R + 30000;
@@ -171,7 +173,7 @@ public class PrecisionEndToEndTests
 
         // Re-plan from the orbit actually reached; the baseline from the same orbit, no target.
         DeorbitPlan deorbit = DeorbitSearch.Find(rb, vb, tb, Mun, Lander(mass), TargetAt(tb), earliest);
-        DeorbitPlan baseline = DeorbitSearch.Baseline(rb, vb, tb, Mun, Lander(mass), earliest);
+        DeorbitPlan baseline = DeorbitSearch.Baseline(rb, vb, tb, Mun, NoTarget(mass), earliest);
         log.AppendLine($"deorbit: ok {deorbit.Ok} ({deorbit.Reason}), +{deorbit.BurnUT - tb:F1} s after the plane change, Δv {deorbit.DeltaV.magnitude:F2} m/s, "
             + $"predicted along {deorbit.AlongMissM:F1} m cross {deorbit.CrossMissM:F1} m, brake {deorbit.Stop.BrakeDeltaV:F1} m/s, {deorbit.PredictCalls} Predict calls");
         log.AppendLine($"baseline: ok {baseline.Ok} ({baseline.Reason}), +{baseline.BurnUT - tb:F1} s, Δv {baseline.DeltaV.magnitude:F2} m/s, "
@@ -214,14 +216,15 @@ public class PrecisionEndToEndTests
             0.02, 600, (p, v) => TerminalGuidance.Compute(p, v, SurfaceGravity, maxAccel, TouchDown));
         log.AppendLine("terminal: " + landing);
 
-        // Baseline: the same orbit, deorbit at the natural point, brake, then a vertical descent
-        // onto the point under its stop (no target).
+        // Baseline: the same orbit, deorbit at the natural point, brake to ~50 m, then the final
+        // descent onto the point under its stop (no target).
         KeplerPropagator.Propagate(rb, vb, Mu, baseline.BurnUT - tb, out Vector3d rbd, out Vector3d vbd);
         vbd = vbd + baseline.DeltaV;
         double massB = AfterBurn(mass, baseline.DeltaV.magnitude);
         KeplerPropagator.Propagate(rbd, vbd, Mu, baseline.Stop.BrakeStartUT - baseline.BurnUT, out Vector3d rbs, out Vector3d vbs);
         State gateB = Brake(rbs, vbs, baseline.Stop.BrakeStartUT, massB);
         Assert.IsTrue(gateB.Stopped, "the baseline brake does not stop / " + log);
+        Assert.That(gateB.R.magnitude - R, Is.InRange(BrakeSimulator.SafeAltitude, BrakeSimulator.SafeAltitude + 100), log.ToString());
         Local(gateB, gateB.R.normalized, out Vector3d offsetB, out Vector3d velocityB);
         double maxAccelB = ThrustKN / gateB.Mass;
         PointMassSim.Result landingB = PointMassSim.Run(offsetB, velocityB, SurfaceGravity, maxAccelB, AttitudeLag,
@@ -234,11 +237,14 @@ public class PrecisionEndToEndTests
         double precisionDv = deorbit.DeltaV.magnitude + correctionDv + gate.BrakeDeltaV + landing.DeltaV;
         double baselineDv = baseline.DeltaV.magnitude + gateB.BrakeDeltaV + landingB.DeltaV;
         double ratio = precisionDv / baselineDv;
-        PrecisionBudget.Budget predicted = PrecisionBudget.Evaluate(baseline, deorbit, correctionDv, 0, 0, planeChangeDv);
+        double terminalReserve = PrecisionBudget.TerminalReserve(StartTouchdownAltitude, SurfaceGravity, TouchDown, ThrustKN / AfterBurn(mass, deorbit.DeltaV.magnitude + deorbit.Stop.BrakeDeltaV));
+        double baselineReserve = PrecisionBudget.TerminalReserve(BrakeSimulator.SafeAltitude, SurfaceGravity, TouchDown, ThrustKN / AfterBurn(mass, baseline.DeltaV.magnitude + baseline.Stop.BrakeDeltaV));
+        PrecisionBudget.Budget predicted = PrecisionBudget.Evaluate(baseline, deorbit, correctionDv, terminalReserve, 0, planeChangeDv, baselineReserve);
         log.AppendLine($"simulated Δv: precision {precisionDv:F1} m/s (deorbit {deorbit.DeltaV.magnitude:F2} + correction {correctionDv:F3} "
             + $"+ brake {gate.BrakeDeltaV:F1} + terminal {landing.DeltaV:F1}), baseline {baselineDv:F1} m/s (deorbit {baseline.DeltaV.magnitude:F2} "
             + $"+ brake {gateB.BrakeDeltaV:F1} + terminal {landingB.DeltaV:F1}), ratio {ratio:F4}; plane change {planeChangeDv:F2} m/s apart");
-        log.AppendLine("predicted at start (deorbit + brake + correction): " + predicted.Summary);
+        log.AppendLine($"predicted at start (terminal reserve {terminalReserve:F1} m/s, baseline final descent reserve {baselineReserve:F1} m/s): "
+            + predicted.Summary + $" ratio {predicted.PrecisionDeltaV / predicted.BaselineDeltaV:F4} ({predicted.Reason})");
         log.AppendLine($"final distance {landing.FinalOffsetM:F1} m, gate drift {landing.GateHorizontalSpeed:F2} m/s at {FinalDescent.FinalHeight:F0} m, "
             + $"touchdown drift {landing.FinalHorizontalSpeed:F2} m/s, vz {landing.FinalVerticalSpeed:F2} m/s; runtime {watch.Elapsed.TotalMilliseconds:F0} ms");
         TestContext.Out.WriteLine(log.ToString());
@@ -253,5 +259,6 @@ public class PrecisionEndToEndTests
         Assert.Less(landing.FinalOffsetM, 100, log.ToString());
         Assert.LessOrEqual(ratio, PrecisionBudget.MaxRatio, log.ToString());
         Assert.IsTrue(predicted.WithinLimit, log.ToString());
+        Assert.IsFalse(after.BelowHandOver, log.ToString());
     }
 }

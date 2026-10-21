@@ -37,12 +37,16 @@ namespace K2D2.Landing.Precision
     public struct StopPrediction
     {
         public bool Ok;
-        public string Reason;          // why not Ok; null when Ok
+        public string Reason;          // why not Ok, or the BelowHandOver note; null otherwise
         public double StopUT;
         public Vector3d StopDirNow;    // unit, body-fixed stop point in the orientation at the prediction's UT
         public double StopAltitude;    // m above the terrain at the stop
         public double BrakeDeltaV;     // m/s
         public double BrakeStartUT;
+        // Vehicle.StopHeight above SafeAltitude only: braking now (BrakeStartUT = the
+        // prediction's start) stops below StopHeight but at or above SafeAltitude. Safe, so Ok;
+        // the hand-over to terminal guidance then starts lower. Reason says so.
+        public bool BelowHandOver;
     }
 
     // Where a powered descent really stops: coast (after the optional impulse) to the terrain
@@ -78,6 +82,9 @@ namespace K2D2.Landing.Precision
                     KeplerPropagator.Propagate(r, v, body.Mu, burn.UT - ut, out r, out v);
                 v = v + burn.DeltaV;
                 t0 = Math.Max(burn.UT, ut);
+                // The brake starts lighter by the propellant the impulse used.
+                if (vehicle.Isp > 0)
+                    vehicle.MassT *= Math.Exp(-burn.DeltaV.magnitude / (vehicle.Isp * BrakeSimulator.G0));
             }
 
             double energy = 0.5 * v.sqrMagnitude - body.Mu / r.magnitude;
@@ -128,7 +135,14 @@ namespace K2D2.Landing.Precision
                 BrakeDeltaV = brake.DeltaVNeeded,
                 BrakeStartUT = brake.StartUT,
             };
-            if (brake.Status == BrakeStatus.TooLate)
+            if (brake.Status == BrakeStatus.TooLate && vehicle.StopHeight > BrakeSimulator.SafeAltitude
+                && brake.StopAltitude >= BrakeSimulator.SafeAltitude)
+            {
+                prediction.Ok = true;
+                prediction.BelowHandOver = true;
+                prediction.Reason = $"Braking now stops below the hand-over altitude ({brake.StopAltitude:F0} m)";
+            }
+            else if (brake.Status == BrakeStatus.TooLate)
                 prediction.Reason = "Too late: braking now stops below the safe altitude";
             else if (brake.Status == BrakeStatus.Impossible)
                 prediction.Reason = "Cannot stop before the ground!";

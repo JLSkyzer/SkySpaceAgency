@@ -55,7 +55,8 @@ namespace K2D2.Landing.Braking
     // Forward simulation of the braking burn, like MechJeb's landing prediction: coast on the
     // Kepler orbit until the start time, then burn ThrustFraction of the active thrust against the
     // surface velocity (RK4), with varying gravity, mass loss, body rotation and the terrain
-    // under the path. FindStart bisects the latest start that still stops SafeAltitude up.
+    // under the path. FindStart bisects the latest start that still stops StopHeight up
+    // (BrakeInput.StopHeight, SafeAltitude by default).
     public static class BrakeSimulator
     {
         public const double SafeAltitude = 50;     // m
