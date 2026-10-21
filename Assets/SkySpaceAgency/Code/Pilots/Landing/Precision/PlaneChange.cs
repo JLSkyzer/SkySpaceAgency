@@ -32,7 +32,9 @@ namespace K2D2.Landing.Precision
     public static class PlaneChange
     {
         public const double Threshold = 1000;           // m of cross-track miss before a plane change is needed
-        public const double MinLead = 60;               // s between now and the burn
+        // s between now and the burn: PrecisionPhases.PlanLead, so that TargetOrbitBurn's longest
+        // alignment lead (BurnWarp.MaxLead) fits before the burn starts.
+        public const double MinLead = PrecisionPhases.PlanLead;
         public const double ArrivalPrecision = 1;       // s
         public const double CrossPrecision = 100;       // m, residual cross-track miss after the change
         public const int MaxIterations = 10;            // per node

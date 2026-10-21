@@ -16,6 +16,13 @@ namespace K2D2.Landing.Precision
         public const double MaxRatio = 2;
         // Below this surface speed of the rotation × an hour, the sign changes nothing (m).
         public const double NegligibleM = 10;
+        public const string DisagreeMessage = "Rotation direction measurements disagree: precision landing refused.";
+
+        /// <summary>
+        /// The surface-speed calibration and the probe both measured the sign (non-zero) and found
+        /// opposite ones: one of them is wrong, so a precision landing must not trust either.
+        /// </summary>
+        public static bool Disagree(int speedSign, int probeSign) => speedSign != 0 && probeSign != 0 && speedSign != probeSign;
 
         /// <summary>
         /// Sign (+1 / −1) of ω_z from two game longitudes (degrees) of one inertial position dt game

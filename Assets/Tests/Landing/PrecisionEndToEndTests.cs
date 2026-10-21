@@ -36,7 +36,9 @@ public class PrecisionEndToEndTests
     const double MaxCorrection = 20;             // m/s
     const double AttitudeLag = 1.5;              // s, as the robust TerminalGuidance tests
     static double SurfaceGravity => Mu / (R * R);
-    static Vector3d Omega => BodyRotation.AngularVelocity(BodyRotation.AngularSpeed(RotationPeriod), 1);
+    // Rotation sign of the run (LandingPilot.rotation_sign): the scenario is flown with both.
+    static int rotationSign = 1;
+    static Vector3d Omega => BodyRotation.AngularVelocity(BodyRotation.AngularSpeed(RotationPeriod), rotationSign);
     static readonly Vector3d Z = new Vector3d(0, 0, 1);
 
     static Body Mun => new Body { Mu = Mu, Radius = R, Omega = Omega, TerrainHeight = p => 0 };
@@ -141,11 +143,14 @@ public class PrecisionEndToEndTests
         Assert.LessOrEqual(r.FinalHorizontalSpeed, 1.5, what + " drift at contact: " + r);
     }
 
-    [Test]
-    public void MunFarSideAtLatitude8_LandsWithin100mFor120PercentOfTheBaseline()
+    [TestCase(1)]
+    [TestCase(-1)]
+    public void MunFarSideAtLatitude8_LandsWithin100mFor120PercentOfTheBaseline(int sign)
     {
+        rotationSign = sign;
         var watch = Stopwatch.StartNew();
         var log = new System.Text.StringBuilder();
+        log.AppendLine($"rotation sign {sign}");
 
         // 1. Circular 30 km equatorial orbit (prograde with the rotation), target on the far side at 8° N.
         var r0 = new Vector3d(R0, 0, 0);

@@ -203,6 +203,11 @@ namespace K2D2.Landing
                 (pc.Ok || pc.Reason == null ? "" : $" ({pc.Reason})"));
             if (plan.Deorbit.Ok || plan.Deorbit.Reason != null)
                 logger.LogInfo($"[Landing] precision: start plan deorbit: {DeorbitText(plan.Deorbit, now)} | baseline (no target): {DeorbitText(plan.Baseline, now)}");
+            OrbitClearance c = plan.Clearance;
+            logger.LogInfo($"[Landing] precision: start plan clearance: required {c.RequiredM / 1000:n1} km, " +
+                (c.TerrainRead
+                    ? $"terrain up to {c.HighestTerrainM / 1000:n2} km over {c.Samples} samples of the ground track (+{PrecisionStart.TerrainMargin:n0} m margin, floor {PrecisionStart.MinClearance / 1000:n0} km)"
+                    : $"terrain not read ({c.Note}): floor {PrecisionStart.MinClearance / 1000:n0} km alone"));
             if (plan.Ok)
                 logger.LogInfo($"[Landing] precision: start plan budget: {plan.Budget.Summary} | reserves: correction {plan.CorrectionReserve:n1}, " +
                     $"terminal {plan.TerminalReserve:n1} + lateral {plan.LateralReserve:n1} (tilt {brake.steering_max_angle.V:n0}°) from {HandOverHeight:n0} m, " +
@@ -265,7 +270,16 @@ namespace K2D2.Landing
                 }
                 rotation_sign = sign;
                 rotation_sign_body = body.Name;
-                logger.LogInfo($"[Landing] rotation sign for {body.Name}: {rotation_sign} (rotation probe, ω {omega:e3} rad/s)");
+                // A real measurement only (not "negligible: +1 kept"): cross-checked against the
+                // surface-speed calibration by PrecisionContext.
+                if (reason == null)
+                {
+                    probe_sign = sign;
+                    probe_sign_body = body.Name;
+                }
+                int speed = SpeedSignFor(body.Name);
+                logger.LogInfo($"[Landing] rotation sign for {body.Name}: {rotation_sign} (rotation probe, ω {omega:e3} rad/s)" +
+                    (speed != 0 ? $" | surface-speed calibration: {speed}{(RotationProbe.Disagree(speed, ProbeSignFor(body.Name)) ? " - DISAGREE" : "")}" : ""));
             }
             catch (Exception e)
             {
@@ -403,6 +417,8 @@ namespace K2D2.Landing
             logger.LogInfo($"[Landing] precision: plan deorbit (earliest +{earliest - now:n0} s, {timer.Elapsed.TotalMilliseconds:n0} ms): {DeorbitText(plan, now)}");
             if (!plan.Ok)
                 return PhaseError("Deorbit: " + plan.Reason);
+            if (plan.Stop.BelowHandOver)
+                Warn(PrecisionPhases.BelowHandOverMessage);
 
             KeplerPropagator.Propagate(ctx.R, ctx.V, mu, plan.BurnUT - now, out Vector3d rb, out Vector3d vb);
             double dv = plan.DeltaV.magnitude;
@@ -448,6 +464,75 @@ namespace K2D2.Landing
                 PlannedDeltaV = dv,
                 DoneDeltaV = PrecisionPhases.CorrectionDoneDeltaV,
             };
+        }
+
+        static PrecisionStage StageOf(Mode m)
+        {
+            switch (m)
+            {
+                case Mode.OrbitPrep: return PrecisionStage.OrbitPrep;
+                case Mode.PlaneChange: return PrecisionStage.PlaneChange;
+                case Mode.Deorbit: return PrecisionStage.Deorbit;
+                default: return PrecisionStage.MidCourse;
+            }
+        }
+
+        // A precision phase failed (refused plan, refused or aborted burn). PrecisionFailurePolicy:
+        // stop only while the orbit still clears the ground; a failed mid-course correction is
+        // skipped; a failure that leaves the vessel on an impact course lands without target.
+        void OnPrecisionPhaseFailed(string reason)
+        {
+            bool hits;
+            string orbit_text;
+            try
+            {
+                IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
+                var body = orbit.referenceBody;
+                double now = GeneralTools.Current_UT;
+                OrbitElements el = OrbitMath.Elements(orbit.GetRelativePositionAtUTZup(now), orbit.GetOrbitalVelocityAtUTZup(now), body.gravParameter);
+                hits = PrecisionFailurePolicy.OrbitHitsGround(el.PeriapsisRadius, body.radius, collision_detected);
+                orbit_text = $"pe {(el.PeriapsisRadius - body.radius) / 1000:n2} km";
+            }
+            catch (Exception e)
+            {
+                // Unknown orbit: assume the worst, keep flying.
+                hits = true;
+                orbit_text = $"orbit not read ({e.GetType().Name}: {e.Message})";
+            }
+            FailureAction action = PrecisionFailurePolicy.Decide(StageOf(mode), hits);
+            logger.LogWarning($"[Landing] precision: phase {precision_phase.Name} failed: {reason} | {orbit_text}, " +
+                $"collision predicted {collision_detected}, hits the ground {hits} -> {action}");
+            switch (action)
+            {
+                case FailureAction.Stop:
+                    StopWithError(reason);
+                    break;
+                case FailureAction.Skip:
+                    current_vessel.SetThrottle(0);
+                    Warn(PrecisionFailurePolicy.SkipMessage(reason));
+                    OnPrecisionPhaseEnd();
+                    current_executor.setController(null);
+                    nextMode();
+                    break;
+                default:
+                    LandWithoutTarget(PrecisionFailurePolicy.FallBackMessage(reason));
+                    break;
+            }
+        }
+
+        // Drops the precision run and flies the landing without target from QuickWarp (brake to
+        // 50 m, the usual Touch Down), as a non-precision start would.
+        void LandWithoutTarget(string message)
+        {
+            logger.LogWarning($"[Landing] precision: {message} | Δv used {burn_dV.burned_dV:n1} m/s ({string.Join(", ", phase_log)})");
+            precision_run = false;
+            precision_calibrating = false;
+            guidance_enabled = false;
+            last_warning = message;
+            precision_final_message = message;
+            current_vessel.SetThrottle(0);
+            current_executor.setController(null);
+            setMode(Mode.QuickWarp);
         }
 
         // After a precision phase: the Δv really used, and the prediction from the orbit reached.
@@ -526,7 +611,7 @@ namespace K2D2.Landing
             if (throttle >= 1 && !precision_brake_full_logged)
             {
                 precision_brake_full_logged = true;
-                logger.LogWarning($"[Landing] precision: brake at full throttle: the brake simulation stops below the safe altitude " +
+                logger.LogWarning($"[Landing] precision: brake at full throttle: the brake simulation stops below the hand-over height " +
                     $"({brake_result.Status}, stop {brake_result.StopAltitude:n0} m up) at altitude {altitude:n0} m");
             }
             brake.precision_brake_throttle = throttle;

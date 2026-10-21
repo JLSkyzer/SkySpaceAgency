@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using K2D2.Landing.Braking;
 using K2D2.OrbitPlanning;
 using KSP.Sim;
@@ -33,6 +34,16 @@ namespace K2D2.Landing.Precision
         public PrecisionBudget.Budget Budget;
         public double TotalDeltaV;         // m/s, everything the landing needs: preparation + plane change + deorbit + brake + reserves
         public int PredictCalls;
+        public OrbitClearance Clearance;   // terrain clearance of the circular orbit the approach starts from
+    }
+
+    public struct OrbitClearance
+    {
+        public double RequiredM;        // lowest safe altitude above Radius for the circular orbit
+        public double HighestTerrainM;  // highest terrain sampled under its ground track; NaN when not read
+        public bool TerrainRead;        // false: a read failed or was not finite, RequiredM is the floor alone
+        public int Samples;             // terrain reads made
+        public string Note;             // why the terrain was not read; null otherwise
     }
 
     // The plans a precision landing makes before it flies, from the current orbit: orbit
@@ -50,6 +61,72 @@ namespace K2D2.Landing.Precision
         public const double CorrectionReserve = 5;
         // How far (m) terminal guidance must be able to move the hand-over point: the success radius.
         public const double LateralReach = 100;
+        // Terrain clearance of the circular orbit the approach starts from: never below
+        // MinClearance, nor below the highest terrain under its ground track + TerrainMargin. The
+        // track is sampled ClearanceSamplesPerOrbit times per orbit over ClearanceOrbits orbits
+        // (the coast before the deorbit lasts up to about two orbits).
+        public const double MinClearance = 10000;
+        public const double TerrainMargin = 2000;
+        public const int ClearanceSamplesPerOrbit = 72;
+        public const int ClearanceOrbits = 2;
+
+        public static string TooLowMessage(double peAltM, OrbitClearance c) => c.TerrainRead
+            ? string.Format(CultureInfo.InvariantCulture,
+                "Orbit too low for a safe precision approach (Pe {0:0.0} km, terrain up to {1:0.0} km): raise it with the Orbit tab.",
+                peAltM / 1000, c.HighestTerrainM / 1000)
+            : string.Format(CultureInfo.InvariantCulture,
+                "Orbit too low for a safe precision approach (Pe {0:0.0} km, terrain not read, {1:0.0} km minimum): raise it with the Orbit tab.",
+                peAltM / 1000, c.RequiredM / 1000);
+
+        /// <summary>
+        /// Clearance of the circular orbit of the given radius in the plane of normal planeNormal,
+        /// the vessel at p0's direction t0 seconds after the body's UT. Each sample point, at time
+        /// t, is turned back by the body's rotation (the terrain reads positions in the orientation
+        /// at UT), so the samples follow the real ground track. A failed or non-finite read keeps
+        /// the MinClearance floor alone, with the reason in Note. Flat (null terrain) reads 0.
+        /// </summary>
+        public static OrbitClearance Clearance(Vector3d p0, Vector3d planeNormal, double radius, double t0, Body body)
+        {
+            var c = new OrbitClearance { RequiredM = MinClearance, HighestTerrainM = 0, TerrainRead = true };
+            if (body.TerrainHeight == null)
+                return c;
+            Vector3d u = p0.normalized;
+            Vector3d w = Vector3d.Cross(planeNormal.normalized, u).normalized;   // prograde at p0
+            double n = Math.Sqrt(body.Mu / (radius * radius * radius));
+            int count = ClearanceSamplesPerOrbit * ClearanceOrbits;
+            double step = ClearanceOrbits * 2 * Math.PI / n / count;
+            double highest = double.NegativeInfinity;
+            try
+            {
+                for (int k = 0; k < count; k++)
+                {
+                    double t = k * step;
+                    double a = n * t;
+                    Vector3d p = radius * (Math.Cos(a) * u + Math.Sin(a) * w);
+                    double h = body.TerrainHeight(SurfaceGeometry.AtTime(p, body.Omega, -(t0 + t)));
+                    c.Samples++;
+                    if (double.IsNaN(h) || double.IsInfinity(h))
+                        return NotRead(c, $"terrain read {h} at sample {k} of {count}");
+                    highest = Math.Max(highest, h);
+                }
+            }
+            catch (Exception e)
+            {
+                return NotRead(c, $"terrain read failed at sample {c.Samples + 1} of {count} ({e.GetType().Name}: {e.Message})");
+            }
+            c.HighestTerrainM = highest;
+            c.RequiredM = Math.Max(MinClearance, highest + TerrainMargin);
+            return c;
+        }
+
+        static OrbitClearance NotRead(OrbitClearance c, string note)
+        {
+            c.TerrainRead = false;
+            c.HighestTerrainM = double.NaN;
+            c.RequiredM = MinClearance;
+            c.Note = note;
+            return c;
+        }
 
         public static StartPlan Plan(StartInput input)
         {
@@ -68,10 +145,23 @@ namespace K2D2.Landing.Precision
             Body planBody = body;
             Vector3d target = input.TargetDirNow / input.TargetDirNow.magnitude;
             Vehicle vehicle = input.Vehicle;
-            if (el.ApoapsisRadius - el.PeriapsisRadius > CircularTolerance)
+            bool prepare = el.ApoapsisRadius - el.PeriapsisRadius > CircularTolerance;
+            double dt = 0;
+            Vector3d rp = input.R, vp = input.V;
+            if (prepare)
             {
-                double dt = OrbitMath.TimeToTrueAnomaly(input.R, input.V, mu, 0);
-                KeplerPropagator.Propagate(input.R, input.V, mu, dt, out Vector3d rp, out Vector3d vp);
+                dt = OrbitMath.TimeToTrueAnomaly(input.R, input.V, mu, 0);
+                KeplerPropagator.Propagate(input.R, input.V, mu, dt, out rp, out vp);
+            }
+
+            // The circular orbit the approach starts from (the periapsis one after a preparation,
+            // the current one otherwise) must clear the terrain under its ground track.
+            plan.Clearance = Clearance(rp, el.AngularMomentum, el.PeriapsisRadius, dt, body);
+            if (peAlt < plan.Clearance.RequiredM)
+                return Refuse(plan, TooLowMessage(peAlt, plan.Clearance));
+
+            if (prepare)
+            {
                 Vector3d vc = vp.normalized * Math.Sqrt(mu / rp.magnitude);
                 plan.NeedsPreparation = true;
                 plan.PreparationUT = input.UT + dt;

@@ -84,15 +84,15 @@ namespace K2D2.Landing.Precision
         /// <summary>
         /// The precision brake's throttle: DescentEnvelope.ThrustFraction, as BrakeSimulator plans
         /// it, so the predicted stop stays valid; full throttle when the brake simulated from the
-        /// current state says it would stop below SafeAltitude or not at all.
+        /// current state says it would stop below the hand-over height (TooLate, whatever its
+        /// stop altitude) or not at all (Impossible).
         /// </summary>
         public static float BrakeThrottle(BrakeResult? sim)
         {
             if (sim.HasValue)
             {
                 BrakeResult b = sim.Value;
-                if (b.Status == BrakeStatus.Impossible
-                    || (b.Status == BrakeStatus.TooLate && b.StopAltitude < BrakeSimulator.SafeAltitude))
+                if (b.Status == BrakeStatus.Impossible || b.Status == BrakeStatus.TooLate)
                     return 1f;
             }
             return (float)DescentEnvelope.ThrustFraction;

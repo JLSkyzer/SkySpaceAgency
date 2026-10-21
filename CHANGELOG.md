@@ -37,6 +37,14 @@
 
 ### Changed
 
+- **Precision landing safety** (2026-10-21, airless bodies).
+  - Once the deorbit has lowered the orbit into the ground, a failed precision burn no longer stops the autopilot. A failed mid-course correction is skipped ("Course correction skipped: …") and the descent goes on with the brake and the terminal guidance. A deorbit burn that fails after lowering the orbit switches to a landing without target ("Precision landing aborted: …. Landing without target."). A burn that fails while the orbit still clears the ground stops as before.
+  - Precision start refuses an orbit whose periapsis is below 10 km, or below the highest terrain under its ground track + 2 km ("Orbit too low for a safe precision approach …: raise it with the Orbit tab."). This also applies to an elliptical orbit before it is circularized.
+  - Precision start refuses when the two measurements of the body's rotation direction (surface speed and longitude drift) disagree.
+  - The plane-change burn is planned at least 130 s ahead (was 60 s), so the vessel has time to turn before it.
+  - The precision brake goes to full throttle as soon as the simulation says it would stop below the hand-over height (before: only below 50 m).
+  - The "Braking ends below the hand-over height" warning is also shown when the deorbit is re-planned; the last "Landed … m from the target" message is cleared when any landing starts.
+
 - **Closed-loop burns turn early and manage time warp** (2026-10-21): circularization (Lift, Node tab), Orbit-tab plan steps and precision landing burns.
   - The vessel turns toward the burn direction from the start, also while warping. The warp stops instantly before the burn, early enough for the angle to turn at the vessel's measured turn rate (20 s to 120 s; 3°/s assumed until measured).
   - A vessel still more than 10° off at the planned start waits ("Late ignition") instead of burning off-centre; the closed-loop guidance corrects the orbit. If it still cannot align after max(60 s, twice the alignment lead), the burn stops with "Could not align with the burn direction: check SAS and reaction wheels."

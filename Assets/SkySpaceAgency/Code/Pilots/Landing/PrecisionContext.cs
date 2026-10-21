@@ -52,6 +52,8 @@ namespace K2D2.Landing
 
         static bool Finite(double x) => !double.IsNaN(x) && !double.IsInfinity(x);
 
+        static string Measured(int sign) => sign == 0 ? "not measured" : sign.ToString();
+
         // log: write the calibration line (once per landing start; re-plans pass false).
         public static bool TryBuild(LandingPilot pilot, out PrecisionContext ctx, out string reason, bool log = true)
         {
@@ -169,7 +171,11 @@ namespace K2D2.Landing
                     $"period {body.rotationPeriod:n1} s) | longitude sign {lonSign} (lon {lonA:0.0000} -> {lonB:0.0000}, " +
                     $"expected step {expected:0.0000}°) | latitude axis check: game {lat:0.0000}°, atan2(z, hypot(x, y)) {latZ:0.0000}° " +
                     $"(gap {latGap:0.0000}°), probe lat {lat:0.0000} -> {latUp:0.0000} (expected step {expectedLat:0.0000}°) | " +
-                    $"rotation sign {rotationSign}, calibrated {signCalibrated}");
+                    $"rotation sign {rotationSign}, calibrated {signCalibrated} (surface speed {Measured(pilot.SpeedSignFor(body.Name))}, " +
+                    $"rotation probe {Measured(pilot.ProbeSignFor(body.Name))})");
+            // Both measurements made and opposite: neither can be trusted.
+            if (RotationProbe.Disagree(pilot.SpeedSignFor(body.Name), pilot.ProbeSignFor(body.Name)))
+                return RotationProbe.DisagreeMessage;
 
             if (!Finite(lat) || !Finite(lonA) || !Finite(lonB) || !Finite(latUp))
                 return "The game did not return the vessel's latitude/longitude.";

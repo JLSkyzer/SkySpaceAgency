@@ -168,9 +168,8 @@ public class PrecisionFlightTests
         Assert.AreEqual(DescentEnvelope.ThrustFraction, PrecisionPhases.BrakeThrottle(null), 1e-6);
         Assert.AreEqual(DescentEnvelope.ThrustFraction,
             PrecisionPhases.BrakeThrottle(new BrakeResult { Status = BrakeStatus.Ok, StopAltitude = 1500 }), 1e-6);
-        Assert.AreEqual(DescentEnvelope.ThrustFraction,
-            PrecisionPhases.BrakeThrottle(new BrakeResult { Status = BrakeStatus.TooLate, StopAltitude = 900 }), 1e-6,
-            "below the hand-over but safe: keep the plan");
+        Assert.AreEqual(1, PrecisionPhases.BrakeThrottle(new BrakeResult { Status = BrakeStatus.TooLate, StopAltitude = 900 }), 1e-6,
+            "stops below the hand-over height: full throttle to stop as high as possible");
         Assert.AreEqual(1, PrecisionPhases.BrakeThrottle(new BrakeResult { Status = BrakeStatus.TooLate, StopAltitude = 20 }), 1e-6);
         Assert.AreEqual(1, PrecisionPhases.BrakeThrottle(new BrakeResult { Status = BrakeStatus.Impossible }), 1e-6);
     }

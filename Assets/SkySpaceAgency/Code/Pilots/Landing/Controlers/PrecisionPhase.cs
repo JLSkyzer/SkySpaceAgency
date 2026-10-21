@@ -13,8 +13,9 @@ namespace K2D2.Landing
     /// correction): waits (warping when allowed) until its planning time, asks LandingPilot for a
     /// plan made from the orbit really reached, then flies it closed loop, a TargetOrbitBurn toward
     /// the planned orbit or a CircularizeBurn at the periapsis. No maneuver node is followed. A
-    /// refused plan or burn fails the phase (the pilot stops with the reason); a phase with nothing
-    /// to do finishes at once.
+    /// refused plan or burn fails the phase (LandingPilot.OnPrecisionPhaseFailed: stop while the
+    /// orbit clears the ground, else skip or land without target); a phase with nothing to do
+    /// finishes at once.
     /// </summary>
     public class PrecisionPhase : ExecuteController
     {

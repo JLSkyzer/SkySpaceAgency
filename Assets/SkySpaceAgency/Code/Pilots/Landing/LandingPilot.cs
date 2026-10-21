@@ -324,6 +324,15 @@ namespace K2D2.Landing
         // per body against the surface speed the game measures.
         internal int rotation_sign = 1;
         internal string rotation_sign_body = null;
+        // The two measurements behind it, kept apart for the cross-check (RotationProbe.Disagree):
+        // the surface-speed calibration and the rotation probe, each with the body it measured.
+        internal int speed_sign = 0;
+        internal string speed_sign_body = null;
+        internal int probe_sign = 0;
+        internal string probe_sign_body = null;
+
+        internal int SpeedSignFor(string body) => speed_sign_body == body ? speed_sign : 0;
+        internal int ProbeSignFor(string body) => probe_sign_body == body ? probe_sign : 0;
 
         // Why the last start was refused, or why the last run stopped. Shown until the next
         // successful start.
@@ -618,24 +627,38 @@ namespace K2D2.Landing
 
         internal void UpdateRotationSign(CelestialBodyComponent body, Vector3d r0, Vector3d v0, double omega)
         {
-            if (rotation_sign_body == body.Name)
+            if (rotation_sign_body == body.Name && speed_sign_body == body.Name)
                 return;
-            // Another body: back to the +1 default, and not calibrated (a stale name would let a
-            // return to the earlier body skip its calibration with this body's sign).
-            rotation_sign = 1;
-            rotation_sign_body = null;
-            // Too slow, or a polar orbit: both signs predict the same speed. Keep +1, retry later.
-            if (!BodyRotation.IsDecisive(r0, v0, omega))
+            if (rotation_sign_body != body.Name)
+            {
+                // Another body: back to the +1 default, and not calibrated (a stale name would let
+                // a return to the earlier body skip its calibration with this body's sign).
+                rotation_sign = 1;
+                rotation_sign_body = null;
+            }
+            if (speed_sign_body != body.Name)
+            {
+                // Too slow, or a polar orbit: both signs predict the same speed. Retry later.
+                if (!BodyRotation.IsDecisive(r0, v0, omega))
+                    return;
+                double measured = current_vessel.VesselVehicle.SurfaceSpeed;
+                // A non-finite measurement says nothing: calibrate again later.
+                if (double.IsNaN(measured) || double.IsInfinity(measured))
+                    return;
+                speed_sign = BodyRotation.ChooseSign(r0, v0, omega, measured);
+                speed_sign_body = body.Name;
+                int probe = ProbeSignFor(body.Name);
+                logger.LogInfo($"[Landing] rotation sign for {body.Name}: {speed_sign} " +
+                    $"(measured surface speed {measured:n1} m/s, ω {omega:e3} rad/s)" +
+                    (probe != 0 ? $" | rotation probe: {probe}{(Precision.RotationProbe.Disagree(speed_sign, probe) ? " - DISAGREE" : "")}" : ""));
+            }
+            // A sign the probe really measured stays in use (a disagreement refuses the precision
+            // landing, PrecisionContext); otherwise the surface-speed one (also on a return to a
+            // body measured before).
+            if (rotation_sign_body == body.Name && probe_sign_body == body.Name)
                 return;
-
-            double measured = current_vessel.VesselVehicle.SurfaceSpeed;
-            // A non-finite measurement says nothing: keep +1 and calibrate again later.
-            if (double.IsNaN(measured) || double.IsInfinity(measured))
-                return;
-            rotation_sign = BodyRotation.ChooseSign(r0, v0, omega, measured);
+            rotation_sign = speed_sign;
             rotation_sign_body = body.Name;
-            logger.LogInfo($"[Landing] rotation sign for {body.Name}: {rotation_sign} " +
-                $"(measured surface speed {measured:n1} m/s, ω {omega:e3} rad/s)");
         }
 
         // Terrain height above the body radius under p (Zup, body-relative, current body
@@ -674,6 +697,8 @@ namespace K2D2.Landing
         bool CheckCanStart()
         {
             last_warning = "";
+            // Any start clears the previous precision landing's final message.
+            precision_final_message = null;
             if (current_vessel?.VesselComponent == null || current_vessel.VesselVehicle == null)
             {
                 last_error = "No active vessel.";
@@ -981,11 +1006,15 @@ namespace K2D2.Landing
             // call the sub controllers
             base.Update();
 
-            // A phase that cannot do its job (a refused plan or burn) stops
-            // the landing instead of falling through to the next phase.
+            // A phase that cannot do its job (a refused plan or burn) stops the landing instead of
+            // falling through to the next phase, except a precision burn: once the vessel may be
+            // on an impact course it skips or lands without target (OnPrecisionPhaseFailed).
             if (current_executor.failed)
             {
-                StopWithError(current_executor.failure_reason);
+                if (precision_run && PrecisionPhaseMode(mode))
+                    OnPrecisionPhaseFailed(current_executor.failure_reason);
+                else
+                    StopWithError(current_executor.failure_reason);
                 return;
             }
 
