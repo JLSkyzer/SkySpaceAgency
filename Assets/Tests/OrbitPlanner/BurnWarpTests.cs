@@ -140,6 +140,41 @@ public class BurnWarpTests
         Assert.That(BurnWarp.Throttle(double.NaN, 10, 0.02, 1), Is.EqualTo(0));
     }
 
+    // ---- ShouldSampleTurnRate ----
+
+    [Test]
+    public void ShouldSampleTurnRate_OnlyAt1xAndNotRightAfterAWarpChange()
+    {
+        Assert.That(BurnWarp.ShouldSampleTurnRate(1, false), Is.True);
+        // No time warp object: CurrentRate reads 0, the game runs at 1x.
+        Assert.That(BurnWarp.ShouldSampleTurnRate(0, false), Is.True);
+        Assert.That(BurnWarp.ShouldSampleTurnRate(1, true), Is.False);
+        Assert.That(BurnWarp.ShouldSampleTurnRate(2, false), Is.False);
+        Assert.That(BurnWarp.ShouldSampleTurnRate(1000, false), Is.False);
+        Assert.That(BurnWarp.ShouldSampleTurnRate(double.NaN, false), Is.False);
+    }
+
+    // ---- LateIgnitionTimeout ----
+
+    [Test]
+    public void LateIgnitionTimeout_IsTwiceTheLeadAtLeast60s()
+    {
+        Assert.That(BurnWarp.LateIgnitionTimeout(20), Is.EqualTo(60));
+        Assert.That(BurnWarp.LateIgnitionTimeout(43.3), Is.EqualTo(86.6).Within(1e-9));
+        Assert.That(BurnWarp.LateIgnitionTimeout(120), Is.EqualTo(240));
+        Assert.That(BurnWarp.LateIgnitionTimeout(double.NaN), Is.EqualTo(2 * BurnWarp.MaxLead));
+    }
+
+    [Test]
+    public void AlignmentTimedOut_AfterTheTimeoutPastTheStart()
+    {
+        Assert.That(BurnWarp.AlignmentTimedOut(1059, 1000, 20), Is.False);
+        Assert.That(BurnWarp.AlignmentTimedOut(1060.5, 1000, 20), Is.True);
+        Assert.That(BurnWarp.AlignmentTimedOut(1200, 1000, 120), Is.False);
+        Assert.That(BurnWarp.AlignmentTimedOut(900, 1000, 20), Is.False);
+        Assert.That(BurnWarp.AlignmentTimedOut(double.NaN, 1000, 20), Is.False);
+    }
+
     // ---- MeasuredTurnRate ----
 
     [Test]

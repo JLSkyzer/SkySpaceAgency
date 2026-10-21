@@ -108,7 +108,8 @@ namespace K2D2.Node
         double align_lead;
         double turn_rate;
         double last_angle;       // NaN until a first aim was applied
-        float last_angle_real;
+        double last_angle_real;
+        int last_warp_index;     // warp index at the previous angle sample
         bool warp_stopped;       // the warp was stopped at WarpEndUT
         bool late_logged;
         // Warp while burning: the rate levels, whether a change was already logged, the last index.
@@ -192,6 +193,7 @@ namespace K2D2.Node
             turn_rate = BurnWarp.DefaultTurnRate;
             last_angle = double.NaN;
             last_angle_real = 0;
+            last_warp_index = -1;
             warp_stopped = false;
             late_logged = false;
             warp_rates = null;
@@ -214,7 +216,10 @@ namespace K2D2.Node
         {
             if (now >= BurnStartUT)
             {
-                StartBurning(now);
+                // One aim first, so the ignition log has the real angle.
+                Steer(out _);
+                if (!finished)
+                    StartBurning(now);
                 return;
             }
             // A first aim gives the angle to turn, hence the lead before the warp ends.
@@ -235,14 +240,20 @@ namespace K2D2.Node
         // "[TargetOrbitBurn]", with the subclass's tag after it ("[TargetOrbitBurn] Circularize AP").
         string BurnLogTag => Tag == "TargetOrbitBurn" ? "[TargetOrbitBurn]" : $"[TargetOrbitBurn] {Tag}{TagDetail}";
 
-        // After a Steer: measures the turn rate in real time, only while still turning.
+        // After a Steer: measures the turn rate in real time, only while still turning, at 1x, and
+        // not on the frame after a warp-index change (BurnWarp.ShouldSampleTurnRate). The angle
+        // and time are recorded every frame, so each sample spans one frame.
         void UpdateTurnRate()
         {
-            float real = Time.realtimeSinceStartup;
-            if (!double.IsNaN(last_angle) && last_angle > MaxThrustAngle)
+            double real = Time.realtimeSinceStartupAsDouble;
+            int index = TimeWarpTools.CurrentRateIndex;
+            bool indexChanged = index != last_warp_index;
+            if (!double.IsNaN(last_angle) && last_angle > MaxThrustAngle
+                && BurnWarp.ShouldSampleTurnRate(TimeWarpTools.CurrentRate, indexChanged))
                 turn_rate = BurnWarp.MeasuredTurnRate(turn_rate, last_angle, angle, real - last_angle_real);
             last_angle = angle;
             last_angle_real = real;
+            last_warp_index = index;
         }
 
         // After a Steer: lengthens the lead (never shortens it) while the angle is not yet small.
@@ -367,6 +378,15 @@ namespace K2D2.Node
                         if (mode == Mode.Warp)
                             StartAligning(now);
                         StopWarpAtLead(now);
+                        // No torque or SAS off: give up instead of waiting forever.
+                        if (BurnWarp.AlignmentTimedOut(now, BurnStartUT, align_lead))
+                        {
+                            set_throttle(0);
+                            logger.LogWarning($"{BurnLogTag} alignment timed out: {now - BurnStartUT:n1} s past the start " +
+                                $"(limit {BurnWarp.LateIgnitionTimeout(align_lead):n1} s), {angle:n1}° off, turn rate {turn_rate:n1}°/s");
+                            Fail("Could not align with the burn direction: check SAS and reaction wheels.");
+                            return;
+                        }
                         if (!late_logged)
                         {
                             late_logged = true;

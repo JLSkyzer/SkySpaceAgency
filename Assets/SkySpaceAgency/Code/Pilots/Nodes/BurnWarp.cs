@@ -108,6 +108,36 @@ namespace K2D2.Node
             return t > 1 ? 1f : (float)t;
         }
 
+        // Late ignition: the alignment wait past the start gives up after this many seconds of game
+        // time at least, or LateTimeoutLeads alignment leads.
+        public const double MinLateTimeout = 60;
+        public const double LateTimeoutLeads = 2;
+
+        /// <summary>
+        /// Whether a turn-rate sample is meaningful: only at 1x (a CurrentRate of 0 means no time
+        /// warp object, hence 1x) and not on the frame after a warp-index change. Under warp the aim
+        /// sweeps at the orbital rate times the warp (about 60°/s of real time at x1000 in low
+        /// orbit), so an angle drop there says nothing about the vessel's turn.
+        /// </summary>
+        public static bool ShouldSampleTurnRate(double currentRate, bool warpIndexChanged)
+        {
+            return !warpIndexChanged && currentRate <= 1;
+        }
+
+        /// <summary>Seconds of game time past the burn start after which a vessel still not aligned
+        /// gives up: max(60 s, 2 × the alignment lead); an unknown lead counts as MaxLead.</summary>
+        public static double LateIgnitionTimeout(double alignLead)
+        {
+            double lead = double.IsNaN(alignLead) ? MaxLead : alignLead;
+            return Math.Max(MinLateTimeout, LateTimeoutLeads * lead);
+        }
+
+        /// <summary>True once now is more than LateIgnitionTimeout(alignLead) past burnStartUT.</summary>
+        public static bool AlignmentTimedOut(double now, double burnStartUT, double alignLead)
+        {
+            return now - burnStartUT > LateIgnitionTimeout(alignLead);
+        }
+
         /// <summary>
         /// Low-passed turn rate (°/s of real time) from the steering angle dropping from
         /// angleBefore to angleNow in realDt seconds. Increases (the aim moved away), a still angle
