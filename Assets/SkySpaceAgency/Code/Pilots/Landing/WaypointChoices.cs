@@ -26,6 +26,33 @@ namespace K2D2.Landing
 
         public const string KscName = "KSC";
         public const string PickedName = "Picked point";
+        // Entry showing the saved target when no listed entry sits on it.
+        public const string CustomName = "Custom";
+        // Two points closer than this (degrees, on latitude and on longitude) are the saved target.
+        public const double SavedMatchDeg = 0.005;
+
+        /// <summary>
+        /// Index of the first entry within SavedMatchDeg of the saved target (latitude and longitude,
+        /// longitude compared modulo 360), or -1.
+        /// </summary>
+        public static int IndexOfSaved(IReadOnlyList<WaypointChoice> choices, double lat, double lon)
+        {
+            for (int i = 0; i < choices.Count; i++)
+            {
+                var w = choices[i].Waypoint;
+                double dlon = Math.Abs((((w.longitude - lon) % 360) + 540) % 360 - 180);
+                if (Math.Abs(w.latitude - lat) <= SavedMatchDeg && dlon <= SavedMatchDeg)
+                    return i;
+            }
+            return -1;
+        }
+
+        /// <summary>The "Custom (lat, lon)" entry for a saved target that matches no listed entry.</summary>
+        public static WaypointChoice Custom(string bodyName, double lat, double lon)
+        {
+            var waypoint = new ReduxWaypoint { name = CustomName, body_name = bodyName, latitude = lat, longitude = lon };
+            return new WaypointChoice { Label = Label(waypoint, ""), Waypoint = waypoint };
+        }
 
         public static List<WaypointChoice> Build(IEnumerable<ReduxWaypoint> player, IEnumerable<ReduxWaypoint> game,
             string bodyName) => Build(player, game, bodyName, null, null);

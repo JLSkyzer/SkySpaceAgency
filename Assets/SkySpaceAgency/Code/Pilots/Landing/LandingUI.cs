@@ -304,6 +304,7 @@ namespace K2D2.Landing
 
             var body = pilot.current_vessel?.currentBody();
             var choices = new List<string>();
+            var built = new List<WaypointChoice>();
 
             if (body != null)
             {
@@ -314,39 +315,53 @@ namespace K2D2.Landing
                 // KSC and the picked point, the player's own waypoints, then the game's (missions
                 // that need a precise point create one when they activate): see WaypointChoices.
                 var player = ReduxWaypoints.available ? ReduxWaypoints.GetWaypointsForBody(body.Name) : new List<ReduxWaypoint>();
-                foreach (var choice in WaypointChoices.Build(player, ReduxWaypoints.GetGameWaypoints(), body.Name,
-                             KscEntry(body.Name), picked_point))
+                built = WaypointChoices.Build(player, ReduxWaypoints.GetGameWaypoints(), body.Name,
+                    KscEntry(body.Name), picked_point);
+                foreach (var choice in built)
                 {
                     waypoint_choices[choice.Label] = choice.Waypoint;
                     choices.Add(choice.Label);
                 }
             }
 
-            if (choices.Count == 0)
-                choices.Add(body == null ? "No body" : "No waypoints on " + body.Name);
-
             // This runs every UI tick (see onUpdateUI()) so the list stays current if a waypoint's
-            // added while this tab's open - preserve whatever's currently selected across the
-            // rebuild instead of resetting it every frame, via SetValueWithoutNotify so this doesn't
-            // re-fire the ChangeEvent handler above.
+            // added while this tab's open. A rebuild NEVER writes the target settings (not even on a
+            // body change): only an explicit choice does (dropdown change, Pick on map, typing in the
+            // fields). Everything below goes through SetValueWithoutNotify.
             string current = waypoint_drop.value;
-            waypoint_drop.choices = choices;
 
             if (current != null && choices.Contains(current))
             {
+                waypoint_drop.choices = choices;
                 waypoint_drop.SetValueWithoutNotify(current);
+                return;
             }
-            else if (waypoint_choices.Count > 0)
+
+            if (body == null)
             {
-                // Whatever was selected doesn't exist for this body (e.g. after teleporting
-                // between planets) - auto-select the new body's first real waypoint instead,
-                // through the normal .value setter (not SetValueWithoutNotify) so the ChangeEvent
-                // handler above actually fires and updates target_latitude/longitude, same as if
-                // the player had clicked it themselves.
-                waypoint_drop.value = choices[0];
+                waypoint_drop.choices = new List<string> { "No body" };
+                waypoint_drop.SetValueWithoutNotify("No body");
+                return;
             }
-            // else: no real waypoints on this body at all (just the "No body"/"No waypoints on
-            // X" placeholder) - leave target_latitude/longitude alone, nothing sensible to select.
+
+            // Show the saved target: the entry sitting on it, else a "Custom (lat, lon)" entry listed
+            // last. The Custom entry is not in waypoint_choices, so choosing it writes nothing (it is
+            // the saved value already).
+            double saved_lat = block.settings.target_latitude.V;
+            double saved_lon = block.settings.target_longitude.V;
+            int index = WaypointChoices.IndexOfSaved(built, saved_lat, saved_lon);
+            string selected;
+            if (index >= 0)
+                selected = built[index].Label;
+            else
+            {
+                selected = WaypointChoices.Custom(body.Name, saved_lat, saved_lon).Label;
+                if (choices.Contains(selected))
+                    selected += " #2";
+                choices.Add(selected);
+            }
+            waypoint_drop.choices = choices;
+            waypoint_drop.SetValueWithoutNotify(selected);
         }
 
         // ---- Map target picker (ReduxPlacement) ----
@@ -414,7 +429,6 @@ namespace K2D2.Landing
             SetStatus(block, "");
             pick_owner = block;
             pick_vessel = pilot.current_vessel?.VesselComponent;
-            pick_waypoints_before = CountPlayerWaypoints();
             pick_count_check = null;
             block.pick.text = WaitingText;
 
@@ -440,6 +454,9 @@ namespace K2D2.Landing
             if (block == null)
                 return;
 
+            // Counted when Begin is called, not at the click: a waypoint added by hand while waiting
+            // for the map must not look like one saved by Redux's own window.
+            pick_waypoints_before = CountPlayerWaypoints();
             bool started = ReduxPlacement.Begin(
                 (body, lat, lon) => OnPicked(block, body, lat, lon),
                 message => OnPickFailed(block, message));

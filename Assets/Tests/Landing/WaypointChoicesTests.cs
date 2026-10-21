@@ -119,4 +119,61 @@ public class WaypointChoicesTests
             Assert.AreEqual(a[i].Waypoint.from_mission, b[i].Waypoint.from_mission);
         }
     }
+    static List<WaypointChoice> Choices(params ReduxWaypoint[] waypoints)
+    {
+        var list = new List<WaypointChoice>();
+        foreach (var w in waypoints)
+            list.Add(new WaypointChoice { Label = w.name, Waypoint = w });
+        return list;
+    }
+
+    [Test]
+    public void IndexOfSaved_MatchesWithinTolerance()
+    {
+        var choices = Choices(Wp("KSC", "Kerbin", -0.0972, -74.5577), Wp("Base", "Kerbin", 10, 20));
+
+        Assert.AreEqual(1, WaypointChoices.IndexOfSaved(choices, 10.004, 19.996));
+        Assert.AreEqual(0, WaypointChoices.IndexOfSaved(choices, -0.0972, -74.5577));
+    }
+
+    [Test]
+    public void IndexOfSaved_NoMatch_ReturnsMinusOne()
+    {
+        var choices = Choices(Wp("Base", "Kerbin", 10, 20));
+
+        Assert.AreEqual(-1, WaypointChoices.IndexOfSaved(choices, 10.006, 20));
+        Assert.AreEqual(-1, WaypointChoices.IndexOfSaved(choices, 10, 20.006));
+        Assert.AreEqual(-1, WaypointChoices.IndexOfSaved(new List<WaypointChoice>(), 10, 20));
+    }
+
+    [Test]
+    public void IndexOfSaved_LongitudeComparedModulo360()
+    {
+        var choices = Choices(Wp("Edge", "Mun", 5, 179.999));
+
+        Assert.AreEqual(0, WaypointChoices.IndexOfSaved(choices, 5, -180));
+        Assert.AreEqual(0, WaypointChoices.IndexOfSaved(choices, 5, 539.999));
+    }
+
+    [Test]
+    public void Custom_LabelUsesSavedValuesWithInvariantFormat()
+    {
+        var culture = System.Threading.Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("fr-FR");
+            var custom = WaypointChoices.Custom("Mun", -12.346, 67.891);
+
+            Assert.AreEqual("Custom (-12.35, 67.89)", custom.Label);
+            Assert.AreEqual(WaypointChoices.CustomName, custom.Waypoint.name);
+            Assert.AreEqual("Mun", custom.Waypoint.body_name);
+            Assert.AreEqual(-12.346, custom.Waypoint.latitude);
+            Assert.AreEqual(67.891, custom.Waypoint.longitude);
+            Assert.IsFalse(custom.Waypoint.from_mission);
+        }
+        finally
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = culture;
+        }
+    }
 }
