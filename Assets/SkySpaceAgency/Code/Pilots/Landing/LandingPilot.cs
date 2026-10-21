@@ -327,8 +327,8 @@ namespace K2D2.Landing
 
         // Sign of the body rotation in the Zup frame (BodyRotation.ChooseSign), calibrated once
         // per body against the surface speed the game measures.
-        int rotation_sign = 1;
-        string rotation_sign_body = null;
+        internal int rotation_sign = 1;
+        internal string rotation_sign_body = null;
 
         // Why the last start was refused, or why the last run stopped. Shown until the next
         // successful start.
@@ -697,7 +697,7 @@ namespace K2D2.Landing
             LogBrakeResult(now);
         }
 
-        void UpdateRotationSign(CelestialBodyComponent body, Vector3d r0, Vector3d v0, double omega)
+        internal void UpdateRotationSign(CelestialBodyComponent body, Vector3d r0, Vector3d v0, double omega)
         {
             if (rotation_sign_body == body.Name)
                 return;
@@ -718,7 +718,7 @@ namespace K2D2.Landing
 
         // Terrain height above the body radius under p (Zup, body-relative, current body
         // orientation), with the same Zup -> Yup swap and frame as compute_real_collision.
-        static double TerrainHeightAt(CelestialBodyComponent body, Vector3d p_zup)
+        internal static double TerrainHeightAt(CelestialBodyComponent body, Vector3d p_zup)
         {
             Vector3d p_yup = new Vector3d(p_zup.x, p_zup.z, p_zup.y);
             Position ps = new Position(body.SimulationObject.transform.celestialFrame, p_yup);
