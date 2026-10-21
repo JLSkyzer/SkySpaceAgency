@@ -37,6 +37,14 @@
 
 ### Changed
 
+- **Precision landing rewritten for bodies without atmosphere** (precision landing part 2, 2026-10-21; not yet flown in game).
+  - Goal: stop within 100 m of the target for at most 20 % more Δv than a landing without target; over 20 % the landing is refused at start with the numbers.
+  - The planner predicts the real stop point (braking and body rotation included, the longitude and rotation directions measured in game), searches the deorbit time, plans a plane change itself when the target is not under the orbit, solves a mid-course correction, brakes to a stop at the Touch Down altitude, then a terminal guidance brings the vessel down above the target. Δv per phase, predicted and final distances are shown in the Land tab.
+  - Refuses a starting orbit that is too low for the terrain under it (raise it with the Orbit tab) or whose periapsis is above 100 km.
+  - Once the vessel is on an impact course, a precision failure never turns the pilot off: the correction is skipped, or the pilot lands without target.
+  - The old empirical rotation factor (×1.307) and the 36-sample deorbit scan are gone, with their Extend/Shorten/RCS fine-correction settings.
+- **Closed-loop burns align early and manage time warp** (Lift circularization, Node tab Circularize buttons, Orbit-tab plans, precision burns). The vessel turns toward the burn during the warp, the warp stops at a lead based on its measured turn rate (20 to 120 s), a late alignment waits instead of burning off-centre (and fails with a message after a while if the vessel never aligns), and during the burn the mod caps the warp (and raises it for long burns when auto-warp is on) so it cannot overshoot; the throttle accounts for the frame length.
+
 - **Precision landing safety** (2026-10-21, airless bodies).
   - Once the deorbit has lowered the orbit into the ground, a failed precision burn no longer stops the autopilot. A failed mid-course correction is skipped ("Course correction skipped: …") and the descent goes on with the brake and the terminal guidance. A deorbit burn that fails after lowering the orbit switches to a landing without target ("Precision landing aborted: …. Landing without target."). A burn that fails while the orbit still clears the ground stops as before.
   - Precision start refuses an orbit whose periapsis is below 10 km, or below the highest terrain under its ground track + 2 km ("Orbit too low for a safe precision approach …: raise it with the Orbit tab."). This also applies to an elliptical orbit before it is circularized.
