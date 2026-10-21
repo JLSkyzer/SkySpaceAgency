@@ -48,7 +48,7 @@ public class PlaneChangeTests
     }
 
     static string Describe(PlaneChangePlan plan, double ms) =>
-        $"needed {plan.Needed} ok {plan.Ok} ({plan.Reason}), burn +{plan.BurnUT - UT:F1} s, dv {plan.DeltaV:F1} m/s, " +
+        $"needed {plan.Needed} ok {plan.Ok} ({plan.Reason}), burn +{plan.BurnUT - UT:F1} s (start +{plan.BurnStartUT - UT:F1} s), dv {plan.DeltaV:F1} m/s, " +
         $"incl {plan.Target.InclinationRad / Deg:F3}°, {plan.Iterations} iteration(s), {plan.PredictCalls} Predict calls, {ms:F0} ms, " +
         $"deorbit after: cross {plan.Deorbit.CrossMissM:F1} m along {plan.Deorbit.AlongMissM:F1} m";
 
@@ -77,6 +77,16 @@ public class PlaneChangeTests
         ApplyBurn(plan, out Vector3d rb, out Vector3d vb, out Vector3d vNew);
         // The burn is at a node: the position is in both planes.
         Assert.That(Math.Abs(Vector3d.Dot(rb.normalized, plan.Target.PlaneNormal.normalized)), Is.LessThan(1e-6));
+        // ... and at the earlier of the two nodes that is at least MinLead ahead.
+        double lead = plan.BurnUT - UT;
+        double otherLead = OrbitMath.TimeToDirection(R0Vec, V0Vec, Mu, -1.0 * rb);
+        TestContext.Out.WriteLine($"lead {lead:F1} s, other node {otherLead:F1} s, start {plan.BurnStartUT - UT:F1} s");
+        Assert.That(otherLead < PlaneChange.MinLead || lead <= otherLead, $"other node at +{otherLead:F1} s");
+        // The finite burn starts half its (Tsiolkovsky) duration before the node.
+        double duration = BurnTiming.Duration(plan.DeltaV, Lander.ThrustKN, Lander.MassT, Lander.Isp);
+        Assert.That(duration, Is.GreaterThan(10));
+        Assert.AreEqual(plan.BurnUT - duration / 2, plan.BurnStartUT, 0.01);
+        Assert.That(plan.BurnStartUT, Is.GreaterThanOrEqualTo(UT + PlaneChange.MinLead));
         Assert.That(plan.DeltaV, Is.EqualTo((vNew - vb).magnitude).Within(0.01));
         // Target is the current orbit's shape in the new plane: the closed-loop guidance toward it
         // asks, at the node, for the same velocity change.
@@ -127,6 +137,17 @@ public class PlaneChangeTests
         TestContext.Out.WriteLine($"after: ok {after.Ok} ({after.Reason}), along {after.AlongMissM:F1} m, cross {after.CrossMissM:F1} m");
         Assert.IsTrue(after.Ok, after.Reason);
         Assert.That(Math.Abs(after.CrossMissM), Is.LessThan(300));
+    }
+
+    [Test]
+    public void TargetAtThePoleOfTheOrbit_IsRefused()
+    {
+        PlaneChangePlan plan = Plan(new Vector3d(0, 0, 1), out double ms);
+
+        TestContext.Out.WriteLine("pole: " + Describe(plan, ms));
+        Assert.IsTrue(plan.Needed);
+        Assert.IsFalse(plan.Ok);
+        Assert.That(plan.Reason, Does.Contain("pole"));
     }
 
     [Test]
