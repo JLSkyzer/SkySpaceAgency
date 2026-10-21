@@ -54,24 +54,23 @@
                  the current course
                  naturally lands, same as always. On = shows the target picker below - a waypoint
                  dropdown (reads whatever's placed in Redux's own Waypoints window, see
-                 ReduxWaypoints.cs) or manual lat/lon. Steering toward that target isn't wired up
-                 yet - see LandingPilot.cs - so right now this only changes what Target Error
-                 reports, not how the ship flies. -->
+                 ReduxWaypoints.cs), the map picker or manual lat/lon. Brake then flies the
+                 precision sequence toward it (LandingPilotPrecision.cs). -->
             <ui:VisualElement name="landing_mode_group_vac" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); margin-top: 8px;">
                 <K2UI.K2Toggle label="Precision Landing" name="precision_landing_vac" tooltip="Steer toward a chosen landing site instead of just braking straight down wherever the current course naturally lands (vacuum bodies only)" />
-                <!-- Orbit gate (see LandingUI.UpdateOrbitGate) - Precision Landing needs a starting
-                     orbit within Circularize.max_starting_altitude_m (100km), same ceiling
-                     Circularize.cs already refuses above once a run actually gets that far. This
-                     surfaces that same check up front instead of letting the player turn Precision
-                     Landing on from a high orbit and only find out it's rejected once Circularize
-                     runs. Hidden by default (style="display: none") - shown/updated every UI tick,
-                     independent of whether Precision Landing itself is on, since it's meant to
-                     explain WHY the toggle won't stay on. -->
+                <!-- Orbit gate (see LandingUI.UpdateOrbitGate) - Precision Landing needs a periapsis
+                     within PrecisionStart.MaxPeriapsisAltitude (100 km), the same limit the start
+                     check refuses above. Hidden by default (style="display: none") - shown/updated
+                     every UI tick, independent of whether Precision Landing itself is on, since
+                     it's meant to explain WHY the toggle won't stay on. -->
                 <ui:Label tabindex="-1" text="" display-tooltip-when-elided="true" name="precision_landing_orbit_gate_vac" style="display: none; color: rgb(224, 132, 132); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
                 <ui:VisualElement name="target_settings_vac" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
                     <ui:DropdownField label="Waypoint :" index="-1" choices="" name="waypoint_drop_vac" tooltip="Waypoints placed on the current body via Redux's own Waypoints window (list refreshes automatically)" />
                     <ui:Button text="Pick on map" display-tooltip-when-elided="true" name="pick_target_vac" tooltip="Click the body in the map view to set the landing target" />
                     <ui:Label tabindex="-1" text="" name="pick_status_vac" style="display: none; color: rgb(224, 200, 132); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
+                    <!-- Precision plan (LandingUI.UpdatePrecisionPlanLabel): the Δv budget and predicted miss of the
+                         last start, its warnings, or the final distance. Hidden while empty. -->
+                    <ui:Label tabindex="-1" text="" name="precision_plan_vac" style="display: none; color: rgb(200, 220, 240); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
                     <ui:FloatField label="Target Latitude" value="0" name="target_latitude_vac" />
                     <ui:FloatField label="Target Longitude" value="0" name="target_longitude_vac" />
                 </ui:VisualElement>
@@ -168,8 +167,7 @@
                          in-game instead of needing a code change + rebuild per test. -->
                     <ui:VisualElement name="PrecisionLanding_vac">
                         <ui:Label text="// PRECISION LANDING" class="k2-section-header" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="20" max="200" name="max_plane_trim_dv_vac" label="Max Plane Trim (m/s)" tooltip="How much sideways (normal/antinormal) dV the deorbit burn is allowed to add on top of its usual burn, to nudge the orbital plane a little closer to the target. 0 disables it - the deorbit burn only ever picks the best point on whatever plane you're already flying. Meant as a small trim, not a substitute for lining up the plane yourself." />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="40" max="80" name="steering_max_angle_vac" label="Max Steering Angle °" tooltip="How far off retrograde the burn can tilt sideways to correct a left/right miss. Wider catches a bigger miss (or a slightly mismatched orbital plane) but costs more fuel - it never touches the vertical/braking component." />
+                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="40" max="80" name="steering_max_angle_vac" label="Max Steering Angle °" tooltip="Largest tilt off vertical the terminal guidance may use below the Touch Down altitude to reach the target. It also sizes the lateral Δv reserve of the precision plan; 0 refuses precision landing." />
                         <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="80" max="90" name="arc_extend_max_angle_vac" label="Max Extend Angle °" tooltip="How far the burn can tilt toward straight up to stretch the landing arc when undershooting. Only ever adds vertical braking margin, so it's safe to run high." />
                         <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="10" max="45" name="arc_shorten_max_angle_vac" label="Max Shorten Angle °" tooltip="How far the burn can tilt toward horizontal to cut the landing arc short when overshooting. Spends vertical braking margin, so keep this one conservative." />
                         <!-- Arc Correction Full-Scale and Min Correction Altitude Margin sliders

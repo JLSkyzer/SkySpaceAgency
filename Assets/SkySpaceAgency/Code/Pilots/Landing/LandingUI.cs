@@ -76,11 +76,12 @@ namespace K2D2.Landing
         // KscLocation retries a full game lookup while it fails: at most once a second from here.
         float ksc_retry_time = -1;
 
-        // Precision Landing orbit gate (see UpdateOrbitGate below) - reuses Circularize's own
-        // 100km ceiling (Circularize.max_starting_altitude_m) rather than a separate number, so
-        // this and the actual in-run refusal in Circularize.cs can never drift apart. Vacuum-only
-        // (precision_landing_orbit_gate_vac) - see landing_mode_group_vac/pilot.settings_vac below.
+        // Precision Landing orbit gate (see UpdateOrbitGate below) - the same periapsis limit as
+        // the start check (PrecisionStart.MaxPeriapsisAltitude and its message), so the two can
+        // never drift apart. Vacuum-only (precision_landing_orbit_gate_vac).
         Label orbit_gate_label;
+        // The last precision plan, its warnings or the final distance (precision_plan_vac).
+        Label precision_plan_label;
 
         // Atmo/Vacuum profile panels (see LandingSettings.cs's class comment) - shown/hidden
         // together every UI tick by UpdateProfilePanels, based on LandingProfile.IsAtmospheric.
@@ -191,16 +192,15 @@ namespace K2D2.Landing
             // it sit on and only get refused once Circularize.cs actually runs. Vacuum-only, same
             // as the toggle itself.
             orbit_gate_label = panel.Q<Label>("precision_landing_orbit_gate_vac");
+            precision_plan_label = panel.Q<Label>("precision_plan_vac");
             pilot.settings_vac.precision_landing.listeners += v =>
             {
                 if (!v) return;
-
-                var check = Circularize.CheckOrbit(out double apoapsisAlt_m, out double periapsisAlt_m);
-                if (check != Circularize.OrbitCheck.TooHigh)
+                if (!PeriapsisTooHigh(out double periapsisAlt_m))
                     return;
 
-                pilot.logger.LogInfo($"[LandingUI] Precision Landing refused - orbit too high " +
-                    $"(Ap {apoapsisAlt_m:n0}m / Pe {periapsisAlt_m:n0}m, max {Circularize.max_starting_altitude_m:n0}m).");
+                pilot.logger.LogInfo($"[LandingUI] Precision Landing refused - periapsis too high " +
+                    $"({periapsisAlt_m:n0} m, max {Precision.PrecisionStart.MaxPeriapsisAltitude:n0} m).");
                 pilot.settings_vac.precision_landing.V = false;
             };
 
@@ -665,49 +665,71 @@ namespace K2D2.Landing
             collision_value.text = pilot.collision_detected ? "Detected" : "None detected";
         }
 
+        // The current periapsis altitude is above PrecisionStart.MaxPeriapsisAltitude (state
+        // vectors, valid for any conic). False without a vessel.
+        bool PeriapsisTooHigh(out double periapsisAlt_m)
+        {
+            periapsisAlt_m = double.NaN;
+            var vessel = pilot.current_vessel?.VesselComponent;
+            if (vessel?.Orbit == null)
+                return false;
+            KSP.Sim.IKeplerPatch orbit = vessel.Orbit;
+            var body = orbit.referenceBody;
+            double now = GeneralTools.Current_UT;
+            LandingTargeting.OrbitalElementsFromStateVectors(orbit.GetRelativePositionAtUTZup(now),
+                orbit.GetOrbitalVelocityAtUTZup(now), body.gravParameter, out _, out _, out double periapsis_radius);
+            periapsisAlt_m = periapsis_radius - body.radius;
+            return periapsisAlt_m > Precision.PrecisionStart.MaxPeriapsisAltitude;
+        }
+
         // Precision Landing orbit gate. The status_bar console/status lines get wiped and
         // rebuilt every single UI tick (see status_bar.Reset() below), so a one-shot message from
         // the precision_landing toggle listener (onInit above) would only ever be visible for a
-        // single frame. This runs every tick instead, independent of isRunning/mode, keeping a
-        // small persistent label under the toggle in sync with the same Circularize.CheckOrbit()
-        // the toggle listener already gates on.
+        // single frame. This runs every tick instead, keeping a small persistent label under the
+        // toggle in sync with the same periapsis check (and message) as the start check.
         void UpdateOrbitGate()
         {
-            // Circularize.CheckOrbit() isn't itself null-safe against VesselComponent being null -
-            // fine for its one existing caller (Circularize.Start(), which only runs mid-landing,
-            // i.e. definitely in active flight), but this runs unconditionally every UI tick
-            // regardless of game state, so it needs its own check here.
-            if (pilot.current_vessel?.VesselComponent == null)
-            {
-                orbit_gate_label.Show(false);
-                return;
-            }
-
-            var check = Circularize.CheckOrbit(out double apoapsisAlt_m, out double periapsisAlt_m);
-            bool too_high = check == Circularize.OrbitCheck.TooHigh;
-
+            bool too_high = PeriapsisTooHigh(out _);
             orbit_gate_label.Show(too_high);
             if (!too_high)
                 return;
+            orbit_gate_label.text = Precision.PrecisionStart.PeriapsisTooHighMessage;
 
-            orbit_gate_label.text = $"Needs a starting orbit within {Circularize.max_starting_altitude_m / 1000:n0}km " +
-                $"(currently Ap {apoapsisAlt_m / 1000:n0}km / Pe {periapsisAlt_m / 1000:n0}km) - circularize lower first.";
-
-            // Covers the case where the orbit was too high when the player tries to turn
-            // Precision Landing on before a landing sequence has started, re-checked continuously
-            // instead of only at the moment of the click, so the toggle doesn't silently stay on
-            // if apoapsis creeps up between then and pressing Brake/Touch Down.
-            //
-            // Gated on !pilot.isRunning: apoapsis routinely sits well above
-            // max_starting_altitude_m for a big chunk of a normal descent (Circularize/DeorbitBurn
-            // only lower periapsis at first - apoapsis doesn't come down until much later, if at
-            // all). Without this guard the check would fire mid-descent too and silently flip
-            // precision_landing off, which would mean TouchDown's closed-loop steering never
-            // engages for the rest of that descent. This check is only meaningful as a pre-flight
-            // gate; once the sequence has committed (isRunning), the orbit is EXPECTED to move
-            // around and must not retroactively cancel precision landing.
+            // Only before a start: once running, the orbit is expected to move and must not cancel
+            // the landing's precision mode.
             if (!pilot.isRunning && pilot.settings_vac.precision_landing.V)
                 pilot.settings_vac.precision_landing.V = false;
+        }
+
+        // The last precision plan (budget, predicted miss), its warnings, or the final distance.
+        void UpdatePrecisionPlanLabel()
+        {
+            string text = "";
+            if (pilot.precision_run || !string.IsNullOrEmpty(pilot.precision_final_message))
+            {
+                var lines = new List<string>();
+                if (!string.IsNullOrEmpty(pilot.precision_final_message))
+                    lines.Add(pilot.precision_final_message);
+                if (!string.IsNullOrEmpty(pilot.precision_summary))
+                    lines.Add(pilot.precision_summary);
+                lines.AddRange(pilot.precision_warnings);
+                text = string.Join("\n", lines);
+            }
+            precision_plan_label.text = text;
+            precision_plan_label.Show(text.Length > 0);
+        }
+
+        static string PrecisionPhaseText(LandingPilot.Mode mode)
+        {
+            switch (mode)
+            {
+                case LandingPilot.Mode.Calibrate: return "Precision: measuring the body's rotation";
+                case LandingPilot.Mode.OrbitPrep: return "Precision: orbit preparation";
+                case LandingPilot.Mode.PlaneChange: return "Precision: plane change";
+                case LandingPilot.Mode.Deorbit: return "Precision: deorbit burn";
+                case LandingPilot.Mode.MidCourse: return "Precision: mid-course correction";
+                default: return null;
+            }
         }
 
         public void updateContext()
@@ -749,8 +771,17 @@ namespace K2D2.Landing
                 // yet. Predicted Landing lets players confirm the lat/lon math is sane in-game
                 // (compare it against where the ship actually comes down).
                 AddInfoRow("Predicted Landing", $"{pilot.predicted_landing_lat:n2}, {pilot.predicted_landing_lon:n2}");
-                if (pilot.settings_vac.precision_landing.V)
+                if (pilot.settings_vac.precision_landing.V && !pilot.PrecisionActive)
                     AddInfoRow("Target Error", StrTool.DistanceToString((float)pilot.target_error_m));
+            }
+
+            // Precision landing: the phase and the distance to the target (predicted from the
+            // braking simulation every 2 s outside the burns, live in Touch Down).
+            if (pilot.PrecisionActive)
+            {
+                AddInfoRow("Precision Phase", PrecisionPhaseText(pilot.mode) ?? pilot.mode.ToString());
+                AddInfoRow(pilot.precision_distance_label, double.IsNaN(pilot.precision_distance_m)
+                    ? "no prediction yet" : StrTool.DistanceToString((float)pilot.precision_distance_m));
             }
 
             // Same idea as Lift's LIFT INFO: numeric telemetry from whichever sub-controller is
@@ -785,6 +816,7 @@ namespace K2D2.Landing
             buildWaypointList(target);
             UpdatePickButton(target);
             UpdateOrbitGate();
+            UpdatePrecisionPlanLabel();
             UpdateProfilePanels();
 
             status_bar.Reset();
@@ -809,6 +841,13 @@ namespace K2D2.Landing
                 {
                     default:
                     case LandingPilot.Mode.Off: break;
+                    case LandingPilot.Mode.Calibrate:
+                    case LandingPilot.Mode.OrbitPrep:
+                    case LandingPilot.Mode.PlaneChange:
+                    case LandingPilot.Mode.Deorbit:
+                    case LandingPilot.Mode.MidCourse:
+                        status_bar.Status(PrecisionPhaseText(pilot.mode));
+                        break;
                     case LandingPilot.Mode.Pause:
                         status_bar.Status("Pause");
                         break;
@@ -830,6 +869,8 @@ namespace K2D2.Landing
                     case LandingPilot.Mode.TouchDown:
                         if (pilot.brake.cannot_stop)
                             status_bar.Error("Cannot stop before the ground!");
+                        else if (pilot.PrecisionActive && pilot.precision_drop_message != null)
+                            status_bar.Warning(pilot.precision_drop_message);
                         else
                             status_bar.Warning($"Touch Down...");
                         break;
@@ -849,13 +890,23 @@ namespace K2D2.Landing
 
                 if (!string.IsNullOrEmpty(pilot.last_warning))
                     status_bar.Console(pilot.last_warning);
+                if (pilot.PrecisionActive)
+                {
+                    if (!string.IsNullOrEmpty(pilot.precision_summary))
+                        status_bar.Console(pilot.precision_summary);
+                    foreach (string warning in pilot.precision_warnings)
+                        status_bar.Console(warning);
+                }
             }
             else
             {
                 // A refused start or a failed phase stays visible until the next successful
-                // start; status_bar.Reset() wipes everything else every tick.
+                // start; status_bar.Reset() wipes everything else every tick. A precision landing's
+                // final distance stays the same way.
                 if (!string.IsNullOrEmpty(pilot.last_error))
                     status_bar.Error(pilot.last_error);
+                else if (!string.IsNullOrEmpty(pilot.precision_final_message))
+                    status_bar.Status(pilot.precision_final_message);
                 else
                     status_bar.Status("Landing autopilot not enabled");
             }

@@ -26,6 +26,19 @@ namespace K2D2.Landing
         // The landing tab shows it as an alert; braking goes on at full throttle anyway.
         public bool cannot_stop = false;
 
+        // Precision landing (LandingPilot.UpdatePrecisionGuidance), set every frame: in Touch Down
+        // above FinalDescent.FinalHeight, the terminal guidance's thrust direction (any frame) and
+        // throttle replace the speed regulation; guidance_active is false otherwise. "Cannot
+        // stop" overrides it for the frame (retrograde, full throttle).
+        public bool guidance_active = false;
+        public Vector guidance_aim;
+        public float guidance_throttle = 0;
+        // Precision brake (Brake mode): the throttle BrakeSimulator planned with
+        // (PrecisionPhases.BrakeThrottle), so the predicted stop stays valid. NaN: speed regulation.
+        public float precision_brake_throttle = float.NaN;
+        // The guidance flies this frame (guidance_active, not in the final descent, can stop).
+        bool guiding = false;
+
         // Atmo/Vacuum profile split (see LandingSettings.cs's class comment) - TouchDown's own 5
         // tunables get the same treatment: two full copies (atmo/vac, each its own independent
         // ClampSetting<float> against its own SettingsFile), selected via the pass-through
@@ -268,6 +281,12 @@ namespace K2D2.Landing
             float remaining_full_burn_time = delta_speed / accel;
             wanted_throttle = Mathf.Clamp(remaining_full_burn_time + min_throttle, 0, 1);
 
+            // Precision landing: the guidance's throttle, or the planned brake throttle.
+            if (guiding)
+                wanted_throttle = Mathf.Clamp01(guidance_throttle);
+            else if (!float.IsNaN(precision_brake_throttle))
+                wanted_throttle = Mathf.Clamp01(precision_brake_throttle);
+
             // Cannot stop any more: keep braking at maximum (spec). After the computation above,
             // which would otherwise overwrite it. Below h_final the pinned throttle is still scaled
             // by the alignment factor in Update (spec: thrust x cos(error)).
@@ -322,8 +341,11 @@ namespace K2D2.Landing
             // Final descent (below FinalHeight): the vertical regulation in Update/compute_Throttle
             // already lowers the throttle when the vessel climbs, so the guard below does not apply.
             final_descent = IsFinalDescent();
+            // The guidance also flies a climb or a hover (its vertical channel), so the guard does
+            // not apply to it either.
+            guiding = guidance_active && !final_descent && !cannot_stop;
 
-            if (speed_vertical_angle > 90 && !final_descent)
+            if (speed_vertical_angle > 90 && !final_descent && !guiding)
             {
                 status_line = $"Waiting for speed Down\nAngle = {speed_vertical_angle:n2}°\nFree Time Warp";
                 return false;
@@ -339,29 +361,17 @@ namespace K2D2.Landing
             // there's actually enough room to close a large miss; the taper inside
             // ComputeSteeredDirection is what keeps TouchDown itself safely close to pure vertical.
             Vector3d aim_dir = retro_dir.vector;
-            // Not while in the final descent: the vertical aim and its tilt handle the drift, and
-            // RCS fine correction would keep translating sideways under it.
-            bool steering = !final_descent && landing != null && landing.settings.precision_landing.V && steering_max_angle.V > 0;
-            if (steering)
+            // The precision landing steers with the terminal guidance (LandingPilot) since
+            // 2026-10-21: the older closed-loop steering (ComputeSteeredDirection) and its RCS fine
+            // correction no longer run. Make sure no RCS command is left firing.
+            ClearRCSFineCorrection();
+            ResetRcsGrowthTracking();
+
+            if (guiding)
             {
-                // Updated before ComputeSteeredDirection below (not after) so a bailout latched
-                // this frame - see UpdateRcsGrowthTracking's own comment - is reflected in THIS
-                // frame's aim_dir (RCSHandlingHeading, which it reads, checks the same latch) as
-                // well as this frame's ApplyRCSFineCorrection call, instead of lagging a frame
-                // behind.
-                UpdateRcsGrowthTracking();
-                aim_dir = ComputeSteeredDirection(HorizonUp, retro_dir.vector);
-                // RCS fine correction: takes over heading correction from the engine once the
-                // miss is close enough (see RCSHandlingHeading/the setting's own comment) - never
-                // at all when steering itself is off.
-                ApplyRCSFineCorrection(HorizonUp);
-            }
-            else
-            {
-                // Make sure a previous tick's RCS command doesn't keep firing once steering (and
-                // therefore RCS fine correction) is no longer active.
-                ClearRCSFineCorrection();
-                ResetRcsGrowthTracking();
+                Vector aim = guidance_aim;
+                aim.Reframe(HorizonUp.coordinateSystem);
+                aim_dir = aim.vector.magnitude > 1e-9 ? aim.vector.normalized : HorizonUp.vector.normalized;
             }
 
             // Final descent: aim at the local vertical tilted against the horizontal drift
@@ -377,7 +387,7 @@ namespace K2D2.Landing
                 final_tilt_deg = (float)Vector3d.Angle(aim_dir, HorizonUp.vector);
             }
 
-            if (steering || final_descent)
+            if (final_descent || guiding)
             {
                 var autopilot = current_vessel.Autopilot;
                 autopilot.Enabled = true;
@@ -413,6 +423,15 @@ namespace K2D2.Landing
                 // how well the vessel points instead (FinalDescent.ThrustFactor).
                 thrust_factor = (float)FinalDescent.ThrustFactor(retrograde_angle);
                 status_line = $"Final descent\nTilt = {final_tilt_deg:n1}°, Angle = {retrograde_angle:n2}°";
+                return true;
+            }
+
+            if (guiding)
+            {
+                // Same rule as the final descent: never cut the thrust only because SAS lags (the
+                // guidance holds the vessel up), scale it by the alignment instead.
+                thrust_factor = (float)FinalDescent.ThrustFactor(retrograde_angle);
+                status_line = $"Terminal guidance\nAngle = {retrograde_angle:n2}°";
                 return true;
             }
 

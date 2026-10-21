@@ -58,25 +58,6 @@ namespace K2D2.Landing
         public Setting<float> target_latitude;
         public Setting<float> target_longitude;
 
-        // Small optional normal/antinormal component the deorbit burn is allowed to add on top of
-        // its usual prograde/retrograde burn, to nudge the orbital plane a little closer to the
-        // target instead of only picking the best-achievable point on the plane the player's
-        // already on - see LandingTargeting.FindBestDeorbitBurn for the reasoning and limits. 0
-        // disables it entirely (in-plane-only behavior).
-        public ClampSetting<float> max_plane_trim_dv;
-
-        // How much altitude clearance the correction burn (see LandingPilot.compute_startBurn)
-        // keeps above start_touchdown_altitude, on top of whatever time the lateral correction
-        // itself needs. This is a separate, unconditional floor - it doesn't care how big the
-        // miss is, it just always wants this much room above the touchdown threshold.
-        //
-        // Fixed at its old slider's max (8000) instead of staying a player-adjustable setting -
-        // in practice players always wanted maximum margin, so there was never a real reason to
-        // offer less. Was a ClampSetting (0-8000, default 3000) with its own slider in the
-        // ADVANCED foldout; both are gone now. Shared across both profiles (a plain const, not a
-        // per-profile Setting), since it was never player-adjustable to begin with.
-        public const float min_correction_altitude_margin = 8000;
-
         // RCS fine correction (vacuum precision landing). The engine-steered correction above can
         // get target_error_m down close, then a "fine" correction can actually make it WORSE,
         // because closing the last bit needs the burn direction to keep adjusting and the vessel
@@ -127,8 +108,6 @@ namespace K2D2.Landing
             precision_landing = new("land.precision_landing", false, file);
             target_latitude = new("land.target_latitude", 0f, file);
             target_longitude = new("land.target_longitude", 0f, file);
-
-            max_plane_trim_dv = new("land.max_plane_trim_dv", 20, 0, 200, file);
 
             use_rcs_fine_correction = new("land.use_rcs_fine_correction", false, file);
             rcs_fine_correction_threshold_m = new("land.rcs_fine_correction_threshold_m", 1000, 100, 5000, file);
@@ -183,10 +162,8 @@ namespace K2D2.Landing
             root.Q<K2Slider>("touch_down_ratio_vac").Bind(touch_down_ratio);
             root.Q<K2Slider>("touch_down_speed_vac").Bind(touch_down_speed);
 
-            // PRECISION LANDING - closed-loop steering caps live on TouchDown now (see its
-            // SetupFullUI), min_correction_altitude_margin and arc_correction_full_scale_m are
-            // fixed values (see their own comments), no sliders for either.
-            root.Q<K2Slider>("max_plane_trim_dv_vac").Bind(max_plane_trim_dv);
+            // PRECISION LANDING - the steering caps live on TouchDown (see its SetupFullUI). The
+            // plane change is planned by the pilot (Precision/PlaneChange), no trim slider.
 
             // RCS fine correction - see TouchDown.ApplyRCSFineCorrection
             root.Q<K2Toggle>("use_rcs_fine_correction_vac").Bind(use_rcs_fine_correction);

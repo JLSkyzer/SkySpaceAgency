@@ -36,14 +36,14 @@ namespace K2D2.Landing
         const double SlopeBaselineM = 50;
         public const double MaxSlopeDeg = 15;
 
-        static double Wrap180(double d)
+        internal static double Wrap180(double d)
         {
             d = (d + 180) % 360;
             if (d < 0) d += 360;
             return d - 180;
         }
 
-        static void GameLatLon(CelestialBodyComponent body, Vector3d p_zup, out double lat, out double lon)
+        internal static void GameLatLon(CelestialBodyComponent body, Vector3d p_zup, out double lat, out double lon)
         {
             Vector3d p_yup = new Vector3d(p_zup.x, p_zup.z, p_zup.y);
             Position pos = new Position(body.SimulationObject.transform.celestialFrame, p_yup);

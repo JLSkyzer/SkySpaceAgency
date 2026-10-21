@@ -13,7 +13,8 @@ using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Landing
 {
-    public class LandingPilot : Pilot
+    // The precision sequence (OrbitPrep → … → terminal guidance) is in LandingPilotPrecision.cs.
+    public partial class LandingPilot : Pilot
     {
         public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.LandingController");
 
@@ -52,20 +53,6 @@ namespace K2D2.Landing
         // deploy_legs_early), or by ParachuteDescent once a canopy opens. One request per run.
         internal LandingGear gear = new LandingGear();
 
-        // Precondition phase for precision landing, run before deorbit_burn: circularizes the
-        // starting orbit if it isn't already close to circular, or refuses if it's too high.
-        // deorbit_burn's own math assumes a roughly circular starting orbit.
-        public Circularize circularize = new Circularize();
-
-        // Deorbit/phasing burn phase - see DeorbitBurn.cs.
-        public DeorbitBurn deorbit_burn = new DeorbitBurn();
-
-        // Small correction burn against the real post-deorbit-burn trajectory, run right after
-        // deorbit_burn and before the normal Pause -> QuickWarp -> ... sequence, so the
-        // descent-phase steering isn't left doing all the correcting close to the ground. See
-        // MidCourseCorrection.cs.
-        public MidCourseCorrection mid_course_correction = new MidCourseCorrection();
-
         public SingleExecuteController current_executor = new SingleExecuteController();
 
         public LandingPilot()
@@ -97,9 +84,13 @@ namespace K2D2.Landing
             Off,
             // nextMode() just does mode+1, so any phase inserted here needs to stay ahead of
             // Pause/QuickWarp/.../TouchDown, which keep their relative ordering either way.
-            Circularize,
-            DeorbitBurn,
-            MidCourseCorrection,
+            // Precision landing only (LandingPilotPrecision.cs): Calibrate waits for the rotation
+            // probe and plans; the four burns are PrecisionPhase runs.
+            Calibrate,
+            OrbitPrep,
+            PlaneChange,
+            Deorbit,
+            MidCourse,
             Pause,
             QuickWarp,
             RotationWarp,
@@ -125,6 +116,10 @@ namespace K2D2.Landing
 
             this.mode = mode;
 
+            // Precision commands to TouchDown last one mode at most (set again every frame).
+            brake.precision_brake_throttle = float.NaN;
+            brake.guidance_active = false;
+
             if (mode == Mode.Off)
             {
                 TimeWarpTools.SetRateIndex(0, false);
@@ -136,17 +131,15 @@ namespace K2D2.Landing
                 case Mode.Off:
                     current_executor.setController(null);
                     break;
-                case Mode.Circularize:
-                    current_executor.setController(circularize);
-                    circularize.Start();
+                case Mode.Calibrate:
+                    current_vessel.SetThrottle(0);
+                    current_executor.setController(null);
                     break;
-                case Mode.DeorbitBurn:
-                    current_executor.setController(deorbit_burn);
-                    deorbit_burn.Start();
-                    break;
-                case Mode.MidCourseCorrection:
-                    current_executor.setController(mid_course_correction);
-                    mid_course_correction.Start();
+                case Mode.OrbitPrep:
+                case Mode.PlaneChange:
+                case Mode.Deorbit:
+                case Mode.MidCourse:
+                    StartPrecisionPhase(mode);
                     break;
                 case Mode.Pause:
                     end_pause_Ut = GeneralTools.Current_UT + settings.pause_time;
@@ -187,6 +180,13 @@ namespace K2D2.Landing
                     if (mode == Mode.TouchDown || settings.deploy_legs_early.V)
                         gear.Deploy(current_vessel.VesselComponent, $"entering {mode}");
                     current_executor.setController(brake);
+                    if (precision_run)
+                    {
+                        if (mode == Mode.Brake)
+                            OnPrecisionBrakeStart();
+                        else
+                            OnPrecisionHandOver();
+                    }
                     break;
                 case Mode.Parachute:
                     current_vessel.SetThrottle(0);
@@ -251,22 +251,17 @@ namespace K2D2.Landing
 
                     _active = true;
 
-                    // Precision landing starts with Circularize (a no-op if the orbit's already
-                    // close enough to circular, or a refusal if it's too high - see Circularize.cs),
-                    // then plans and flies a real, visible deorbit/phasing node, before falling
-                    // into the normal Pause->QuickWarp->...->TouchDown sequence.
-                    //
-                    // !LandingProfile.IsAtmospheric is defense in depth, not the main gate - the
-                    // Atmo profile's precision_landing setting has no UI control (see
-                    // LandingUI.cs's atmo panel), so there's normally no way for it to read true
-                    // here at all. This just guarantees Circularize/DeorbitBurn (which assume a
-                    // vacuum trajectory) can never run on an atmospheric body even if that changes.
+                    // Precision landing (vacuum only, decided by CheckCanStart: precision_run)
+                    // starts with its four planned burns (orbit preparation, plane change, deorbit,
+                    // mid-course correction; each skipped when not needed), or with Calibrate when
+                    // the rotation sign must be measured first, before falling into the normal
+                    // Pause->QuickWarp->...->TouchDown sequence.
                     gear.Reset();
                     net_start_ut = double.NaN;
                     if (parachute_mode)
                         setMode(Mode.Parachute);
-                    else if (settings.precision_landing.V && !LandingProfile.IsAtmospheric)
-                        setMode(Mode.Circularize);
+                    else if (precision_run)
+                        setMode(precision_calibrating ? Mode.Calibrate : Mode.OrbitPrep);
                     else
                         setMode(Mode.QuickWarp);
                 }
@@ -365,95 +360,17 @@ namespace K2D2.Landing
         {
             double burn_before = settings.burn_before.V;
 
-            // TouchDown's closed-loop steering (see ComputeSteeredDirection) needs real time to
-            // act before touchdown, not just the right direction - a correction attempted only in
-            // the last couple seconds before collision barely moves a large miss, however
-            // correctly aimed. Closing a lateral error needs lateral_deltaV * time_remaining >=
-            // error, so back out how much EXTRA margin (beyond the efficiency-only burn_before
-            // setting) buys enough time for the maximum lateral deltaV the steering angle cap
-            // allows to actually close the gap - a bigger miss earns an earlier burn start, a
-            // small one barely changes anything. First-pass heuristic (treats it as one lateral
-            // kick + coast rather than modeling the whole burn), not exact, but ties "start
-            // sooner/later" directly to how far off target we actually are.
-            //
-            // Uses whichever of the three correction caps is smallest (steering, extend, or
-            // shorten), not steering_max_angle alone - target_error_m is a straight-line miss
-            // distance and doesn't say whether the miss is left/right (heading's job) or long/
-            // short (the arc correction's job, see TouchDown.ComputeSteeredDirection), and the arc
-            // shorten cap is deliberately much tighter than the heading budget (tilting toward
-            // horizontal spends braking margin). Sizing the margin off the worst case rather than
-            // the best case keeps this correct even when the miss is mostly along-track.
-            double min_correction_angle_deg = Math.Min(brake.steering_max_angle.V,
-                Math.Min(brake.arc_extend_max_angle.V, brake.arc_shorten_max_angle.V));
-
-            if (settings.precision_landing.V && target_error_m > 0 && min_correction_angle_deg > 0)
-            {
-                double min_correction_angle_rad = min_correction_angle_deg * Math.PI / 180.0;
-                double lateral_dv_budget = speed_collision * Math.Sin(min_correction_angle_rad);
-
-                if (lateral_dv_budget > 0.1) // avoid a near-zero budget blowing this up
-                {
-                    double correction_time_needed = target_error_m / lateral_dv_budget;
-                    burn_before = Math.Max(burn_before, correction_time_needed);
-                }
-            }
-
-            // Also keep real ALTITUDE margin above the touchdown phase's own threshold
-            // (start_touchdown_altitude), not just enough TIME for the lateral correction above.
-            // The lateral floor above only sizes itself off how big the miss is, so a well-aimed
-            // deorbit burn (small target_error_m) could still leave the correction starting
-            // uncomfortably close to start_touchdown_altitude. This floor doesn't care how big the
-            // miss is - it always wants at least this much clearance - and Math.Max's with the
-            // lateral floor above so whichever asks for more wins.
-            //
-            // Found by directly searching the propagated trajectory for the UT it actually
-            // crosses target_start_altitude (LandingTargeting.PredictUTAtAltitude), not estimated
-            // via a speed division - see PredictUTAtAltitude's own comment for why a speed-based
-            // estimate has no good single choice (dividing by the full orbital speed
-            // underestimates real descent time; dividing by vertical speed at the impact point
-            // blows up near periapsis, where it's ~0 by definition). Directly searching for the
-            // real crossing avoids both failure modes.
-            // Gated on collision_detected - this search costs about the same as
-            // compute_real_collision()'s own bisection (both run every Update() tick), so it's
-            // skipped before there's even an impacting trajectory to search.
-            if (settings.precision_landing.V && collision_detected)
-            {
-                double target_start_altitude = settings.start_touchdown_altitude.V
-                    + LandingSettings.min_correction_altitude_margin;
-
-                var current_vessel = K2D2_Plugin.Instance.current_vessel;
-                if (current_vessel != null)
-                {
-                    IKeplerPatch startBurn_orbit = current_vessel.VesselComponent.Orbit;
-                    var startBurn_body = startBurn_orbit.referenceBody;
-                    double startBurn_now = GeneralTools.Current_UT;
-                    Vector3d startBurn_r0 = startBurn_orbit.GetRelativePositionAtUTZup(startBurn_now);
-                    Vector3d startBurn_v0 = startBurn_orbit.GetOrbitalVelocityAtUTZup(startBurn_now);
-
-                    if (LandingTargeting.PredictUTAtAltitude(startBurn_r0, startBurn_v0, startBurn_body, startBurn_now,
-                            target_start_altitude, out double crossingUT))
-                    {
-                        double altitude_lead_time = adjusted_collision_UT - crossingUT;
-                        if (altitude_lead_time > 0)
-                            burn_before = Math.Max(burn_before, altitude_lead_time);
-                    }
-                }
-            }
-
             startBurn_UT = adjusted_collision_UT - burn_duration - burn_before;
             double now_ut = GeneralTools.Game.UniverseModel.UniverseTime;
 
             // The braking simulation gives the real latest safe start (gravity, approach angle,
             // mass loss, terrain, body rotation); the player's "burn before" stays an extra margin.
-            // Precision landing keeps the earlier of the two, so its correction margins above
-            // still apply. TooLate / Impossible: brake now, at full thrust.
+            // A precision landing brakes exactly at the simulated start (its stop point is the
+            // planned one only from there). TooLate / Impossible: brake now, at full thrust.
             if (brake_result_valid)
             {
                 if (brake_result.Status == BrakeStatus.Ok)
-                {
-                    double simulated = brake_result.StartUT - settings.burn_before.V;
-                    startBurn_UT = settings.precision_landing.V ? Math.Min(startBurn_UT, simulated) : simulated;
-                }
+                    startBurn_UT = PrecisionActive ? brake_result.StartUT : brake_result.StartUT - settings.burn_before.V;
                 else
                 {
                     startBurn_UT = now_ut;
@@ -688,6 +605,8 @@ namespace K2D2.Landing
                 Isp = burn_dV.active_isp,
                 ImpactUT = adjusted_collision_UT,
                 TerrainHeight = p => TerrainHeightAt(body, p),
+                // A precision landing brakes to a stop at the hand-over height (its plans do).
+                StopHeight = PrecisionActive ? settings.start_touchdown_altitude.V : 0,
             };
             var sim_timer = Stopwatch.StartNew();
             brake_result = BrakeSimulator.FindStart(input);
@@ -701,7 +620,10 @@ namespace K2D2.Landing
         {
             if (rotation_sign_body == body.Name)
                 return;
+            // Another body: back to the +1 default, and not calibrated (a stale name would let a
+            // return to the earlier body skip its calibration with this body's sign).
             rotation_sign = 1;
+            rotation_sign_body = null;
             // Too slow, or a polar orbit: both signs predict the same speed. Keep +1, retry later.
             if (!BodyRotation.IsDecisive(r0, v0, omega))
                 return;
@@ -769,11 +691,16 @@ namespace K2D2.Landing
                 return false;
             }
 
+            precision_run = false;
+            precision_calibrating = false;
             if (parachute_mode)
                 return CheckCanStartParachute();
 
             burn_dV.Compute_Thrust();
             LogEngines();
+            // Precision landing on an airless body: its own plans and Δv check (all phases).
+            if (settings.precision_landing.V && !LandingProfile.IsAtmospheric)
+                return CheckCanStartPrecision();
             var body = current_vessel.VesselComponent.Orbit.referenceBody;
             double surface_gravity = body.gravParameter / (body.radius * body.radius);
 
@@ -854,6 +781,8 @@ namespace K2D2.Landing
         void StopWithError(string reason)
         {
             logger.LogWarning($"[Landing] stopped: {reason}");
+            if (precision_run)
+                logger.LogWarning($"[Landing] precision: stopped in {mode}: {reason} | Δv used {burn_dV.burned_dV:n1} m/s ({string.Join(", ", phase_log)})");
             last_error = reason;
             isRunning = false;
             gear.Reset();
@@ -867,6 +796,8 @@ namespace K2D2.Landing
                 (landed_or_splashed ? "LandedOrSplashed" : "altitude/fall-speed net") +
                 $", altitude {altitude:n1} m, fall speed {current_falling_speed:n2} m/s");
             current_vessel.SetThrottle(0);
+            if (precision_run)
+                OnPrecisionFinish();
             // Release the last aim: setAutoPilot does nothing when SAS is already in
             // StabilityAssist, which would leave fly-by-wire on the final descent's tilted target.
             var autopilot = current_vessel.Autopilot;
@@ -898,6 +829,9 @@ namespace K2D2.Landing
             // Keep the Atmo/Vacuum profile switch current - single source of truth every
             // settings/TouchDown pass-through property reads. Cheap no-op most frames.
             LandingProfile.Update(current_vessel.currentBody());
+
+            // Rotation sign by the rotation probe, while precision landing may need it.
+            UpdateSignProbe();
 
             altitude = (float)current_vessel.GetApproxAltitude();
 
@@ -958,6 +892,13 @@ namespace K2D2.Landing
                 FinishLanding(landed);
                 return;
             }
+            if (mode == Mode.Calibrate)
+            {
+                UpdateCalibrate();
+                return;
+            }
+            if (PrecisionActive)
+                UpdatePrecisionReadout();
             if (mode == Mode.Pause)
             {
                 if (GeneralTools.Current_UT > end_pause_Ut)
@@ -988,21 +929,18 @@ namespace K2D2.Landing
             {
                 brake.gravity_compensation = true;
 
-                if (settings.precision_landing.V)
+                if (PrecisionActive)
                 {
-                    // Precision landing skips the brake-to-near-stop / Pause / re-brake cycle
-                    // below entirely. That cycle repeatedly zeroes throttle (Mode.Pause does
-                    // current_vessel.SetThrottle(0) outright), and TouchDown's closed-loop
-                    // steering only runs while actually burning (see checkDirection), so every
-                    // Pause cycle would kill the steering's authority right along with the
-                    // throttle. Using the exact same speed-limit profile TouchDown itself uses
-                    // turns Brake and TouchDown into one continuous burn split only by an altitude
-                    // threshold, instead of two different behaviors, so steering stays live the
-                    // whole way down.
-                    brake.max_speed = limit_speed(altitude);
-
-                    if (altitude < settings.start_touchdown_altitude.V)
+                    // Precision landing: one retrograde brake at the simulated throttle, down to a
+                    // stop at start_touchdown_altitude (the plans' stop point), then the terminal
+                    // guidance. No Pause / re-brake cycle.
+                    UpdatePrecisionBrake();
+                    if (Precision.PrecisionPhases.BrakeHandOver(current_vessel.VesselVehicle.SurfaceSpeed, burn_dV.active_dv,
+                            altitude, settings.start_touchdown_altitude.V))
+                    {
                         setMode(Mode.TouchDown);
+                        return;
+                    }
                 }
                 else
                 {
@@ -1036,12 +974,14 @@ namespace K2D2.Landing
                 if (FinalDescent.IsFinal(altitude))
                     brake.max_speed = Math.Max(brake.max_speed, (float)FinalDescent.ContactSpeed(settings.touch_down_speed.V));
                 brake.gravity_compensation = true;
+                if (PrecisionActive)
+                    UpdatePrecisionGuidance();
             }
 
             // call the sub controllers
             base.Update();
 
-            // A phase that cannot do its job (Circularize too high, no deorbit window) stops
+            // A phase that cannot do its job (a refused plan or burn) stops
             // the landing instead of falling through to the next phase.
             if (current_executor.failed)
             {
@@ -1051,6 +991,8 @@ namespace K2D2.Landing
 
             if (current_executor.finished)
             {
+                if (PrecisionPhaseMode(mode))
+                    OnPrecisionPhaseEnd();
                 // auto next
                 nextMode();
             }
