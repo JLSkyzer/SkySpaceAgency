@@ -168,3 +168,10 @@ Behaviour in `LandingUI`:
   3. Click Kerbin while orbiting the Mun → refused with the message.
   4. In orbit of Kerbin: "KSC" first in the list; the precision toggle is visible but disabled, with the note.
   5. Send back the `[Landing] target:` lines.
+
+## Deferred after review (2026-10-21)
+
+- Task 1: boundary tests missing (NaN lon, -inf, lat ±90/-91); no test that a from_mission=true KSC/picked is reset; no test of a player waypoint named KSC/Picked point (label uniqueness); Accept(null,null) accepts; per-tick array alloc
+- Task 3: failing ticks allocate reason strings / rescan PQS; ~40 m possible rotation staleness of the cached value (check in game)
+- Task 4: a real waypoint stays selected after the player types different values in the fields (stale selection, nothing written); stale comment at LandingUI.cs:525; Esc may also open the game's pause menu (check in game); cancel-reason log order cosmetic; atmo toggle forced off twice
+- Final: OnPicked selects the first non-mission "Picked point" (name clash with a player waypoint); setupBasicUI forces atmo precision off before the settings file may load (covered by per-tick + LandingPilot refusal)

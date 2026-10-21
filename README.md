@@ -34,7 +34,7 @@ This is a from-scratch port of the original code onto Redux's APIs, not a compat
 - Auto-staging, with a player-facing on/off toggle in the window's title bar
 
 **Known limitations:**
-- Precision Landing on atmospheric bodies is still a work in progress and isn't exposed in the UI yet - only bodies with no atmosphere have a player-facing Precision Landing option for now.
+- Precision Landing on atmospheric bodies is still a work in progress: the target can be chosen there (map click, KSC, waypoints), but precision itself is only available on bodies with no atmosphere for now.
 - Landing's braking plan ignores atmospheric drag (which only helps) and assumes the active engines stay as they are: auto-staging during the landing burn is not planned for.
 - VAB tools: the import replaces the main rocket through the game's workspace restore (or, as a fallback, its assembly loader); it is not an undo step - the `before_import_…` backup in `vab/exports/` is the way back. Engine Isp in the parts dump comes from the part definitions and may differ from the VAB's figures.
 

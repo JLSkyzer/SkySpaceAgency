@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Landing target picker** (Land tab, precision landing part 1).
+  - **Pick on map**: the button opens the map view and waits for a click on the body; the latitude and longitude of the clicked point become the target. Esc or a second click cancels. A click on another body than the one orbited is refused. The click does not add a waypoint of its own; if Redux's Waypoints window also saves it, the tab says so.
+  - **Target list**: KSC (the launch pad, read from the game) first on Kerbin, then the picked point, the player's waypoints and the `[Mission]` waypoints. The saved target is never replaced by the list: when it matches no entry it shows as "Custom (lat, lon)".
+  - **Atmospheric bodies**: the target picker is now shown there too, so a target can be set; precision itself stays unavailable until parachute targeting (part 3).
+
 - **VAB tools** (VAB AppBar → "SkySpaceAgency VAB tools"), a small window that only opens in the VAB. Files go to `mods/SkySpaceAgency/vab/`.
   - **Export** writes `vab/exports/<vessel>_<date>.json`, made to be handed to an AI:
     - a readable summary: per stage, Δv (vacuum, sea level, actual), TWR, Isp, thrust, masses and burn time; every part with its parent, stage, symmetry group, resources and modules; the resource totals;
