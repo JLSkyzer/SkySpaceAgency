@@ -9,7 +9,7 @@ namespace K2D2.Landing.Precision
         public Vector3d Accel;       // thrust acceleration only (gravity not included), local frame x east, y north, z up
         public bool TargetDropped;   // this call gave up the target for the safe stop; the caller decides whether to latch it
         public string Reason;        // why the target was dropped; null otherwise
-        public double PredictedMissM; // with TargetDropped: horizontal distance at which the vessel should stop from the target
+        public double PredictedMissM; // with TargetDropped: horizontal distance from the target to the point now aimed at
     }
 
     // Terminal guidance from about 1500 m down to FinalDescent.FinalHeight, in a local flat-ground
@@ -19,10 +19,11 @@ namespace K2D2.Landing.Precision
     // PlanFraction × (maxAccel − g), gravity compensated. Its time-to-go, minus the time of the
     // last FinalHeight metres, is the time-to-go of the horizontal channel: a ZEM/ZEV law
     // a = 6·ZEM/t² − 2·ZEV/t toward rest above the target. The horizontal part only gets what
-    // the vertical channel leaves, within maxAccel and the tilt limit. The target is dropped,
-    // and the horizontal drift nulled instead, when it is out of reach in the time left, when
-    // DescentEnvelope.CanStop fails with the lateral share taken, or when thrust cannot hold
-    // the vessel up. Below FinalHeight the horizontal channel only nulls the drift, as
+    // the vertical channel leaves, within maxAccel and the tilt limit. When the target is out of
+    // reach in the time left, the law aims at the closest reachable point instead (TargetDropped,
+    // with a braking reserve so the drift is gone by FinalHeight). When DescentEnvelope.CanStop
+    // fails with the lateral share taken, or thrust cannot hold the vessel up, it thrusts
+    // straight up. Below FinalHeight the horizontal channel only nulls the drift, as
     // FinalDescent does in game. Pure maths, tested in EditMode.
     public static class TerminalGuidance
     {
@@ -32,8 +33,13 @@ namespace K2D2.Landing.Precision
         // Floor of the horizontal time-to-go (s): keeps the gains bounded near FinalHeight and
         // the law tolerant of a 1–2 s attitude lag.
         public const double MinHorizontalTimeToGo = 5;
-        // Time constant (s) of the drift nulling once the target is dropped or below FinalHeight.
+        // Time constant (s) of the drift nulling below FinalHeight; also sets the drift-stop point.
         public const double DriftNullTime = 4;
+        // Out-of-reach target: bisection steps for the closest reachable aim, and the share of
+        // the lateral authority × time to FinalHeight that the horizontal speed may use, the
+        // rest being kept to brake.
+        public const int AimBisections = 12;
+        public const double BrakeReserve = 0.5;
         // The profile blends from coast (ratio 0.9) to full braking (ratio 1) of speed over profile speed.
         const double BlendStart = 0.9;
         const double MinHeight = 0.1;   // m, keeps the vertical demand finite at the ground
@@ -100,10 +106,29 @@ namespace K2D2.Landing.Precision
                     + (t - coastShare) * Lateral(g + d, maxAccel, tanTilt)) / t;
                 if (!Reachable(zem, v * -1, t, reachAccel))
                 {
+                    // Closest reachable point: q = (1 − k)·S on the way from the drift-stop point
+                    // S to the target, the largest k in [0, 1] that Reachable accepts.
                     dropped = true;
-                    miss = (p + v * DriftNullTime).magnitude;
-                    reason = $"Target out of reach: stopping about {miss:F0} m from it";
-                    ah = v * (-1 / DriftNullTime);
+                    Vector3d stop = p + v * DriftNullTime;
+                    double lo = 0, hi = 1;
+                    for (int i = 0; i < AimBisections; i++)
+                    {
+                        double k = (lo + hi) / 2;
+                        if (Reachable(stop * (1 - k) - (p + v * t), v * -1, t, reachAccel))
+                            lo = k;
+                        else
+                            hi = k;
+                    }
+                    Vector3d aim = stop * (1 - lo);
+                    miss = aim.magnitude;
+                    reason = $"Target out of reach: landing about {miss:F0} m from it";
+                    ah = (aim - (p + v * t)) * (6 / (t * t)) + v * (2 / t);
+                    // The aim sits on the edge of the (approximate) reachable set: keep a braking
+                    // reserve so the drift is cancelled by FinalHeight, whatever the aim says.
+                    double toGate = Math.Max(0, coast + brake - lastLeg);
+                    double speed = v.magnitude;
+                    if (speed > BrakeReserve * reachAccel * toGate)
+                        ah = v * (-maxAccel / speed); // full lateral braking, capped below
                 }
                 else
                     ah = zem * (6 / (t * t)) + v * (2 / t);

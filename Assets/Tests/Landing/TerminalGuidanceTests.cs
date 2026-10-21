@@ -67,8 +67,24 @@ public class TerminalGuidanceTests
         AssertSafe(r);
         Assert.IsTrue(r.EverDropped, r.ToString());
         StringAssert.Contains("m from it", r.FirstDropReason);
-        Assert.AreEqual(3000, r.FirstDropMissM, 50, "reported residual distance");
+        Assert.Less(r.FirstDropMissM, 3000, "reported residual distance");
+        Assert.Greater(r.FirstDropMissM, 2800, "reported residual distance");
         Assert.LessOrEqual(r.MaxCommandTiltDeg, TerminalGuidance.DefaultMaxTiltDegrees + 1e-9, r.ToString());
+        // Lands as close as it safely can. Bound: lateral room next to the braking thrust is
+        // sqrt(3² − 2.59²) ≈ 1.51 m/s² for ~18 s before FinalHeight; rest to rest, bang-bang
+        // covers at most 1.51·18²/4 ≈ 122 m. Half of it is kept for braking: expect 30–130 m.
+        Assert.LessOrEqual(r.FinalOffsetM, 2970, r.ToString());
+        Assert.GreaterOrEqual(r.FinalOffsetM, 3000 - 130, r.ToString());
+    }
+
+    [Test]
+    public void UnreachableOffset_WithAttitudeLag_MovesCloserAndLandsSafely()
+    {
+        var r = PointMassSim.Run(new Vector3d(3000, 0, 300), new Vector3d(0, 0, -20), MunG, 3, TouchDown, attitudeLag: 1.5);
+        TestContext.WriteLine("3 km, lag 1.5 s: " + r);
+        AssertSafe(r);
+        Assert.IsTrue(r.EverDropped, r.ToString());
+        Assert.LessOrEqual(r.FinalOffsetM, 2970, r.ToString());
     }
 
     [Test]
