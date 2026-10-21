@@ -112,6 +112,31 @@ public class DeorbitSearchTests
         Assert.That(baseline.Stop.BrakeDeltaV, Is.GreaterThan(0));
     }
 
+    // A 10 km wall just short of the target: descents that would stop on the target hit it, so
+    // the stop point jumps from before the wall to past the target (or the candidate is refused)
+    // and no burn time zeroes the along-track miss. Find must refuse instead of returning the
+    // closest bracket end.
+    [Test]
+    public void TargetBehindAWall_IsRefusedAsNotConverged()
+    {
+        Body walled = Mun;
+        double wallFrom = 119.2 * Deg, wallTo = 119.8 * Deg;
+        walled.TerrainHeight = p =>
+        {
+            double phi = Math.Atan2(p.y, p.x);
+            return phi > wallFrom && phi < wallTo ? 10000 : 0;
+        };
+
+        var watch = Stopwatch.StartNew();
+        DeorbitPlan plan = DeorbitSearch.Find(R0Vec, V0Vec, UT, walled, Lander, Target(120), UT);
+        double ms = watch.Elapsed.TotalMilliseconds;
+
+        TestContext.Out.WriteLine($"wall: ok {plan.Ok} ({plan.Reason}), burn +{plan.BurnUT - UT:F1} s, along {plan.AlongMissM:F1} m, {plan.PredictCalls} calls, {ms:F0} ms");
+        Assert.IsFalse(plan.Ok);
+        Assert.That(plan.Reason, Does.Contain("converge"));
+        Assert.That(plan.PredictCalls, Is.LessThan(60));
+    }
+
     [Test]
     public void NoThrust_IsRefusedWithAReason()
     {

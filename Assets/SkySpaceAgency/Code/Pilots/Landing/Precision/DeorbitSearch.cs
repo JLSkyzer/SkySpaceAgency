@@ -22,16 +22,18 @@ namespace K2D2.Landing.Precision
     public static class DeorbitSearch
     {
         public const double DescentPeriapsisMargin = 2000;  // m below the body radius
-        public const int Samples = 12;                      // burn times scanned over one orbit
+        public const int Samples = 12;                      // burn times scanned over SearchWindow
         public const double AlongPrecision = 10;            // m
         public const double TimePrecision = 0.002;          // s
         public const int MaxRefine = 20;
 
         /// <summary>
         /// Retrograde burn lowering the periapsis to R − DescentPeriapsisMargin, at the earliest time
-        /// within SearchWindow (one orbit plus the body's turn) after earliestUT that zeroes the
+        /// within SearchWindow (one ground-track revolution) after earliestUT that zeroes the
         /// along-track miss to targetDirNow (unit, in the body's orientation at ut). The
-        /// cross-track miss is reported, not corrected. Refused burn times are skipped.
+        /// cross-track miss is reported, not corrected. Refused burn times are skipped. Ok is
+        /// false when the refinement ends farther than AlongPrecision from the target (a refused
+        /// candidate inside the bracket, or a jump of the stop point across it).
         /// </summary>
         public static DeorbitPlan Find(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle,
             Vector3d targetDirNow, double earliestUT)
@@ -65,6 +67,11 @@ namespace K2D2.Landing.Precision
                 if (Math.Abs(a1 - a0) >= Math.PI * body.Radius)
                     continue;
                 best = Refine(r, v, ut, body, vehicle, target, plans[i - 1], plans[i], ref calls);
+                if (Math.Abs(best.AlongMissM) > AlongPrecision)
+                {
+                    best.Ok = false;
+                    best.Reason = $"No deorbit time converges on the target (closest {Math.Abs(best.AlongMissM):F0} m along the track)";
+                }
                 found = true;
                 break;  // the earliest crossing
             }
@@ -76,8 +83,8 @@ namespace K2D2.Landing.Precision
                 {
                     Ok = false,
                     Reason = anyOk
-                        ? "No deorbit time within one orbit reaches the target"
-                        : "No deorbit time within one orbit stops safely: " + firstReason,
+                        ? "No deorbit time within one ground-track revolution reaches the target"
+                        : "No deorbit time within one ground-track revolution stops safely: " + firstReason,
                 };
             }
             best.PredictCalls = calls;
@@ -116,7 +123,8 @@ namespace K2D2.Landing.Precision
         }
 
         // Regula falsi (Illinois) between two Ok plans whose along-track misses bracket zero.
-        // A refused candidate inside the bracket ends the refinement with the best plan so far.
+        // A refused candidate inside the bracket ends the refinement with the best plan so far;
+        // Find refuses it when it is not within AlongPrecision.
         static DeorbitPlan Refine(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d target,
             DeorbitPlan lo, DeorbitPlan hi, ref int calls)
         {
