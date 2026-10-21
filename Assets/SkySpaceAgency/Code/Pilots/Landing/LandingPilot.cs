@@ -707,10 +707,10 @@ namespace K2D2.Landing
                 return;
 
             double measured = current_vessel.VesselVehicle.SurfaceSpeed;
-            rotation_sign = BodyRotation.ChooseSign(r0, v0, omega, measured);
             // A non-finite measurement says nothing: keep +1 and calibrate again later.
             if (double.IsNaN(measured) || double.IsInfinity(measured))
                 return;
+            rotation_sign = BodyRotation.ChooseSign(r0, v0, omega, measured);
             rotation_sign_body = body.Name;
             logger.LogInfo($"[Landing] rotation sign for {body.Name}: {rotation_sign} " +
                 $"(measured surface speed {measured:n1} m/s, ω {omega:e3} rad/s)");

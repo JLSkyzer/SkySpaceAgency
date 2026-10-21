@@ -21,6 +21,12 @@ namespace K2D2.Landing
         public Vector3d TargetDirNow;    // unit, target in the orientation at UT
         public double TargetSlopeDeg;    // terrain slope at the target (two 50 m baselines)
         public double TargetTerrainM;    // terrain height above Radius at the target
+        // True only when the pilot's rotation sign was set from a decisive, finite surface-speed
+        // measurement for this body (LandingPilot.UpdateRotationSign). False: Body.Omega uses the
+        // +1 default, which can be wrong (~36 km miss on the Mun). It stays false on a polar
+        // orbit and on very slow bodies. Callers (Task 9) must not fly a precision landing while
+        // it is false: retry later (TryBuild again) or refuse with a clear reason.
+        public bool RotationSignCalibrated;
 
         // Rotation used to measure the longitude sign, and the largest gap (degrees) between the
         // game's latitude and the one implied by z = rotation axis before refusing.
@@ -142,6 +148,18 @@ namespace K2D2.Landing
             double expected = LonProbeRad * 180 / Math.PI;
             int lonSign = dLon >= 0 ? 1 : -1;
 
+            // Latitude probe: r turned by LonProbeRad toward +z (toward -z within ~1° of the
+            // north pole) must change the game latitude by the same angle, with the same sign.
+            // Catches a flipped axis even at the equator, where latZ ≈ lat ≈ 0 either way.
+            Vector3d n = r / r.magnitude;
+            Vector3d north = new Vector3d(0, 0, 1) - n.z * n;
+            north = north / north.magnitude;
+            double probeDir = latZ > 89 ? -1 : 1;
+            Vector3d rUp = r.magnitude * (Math.Cos(LonProbeRad) * n + probeDir * Math.Sin(LonProbeRad) * north);
+            GameLatLon(body, rUp, out double latUp, out _);
+            double dLat = latUp - lat;
+            double expectedLat = probeDir * expected;
+
             var settings = pilot.settings;
             double targetLat = settings.target_latitude.V;
             double targetLon = settings.target_longitude.V;
@@ -150,12 +168,15 @@ namespace K2D2.Landing
                 pilot.logger.LogInfo($"[Landing] precision: body {body.Name} (μ {body.gravParameter:e4}, R {body.radius:n0} m, " +
                     $"period {body.rotationPeriod:n1} s) | longitude sign {lonSign} (lon {lonA:0.0000} -> {lonB:0.0000}, " +
                     $"expected step {expected:0.0000}°) | latitude axis check: game {lat:0.0000}°, atan2(z, hypot(x, y)) {latZ:0.0000}° " +
-                    $"(gap {latGap:0.0000}°) | rotation sign {rotationSign}{(signCalibrated ? "" : " (not calibrated yet)")}");
+                    $"(gap {latGap:0.0000}°), probe lat {lat:0.0000} -> {latUp:0.0000} (expected step {expectedLat:0.0000}°) | " +
+                    $"rotation sign {rotationSign}, calibrated {signCalibrated}");
 
-            if (!Finite(lat) || !Finite(lonA) || !Finite(lonB))
+            if (!Finite(lat) || !Finite(lonA) || !Finite(lonB) || !Finite(latUp))
                 return "The game did not return the vessel's latitude/longitude.";
             if (latGap > MaxLatitudeGapDeg)
                 return $"Latitude check failed (game {lat:0.00}°, frame {latZ:0.00}°): the body's rotation axis is not the frame's z axis.";
+            if (Math.Abs(dLat - expectedLat) > 0.1 * expected)
+                return $"Latitude check failed (moved {dLat:0.0000}° for {expectedLat:0.0000}°): the body's rotation axis is flipped or is not the frame's z axis.";
             // The game longitude must move by the probe angle, in one direction or the other.
             if (Math.Abs(Math.Abs(dLon) - expected) > 0.1 * expected)
                 return $"Longitude check failed (moved {dLon:0.0000}° for {expected:0.0000}°): the body's rotation axis is not the frame's z axis.";
@@ -194,6 +215,7 @@ namespace K2D2.Landing
                 TargetDirNow = targetDir,
                 TargetSlopeDeg = slope,
                 TargetTerrainM = terrain,
+                RotationSignCalibrated = signCalibrated,
             };
             return null;
         }
