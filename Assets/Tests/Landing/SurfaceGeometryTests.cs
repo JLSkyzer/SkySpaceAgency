@@ -132,4 +132,53 @@ public class SurfaceGeometryTests
         SplitEquator(-deg, 0, out along, out cross);
         Assert.AreEqual(-1000, cross, 1e-3);
     }
+
+    static SurfaceGeometry.Reference OffsetRef(int lonSign)
+    {
+        // Inertial azimuth 70 deg, game longitude 20 deg: they differ, as in the game.
+        double az = 70 * Math.PI / 180;
+        return new SurfaceGeometry.Reference
+        {
+            Position = new Vector3d(R * Math.Cos(az), R * Math.Sin(az), 0),
+            Latitude = 0,
+            Longitude = 20,
+            LonSign = lonSign,
+        };
+    }
+
+    [TestCase(1, 100.0)]
+    [TestCase(-1, 40.0)]
+    public void OffsetReferenceGivesKnownAzimuthAndRoundTrips(int lonSign, double expectedAzimuth)
+    {
+        var reference = OffsetRef(lonSign);
+        Vector3d d = SurfaceGeometry.Direction(reference, 0, 50);
+        Assert.AreEqual(expectedAzimuth, Math.Atan2(d.y, d.x) * 180 / Math.PI, 1e-9);
+        SurfaceGeometry.LatLon(reference, d, out double la, out double lo);
+        Assert.AreEqual(0, la, 1e-9);
+        Assert.AreEqual(50, lo, 1e-9);
+        d = SurfaceGeometry.Direction(reference, -30, -170);
+        SurfaceGeometry.LatLon(reference, d, out la, out lo);
+        Assert.AreEqual(-30, la, 1e-9);
+        Assert.AreEqual(0, LonDiff(-170, lo), 1e-9);
+    }
+
+    [Test]
+    public void SplitAtHighLatitudeEastwardTrack()
+    {
+        var reference = Ref(0, 0);
+        Vector3d from = SurfaceGeometry.Direction(reference, 60, 0);
+        double phi = Math.Atan2(from.y, from.x);
+        double lat = 60 * Math.PI / 180;
+        var east = new Vector3d(-Math.Sin(phi), Math.Cos(phi), 0);
+        var north = new Vector3d(-Math.Sin(lat) * Math.Cos(phi), -Math.Sin(lat) * Math.Sin(phi), Math.Cos(lat));
+        double a = 1000 / R;
+        Vector3d toNorth = Math.Cos(a) * from + Math.Sin(a) * north;
+        Vector3d toEast = Math.Cos(a) * from + Math.Sin(a) * east;
+        SurfaceGeometry.Split(from, toNorth, east, R, out double along, out double cross);
+        Assert.AreEqual(0, along, 1);
+        Assert.AreEqual(1000, cross, 1);
+        SurfaceGeometry.Split(from, toEast, east, R, out along, out cross);
+        Assert.AreEqual(1000, along, 1);
+        Assert.AreEqual(0, cross, 1);
+    }
 }

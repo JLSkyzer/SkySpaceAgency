@@ -33,8 +33,7 @@ namespace K2D2.Landing.Precision
         // Inverse of Direction; longitude wrapped to [-180, 180).
         public static void LatLon(Reference reference, Vector3d position, out double latDeg, out double lonDeg)
         {
-            double m = position.magnitude;
-            latDeg = Math.Asin(Math.Max(-1, Math.Min(1, position.z / m))) / Deg;
+            latDeg = Math.Atan2(position.z, Math.Sqrt(position.x * position.x + position.y * position.y)) / Deg;
             double dPhi = Azimuth(position) - Azimuth(reference.Position);
             lonDeg = WrapDeg(reference.Longitude + reference.LonSign * dPhi / Deg);
         }
