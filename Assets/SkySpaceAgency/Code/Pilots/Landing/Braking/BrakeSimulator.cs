@@ -6,8 +6,8 @@ namespace K2D2.Landing.Braking
 {
     public enum BrakeStatus
     {
-        Ok,         // StartUT is the latest start that stops SafeAltitude above the terrain
-        TooLate,    // braking now stops, but below SafeAltitude: brake now
+        Ok,         // StartUT is the latest start that stops StopHeight (default SafeAltitude) above the terrain
+        TooLate,    // braking now stops, but below StopHeight: brake now
         Impossible, // braking now still hits the ground (or there is no thrust)
     }
 
@@ -27,6 +27,9 @@ namespace K2D2.Landing.Braking
         public double ImpactUT;            // unpowered impact: upper bound of the search
         // Terrain height above BodyRadius (m) under a position given in the body's orientation at UT.
         public Func<Vector3d, double> TerrainHeight;
+        // Height above the terrain (m) the burn must stop at or above; 0 = SafeAltitude. The
+        // precision landing stops at start_touchdown_altitude, where terminal guidance takes over.
+        public double StopHeight;
     }
 
     // One simulated braking burn.
@@ -72,10 +75,11 @@ namespace K2D2.Landing.Braking
             if (!(input.ThrustKN > 0) || !(input.MassT > 0))
                 return new BrakeResult { Status = BrakeStatus.Impossible, StartUT = input.UT };
 
+            double stopHeight = input.StopHeight > 0 ? input.StopHeight : SafeAltitude;
             BrakeRun now = Simulate(input, input.UT);
             if (!now.Stopped)
                 return ToResult(BrakeStatus.Impossible, input.UT, now);
-            if (now.StopAltitude < SafeAltitude)
+            if (now.StopAltitude < stopHeight)
                 return ToResult(BrakeStatus.TooLate, input.UT, now);
 
             // lo is always a verified safe start, hi an unsafe one (the impact itself).
@@ -85,7 +89,7 @@ namespace K2D2.Landing.Braking
             {
                 double mid = 0.5 * (lo + hi);
                 BrakeRun run = Simulate(input, mid);
-                if (run.Stopped && run.StopAltitude >= SafeAltitude)
+                if (run.Stopped && run.StopAltitude >= stopHeight)
                 {
                     lo = mid;
                     best = run;

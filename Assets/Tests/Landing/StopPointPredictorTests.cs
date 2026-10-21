@@ -213,4 +213,23 @@ public class StopPointPredictorTests
         Assert.That(p.StopAltitude, Is.InRange(BrakeSimulator.SafeAltitude - 1, BrakeSimulator.SafeAltitude + 30),
             "stops just above the plateau");
     }
+
+    [Test]
+    public void StopHeight_EndsTheBrakeThatHighAboveTheTerrain()
+    {
+        Impulse burn = Deorbit(UT);
+        Vehicle high = Lander();
+        high.StopHeight = 1500;
+
+        StopPrediction low = StopPointPredictor.Predict(R0Vec, V0Vec, UT, Mun(true), Lander(), burn);
+        StopPrediction p = StopPointPredictor.Predict(R0Vec, V0Vec, UT, Mun(true), high, burn);
+
+        TestContext.Out.WriteLine($"default: stop {low.StopAltitude:F1} m, start +{low.BrakeStartUT - UT:F1} s, {low.BrakeDeltaV:F1} m/s; "
+            + $"1500 m: stop {p.StopAltitude:F1} m, start +{p.BrakeStartUT - UT:F1} s, {p.BrakeDeltaV:F1} m/s");
+        Assert.IsTrue(low.Ok, low.Reason);
+        Assert.IsTrue(p.Ok, p.Reason);
+        Assert.That(low.StopAltitude, Is.InRange(BrakeSimulator.SafeAltitude, 100));
+        Assert.That(p.StopAltitude, Is.InRange(1500, 1550));
+        Assert.Less(p.BrakeStartUT, low.BrakeStartUT);
+    }
 }

@@ -10,6 +10,11 @@ namespace K2D2.Landing.Precision
         public double ThrustKN;  // active engines at full throttle
         public double MassT;
         public double Isp;       // s; 0 = unknown (constant mass, pessimistic)
+        // Height above the terrain (m) where the predicted brake ends; 0 = BrakeSimulator.SafeAltitude.
+        // The precision landing brakes to a stop at start_touchdown_altitude above the target:
+        // TerminalGuidance is built for a near-hover hand-over, not for a brake still flying
+        // ~70° from vertical (end-to-end test, 2026-10-21).
+        public double StopHeight;
     }
 
     public struct Body
@@ -107,6 +112,7 @@ namespace K2D2.Landing.Precision
                 Isp = vehicle.Isp,
                 ImpactUT = impactUT,
                 TerrainHeight = terrain ?? (p => 0),
+                StopHeight = vehicle.StopHeight,
             };
             BrakeResult brake = BrakeSimulator.FindStart(input);
 
