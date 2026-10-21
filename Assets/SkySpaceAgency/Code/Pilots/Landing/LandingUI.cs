@@ -55,7 +55,7 @@ namespace K2D2.Landing
         const string WaitingText = "Click the body… (Esc to cancel)";
         const string UnavailableText = "Map picking unavailable in this game version";
         const string OpenMapText = "Open the map (M), then click the body.";
-        const string ReduxAlsoSavedText = "Redux's Waypoints window also received this click and saved a waypoint; close that window before picking.";
+        const string ReduxAlsoSavedText = "Redux's Waypoints window also saved this click as a waypoint.";
         // How long to wait for the map view after asking the game to open it, before starting anyway.
         const float MapOpenTimeout = 3f;
 
@@ -275,6 +275,12 @@ namespace K2D2.Landing
         // The launch pad entry, when the game gives its location and the vessel is on that body.
         ReduxWaypoint? KscEntry(string bodyName)
         {
+            // Another body than the home world: no lookup (it would fail and build a reason every second).
+            string home_name = null;
+            try { home_name = GameManager.Instance?.Game?.UniverseModel?.HomeWorld?.Name; }
+            catch (Exception) { /* treated as no home world */ }
+            if (home_name == null || home_name != bodyName)
+                return null;
             float now = UnityEngine.Time.realtimeSinceStartup;
             if (now < ksc_retry_time)
                 return null;
@@ -330,7 +336,12 @@ namespace K2D2.Landing
             // fields). Everything below goes through SetValueWithoutNotify.
             string current = waypoint_drop.value;
 
-            if (current != null && choices.Contains(current))
+            // Keep the shown entry only while it still matches the saved target (the player may have typed
+            // other coordinates since); otherwise fall through to the saved-target / Custom path.
+            if (current != null && choices.Contains(current)
+                && waypoint_choices.TryGetValue(current, out var shown)
+                && WaypointChoices.IndexOfSaved(new List<WaypointChoice> { new WaypointChoice { Label = current, Waypoint = shown } },
+                    block.settings.target_latitude.V, block.settings.target_longitude.V) == 0)
             {
                 waypoint_drop.choices = choices;
                 waypoint_drop.SetValueWithoutNotify(current);
