@@ -20,9 +20,10 @@ namespace K2D2.Landing
     // The UI side is split into two methods: setupUI (the full binding, used for the Vacuum
     // panel) and setupBasicUI (a smaller subset for the Atmo panel: warp timing, brake timing, and
     // touchdown speed profile - the settings that are actually meaningful on an atmospheric body
-    // today). Target lat/lon, the precision landing toggle, plane trim, and RCS fine correction
-    // all still exist as real, independently-persisted settings on the Atmo profile too - they're
-    // just not wired to a visible control yet, since atmospheric precision landing isn't built.
+    // today), plus the target lat/lon and a disabled, always-off precision landing toggle. Plane
+    // trim and RCS fine correction still exist as real, independently-persisted settings on the
+    // Atmo profile too - they're just not wired to a visible control yet, since atmospheric
+    // precision landing isn't built.
     // TouchDown's own tunables (touch_down_max_angle etc.) are bound from TouchDown.cs's own
     // SetupFullUI/SetupBasicUI, not here.
     public class LandingSettings
@@ -49,9 +50,10 @@ namespace K2D2.Landing
 
         public ClampSetting<float> touch_down_speed;
 
-        // TARGET (precision landing). Manual lat/lon entry only for now. Vacuum bodies only (see
-        // LandingPilot.cs's atmosphere guard and LandingUI.cs's atmo panel note) - the Atmo
-        // profile's own copy of these three exists (see class comment) but has no UI yet.
+        // TARGET (precision landing). Waypoint list, map picker or manual lat/lon (LandingUI). Precision
+        // landing flies on vacuum bodies only (see LandingPilot.cs's atmosphere guard): the Atmo
+        // profile shows its target and a disabled toggle that is kept off (setupBasicUI), so a target
+        // can already be saved there for atmospheric precision landing.
         public Setting<bool> precision_landing;
         public Setting<float> target_latitude;
         public Setting<float> target_longitude;
@@ -195,12 +197,25 @@ namespace K2D2.Landing
         }
 
         // Reduced binding - Atmo panel. Only the settings that are actually meaningful on an
-        // atmospheric body today: warp timing, brake timing, and touchdown speed profile. No
-        // target/precision-landing/RCS controls here (see class comment) - those fields still
-        // exist and persist independently on this profile, just without a visible control until
-        // atmospheric precision landing is built.
+        // atmospheric body today: warp timing, brake timing, and touchdown speed profile, plus the
+        // target (saved for atmospheric precision landing). No plane trim/RCS controls here (see
+        // class comment).
         public void setupBasicUI(VisualElement root)
         {
+            // TARGET - the toggle is shown but disabled and kept off: precision landing is not
+            // available on atmospheric bodies yet (LandingPilot's atmospheric block is unchanged).
+            // LandingUI also forces it off every tick, in case a saved file turns it back on.
+            var precision_toggle = root.Q<K2Toggle>("precision_landing_atmo").Bind(precision_landing);
+            precision_toggle.SetEnabled(false);
+            precision_landing.V = false;
+            precision_landing.listeners += v =>
+            {
+                if (v) precision_landing.V = false;
+            };
+            var target_settings = root.Q<VisualElement>("target_settings_atmo");
+            target_settings.Q<FloatField>("target_latitude_atmo").Bind(target_latitude);
+            target_settings.Q<FloatField>("target_longitude_atmo").Bind(target_longitude);
+
             // LANDING MODE (this is the atmo profile, so mode is not null)
             root.Q<InlineEnum>("land_mode_atmo").Bind(mode);
             root.Q<K2Toggle>("deploy_legs_early_atmo").Bind(deploy_legs_early);

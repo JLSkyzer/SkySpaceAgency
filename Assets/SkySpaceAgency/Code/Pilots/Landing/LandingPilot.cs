@@ -282,6 +282,8 @@ namespace K2D2.Landing
             // Vessel change, scene change or another pilot's start: drop a pending leg check, it
             // must not fire against another vessel. (A landing's own end keeps it, see FinishLanding.)
             gear.Reset();
+            // Same events end a map pick that is still waiting (no-op when none waits).
+            (_page as LandingUI)?.CancelPick("reset: vessel or scene change, or a pilot start");
         }
 
         internal float current_falling_speed = 0;

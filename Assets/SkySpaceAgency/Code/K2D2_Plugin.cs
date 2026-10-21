@@ -78,6 +78,9 @@ namespace K2D2
 
         K2D2Window main_window = null;
 
+        // Read by the Land tab every UI tick: a waiting map pick is cancelled once the window closes.
+        internal static bool IsMainWindowOpen => Instance?.main_window != null && Instance.main_window.IsWindowOpen;
+
         VabToolsWindow vab_window = null;
 
         public override void OnPreInitialized()

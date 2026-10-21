@@ -25,6 +25,9 @@ namespace K2D2.Landing
         static int _count_before;
         // Frame in which Redux reported the end of placement (PlacementStateChanged(false)), or -1.
         static int _ended_frame = -1;
+        // Frame of the last Begin: Redux may only activate placement later in that frame, so a Tick in
+        // the same frame must not read IsPlacementActive == false as a cancellation.
+        static int _begin_frame = -1;
 
         // Manager we are subscribed on (null when not subscribed), and the exact delegates added.
         static object _subscribed_on;
@@ -123,6 +126,7 @@ namespace K2D2.Landing
                 _state_handler = OnStateChanged;
                 _failed_handler = OnFailed;
                 _ended_frame = -1;
+                _begin_frame = UnityEngine.Time.frameCount;
                 // Set before the first AddHandler: if a later one throws, Cleanup still removes the
                 // earlier ones (removing a delegate that was never added is a no-op).
                 _subscribed_on = manager;
@@ -183,16 +187,32 @@ namespace K2D2.Landing
         /// once the frame has moved on (or once IsPlacementActive reads false) was cancelled in Redux
         /// (right-click, Escape, scene change): clean up and report onFailed("cancelled"). A Completed
         /// raised in the same call stack as the state change always wins, as it runs before any Tick.
+        /// IsPlacementActive is not read in the frame of Begin (Redux may activate placement later in
+        /// that frame); if reading it throws, the pick is abandoned and reported through onFailed.
         /// </summary>
         public static void Tick()
         {
             if (!Waiting)
                 return;
             bool ended = _ended_frame >= 0 && UnityEngine.Time.frameCount > _ended_frame;
-            if (!ended)
+            if (!ended && UnityEngine.Time.frameCount != _begin_frame)
             {
-                try { ended = !(bool)_active_property.GetValue(_subscribed_on); }
-                catch (Exception e) { ReduxWaypoints.LogOnce($"[Landing] target: could not read IsPlacementActive: {e.Message}"); }
+                try
+                {
+                    ended = !(bool)_active_property.GetValue(_subscribed_on);
+                }
+                catch (Exception e)
+                {
+                    // Cannot tell whether Redux is still waiting: give the pick up instead of waiting forever.
+                    var on_failed = _on_failed;
+                    object manager = _subscribed_on;
+                    Cleanup();
+                    CancelIfActive(manager);
+                    string message = (e is TargetInvocationException tie && tie.InnerException != null ? tie.InnerException : e).Message;
+                    K2D2_Plugin.logger.LogWarning($"[Landing] target: could not read IsPlacementActive, pick abandoned: {e.GetType().Name}: {message}");
+                    SafeCall(() => on_failed?.Invoke("Map picking failed: could not read the placement state (" + message + ")."));
+                    return;
+                }
             }
             if (!ended)
                 return;
@@ -249,6 +269,7 @@ namespace K2D2.Landing
             Waiting = false;
             _subscribed_on = null;
             _ended_frame = -1;
+            _begin_frame = -1;
             if (manager != null)
             {
                 RemoveHandler(_completed_event, manager, _completed_handler);

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using K2D2.Landing.Braking;
 using K2D2.KSPService;
 using K2D2.UI;
@@ -29,10 +31,50 @@ namespace K2D2.Landing
 
         public Button touch_down;
 
-        public DropdownField waypoint_drop;
-        // Keyed by the exact string shown in waypoint_drop, since DropdownField only ever gives us
-        // the selected label back in its ChangeEvent - not an index or the underlying record.
-        Dictionary<string, ReduxWaypoint> waypoint_choices = new();
+        // One target block per profile (target_settings_vac / target_settings_atmo in Landing.uxml),
+        // each bound to its own settings object, never rebound.
+        class TargetBlock
+        {
+            public string suffix;
+            public LandingSettings settings;
+            public DropdownField drop;
+            public Button pick;
+            public Label status;
+            public bool? pick_available;
+            // Keyed by the exact string shown in drop, since DropdownField only ever gives us the
+            // selected label back in its ChangeEvent - not an index or the underlying record.
+            public Dictionary<string, ReduxWaypoint> choices = new();
+        }
+
+        TargetBlock target_vac;
+        TargetBlock target_atmo;
+        TargetBlock VisibleTarget => LandingProfile.IsAtmospheric ? target_atmo : target_vac;
+
+        const string PickText = "Pick on map";
+        const string PickTooltip = "Click the body in the map view to set the landing target";
+        const string WaitingText = "Click the body… (Esc to cancel)";
+        const string UnavailableText = "Map picking unavailable in this game version";
+        const string OpenMapText = "Open the map (M), then click the body.";
+        const string ReduxAlsoSavedText = "Redux's Waypoints window also received this click and saved a waypoint; close that window before picking.";
+        // How long to wait for the map view after asking the game to open it, before starting anyway.
+        const float MapOpenTimeout = 3f;
+
+        // Session-only (never saved): the last point picked on the map, listed as PickedName.
+        ReduxWaypoint? picked_point;
+
+        // The pick in progress: the block that asked for it (null when none), whether the placement
+        // still waits for the map view to open, and the vessel it was asked for.
+        TargetBlock pick_owner;
+        bool pick_begin_pending;
+        float pick_begin_deadline;
+        object pick_vessel;
+        // Player waypoint count (all bodies) before the pick, checked again on the tick after a
+        // completed pick: Redux's own Waypoints window listens to the same event and may save one.
+        int pick_waypoints_before = -1;
+        TargetBlock pick_count_check;
+
+        // KscLocation retries a full game lookup while it fails: at most once a second from here.
+        float ksc_retry_time = -1;
 
         // Precision Landing orbit gate (see UpdateOrbitGate below) - reuses Circularize's own
         // 100km ceiling (Circularize.max_starting_altitude_m) rather than a separate number, so
@@ -70,27 +112,19 @@ namespace K2D2.Landing
             touch_down = panel.Q<Button>("touch_down");
             status_bar = new FullStatus(panel);
 
-            // Waypoint picker - lists whatever the player's already placed on the current body via
-            // Redux's own Waypoints window (K2D2.Landing.ReduxWaypoints, reflection-based since
-            // that system is internal to Assembly-CSharp). Rebuilt every UI tick (see
-            // onUpdateUI() below) rather than via a click listener, since DropdownField opens its
-            // own native list on pointer-down instead of dispatching a bubbling ClickEvent - a
-            // per-tick rebuild also keeps the list current if a waypoint's added while this tab is
-            // open.
+            // Waypoint picker - one per profile: KSC and the point picked on the map, then whatever
+            // the player's already placed on the current body via Redux's own Waypoints window
+            // (K2D2.Landing.ReduxWaypoints, reflection-based since that system is internal), then
+            // the game's waypoints. Rebuilt every UI tick for the visible profile (see onUpdateUI()
+            // below) rather than via a click listener, since DropdownField opens its own native
+            // list on pointer-down instead of dispatching a bubbling ClickEvent - a per-tick
+            // rebuild also keeps the list current if a waypoint's added while this tab is open.
             //
-            // Vacuum-only (waypoint_drop_vac - see landing_mode_group_vac in Landing.uxml), so this
-            // writes straight to settings_vac rather than through the profile-dependent
-            // pilot.settings property - the dropdown itself only ever exists on the Vacuum panel.
-            waypoint_drop = panel.Q<DropdownField>("waypoint_drop_vac");
-            buildWaypointList();
-            waypoint_drop.RegisterCallback<ChangeEvent<string>>(evt =>
-            {
-                if (waypoint_choices.TryGetValue(evt.newValue, out var waypoint))
-                {
-                    pilot.settings_vac.target_latitude.V = (float)waypoint.latitude;
-                    pilot.settings_vac.target_longitude.V = (float)waypoint.longitude;
-                }
-            });
+            // Each block writes straight to its own settings object (settings_vac/settings_atmo),
+            // not through the profile-dependent pilot.settings property.
+            target_vac = SetupTarget("_vac", pilot.settings_vac);
+            target_atmo = SetupTarget("_atmo", pilot.settings_atmo);
+            buildWaypointList(VisibleTarget);
 
             pilot.is_running_event += is_running => run_button.Value = is_running;
             // Same "give him a little life" touch as Node/Lift: K2's 3 grille lines cascade
@@ -208,8 +242,64 @@ namespace K2D2.Landing
             vac_settings_panel.Show(!atmo);
         }
 
-        void buildWaypointList()
+        TargetBlock SetupTarget(string suffix, LandingSettings settings)
         {
+            var block = new TargetBlock
+            {
+                suffix = suffix,
+                settings = settings,
+                drop = panel.Q<DropdownField>("waypoint_drop" + suffix),
+                pick = panel.Q<Button>("pick_target" + suffix),
+                status = panel.Q<Label>("pick_status" + suffix),
+            };
+            block.drop.RegisterCallback<ChangeEvent<string>>(evt =>
+            {
+                if (evt.newValue != null && block.choices.TryGetValue(evt.newValue, out var waypoint))
+                {
+                    block.settings.target_latitude.V = (float)waypoint.latitude;
+                    block.settings.target_longitude.V = (float)waypoint.longitude;
+                }
+            });
+            block.pick.text = PickText;
+            block.pick.clicked += () => OnPickClicked(block);
+            SetStatus(block, "");
+            return block;
+        }
+
+        static void SetStatus(TargetBlock block, string text)
+        {
+            block.status.text = text ?? "";
+            block.status.Show(!string.IsNullOrEmpty(text));
+        }
+
+        // The launch pad entry, when the game gives its location and the vessel is on that body.
+        ReduxWaypoint? KscEntry(string bodyName)
+        {
+            float now = UnityEngine.Time.realtimeSinceStartup;
+            if (now < ksc_retry_time)
+                return null;
+            if (!KscLocation.TryGet(out string ksc_body, out double raw_lat, out double raw_lon))
+            {
+                ksc_retry_time = now + 1f;
+                return null;
+            }
+            ksc_retry_time = -1;
+            if (ksc_body != bodyName)
+                return null;
+            // WaypointChoices does not normalize: the label and the target must be in range.
+            if (!TargetPoint.TryNormalize(raw_lat, raw_lon, out double lat, out double lon))
+            {
+                ReduxWaypoints.LogOnce(string.Format(CultureInfo.InvariantCulture,
+                    "[Landing] target: KSC coordinates rejected ({0:R}, {1:R}), entry omitted.", raw_lat, raw_lon));
+                return null;
+            }
+            return new ReduxWaypoint { name = WaypointChoices.KscName, body_name = ksc_body, latitude = lat, longitude = lon };
+        }
+
+        void buildWaypointList(TargetBlock block)
+        {
+            var waypoint_choices = block.choices;
+            var waypoint_drop = block.drop;
             waypoint_choices.Clear();
 
             var body = pilot.current_vessel?.currentBody();
@@ -217,10 +307,15 @@ namespace K2D2.Landing
 
             if (body != null)
             {
-                // The player's own waypoints, then the game's (missions that need a precise point
-                // create one when they activate): see WaypointChoices.
+                // A point picked on another body means nothing here: drop it.
+                if (picked_point != null && picked_point.Value.body_name != body.Name)
+                    picked_point = null;
+
+                // KSC and the picked point, the player's own waypoints, then the game's (missions
+                // that need a precise point create one when they activate): see WaypointChoices.
                 var player = ReduxWaypoints.available ? ReduxWaypoints.GetWaypointsForBody(body.Name) : new List<ReduxWaypoint>();
-                foreach (var choice in WaypointChoices.Build(player, ReduxWaypoints.GetGameWaypoints(), body.Name))
+                foreach (var choice in WaypointChoices.Build(player, ReduxWaypoints.GetGameWaypoints(), body.Name,
+                             KscEntry(body.Name), picked_point))
                 {
                     waypoint_choices[choice.Label] = choice.Waypoint;
                     choices.Add(choice.Label);
@@ -237,7 +332,7 @@ namespace K2D2.Landing
             string current = waypoint_drop.value;
             waypoint_drop.choices = choices;
 
-            if (choices.Contains(current))
+            if (current != null && choices.Contains(current))
             {
                 waypoint_drop.SetValueWithoutNotify(current);
             }
@@ -252,6 +347,249 @@ namespace K2D2.Landing
             }
             // else: no real waypoints on this body at all (just the "No body"/"No waypoints on
             // X" placeholder) - leave target_latitude/longitude alone, nothing sensible to select.
+        }
+
+        // ---- Map target picker (ReduxPlacement) ----
+
+        void UpdatePickButton(TargetBlock block)
+        {
+            bool available = ReduxPlacement.Available;
+            if (block.pick_available == available)
+                return;
+            block.pick_available = available;
+            block.pick.SetEnabled(available);
+            block.pick.tooltip = available ? PickTooltip : UnavailableText;
+        }
+
+        static GameState? CurrentState()
+        {
+            try { return GeneralTools.Game?.GlobalGameState?.GetGameState()?.GameState; }
+            catch (Exception) { return null; }
+        }
+
+        static int CountPlayerWaypoints()
+        {
+            try { return ReduxWaypoints.GetWaypointsForBody(null).Count; }
+            catch (Exception) { return -1; }
+        }
+
+        // Switches flight view to the map with the game's own toggle (ViewController.DataProvider.
+        // SetMapEnabled, documented as "transitions the game state to map view"). False when that is
+        // not reachable: the caller then tells the player to open the map himself.
+        bool OpenMap()
+        {
+            try
+            {
+                var provider = GeneralTools.Game?.ViewController?.DataProvider;
+                if (provider == null)
+                {
+                    ReduxWaypoints.LogOnce("[Landing] target: cannot open the map: ViewController.DataProvider is null.");
+                    return false;
+                }
+                provider.SetMapEnabled(true);
+                pilot.logger.LogInfo("[Landing] target: map view requested (ViewDataProvider.SetMapEnabled(true)).");
+                return true;
+            }
+            catch (Exception e)
+            {
+                ReduxWaypoints.LogOnce($"[Landing] target: cannot open the map: {e.GetType().Name}: {e.Message}");
+                return false;
+            }
+        }
+
+        void OnPickClicked(TargetBlock block)
+        {
+            // A click while a pick waits (or waits for the map) cancels it.
+            if (pick_owner != null || ReduxPlacement.Waiting)
+            {
+                CancelPick("cancelled from the button");
+                return;
+            }
+            if (!ReduxPlacement.Available)
+            {
+                SetStatus(block, UnavailableText);
+                return;
+            }
+
+            SetStatus(block, "");
+            pick_owner = block;
+            pick_vessel = pilot.current_vessel?.VesselComponent;
+            pick_waypoints_before = CountPlayerWaypoints();
+            pick_count_check = null;
+            block.pick.text = WaitingText;
+
+            if (CurrentState() == GameState.FlightView)
+            {
+                if (OpenMap())
+                {
+                    // Placement starts once the map view is up (UpdatePick), so Redux never gets a
+                    // BeginPlacement while the game is still switching views.
+                    pick_begin_pending = true;
+                    pick_begin_deadline = UnityEngine.Time.realtimeSinceStartup + MapOpenTimeout;
+                    return;
+                }
+                SetStatus(block, OpenMapText);
+            }
+            StartPlacement();
+        }
+
+        void StartPlacement()
+        {
+            pick_begin_pending = false;
+            var block = pick_owner;
+            if (block == null)
+                return;
+
+            bool started = ReduxPlacement.Begin(
+                (body, lat, lon) => OnPicked(block, body, lat, lon),
+                message => OnPickFailed(block, message));
+            if (!started)
+            {
+                // Members or Instance missing (logged once by ReduxPlacement).
+                pick_owner = null;
+                block.pick.text = PickText;
+                SetStatus(block, UnavailableText);
+            }
+            // A Begin that threw has already called OnPickFailed, which restored the button.
+        }
+
+        void OnPickFailed(TargetBlock block, string message)
+        {
+            if (pick_owner == block)
+                pick_owner = null;
+            pick_begin_pending = false;
+            block.pick.text = PickText;
+            if (message != "cancelled")
+                SetStatus(block, message);
+        }
+
+        void OnPicked(TargetBlock block, string body, double raw_lat, double raw_lon)
+        {
+            if (pick_owner == block)
+                pick_owner = null;
+            block.pick.text = PickText;
+            // Redux's own window, if it handled the same click, may run after us: checked next tick.
+            pick_count_check = block;
+
+            if (!TargetPoint.TryNormalize(raw_lat, raw_lon, out double lat, out double lon))
+            {
+                pilot.logger.LogWarning(string.Format(CultureInfo.InvariantCulture,
+                    "[Landing] target: picked point rejected, not a valid position: raw ({0}, {1:R}, {2:R}).", body, raw_lat, raw_lon));
+                SetStatus(block, "Picked point is not a valid position: ignored.");
+                return;
+            }
+
+            string current = pilot.current_vessel?.currentBody()?.Name;
+            string refusal = TargetPoint.Accept(body, current);
+            if (refusal != null)
+            {
+                pilot.logger.LogInfo("[Landing] target: " + refusal);
+                SetStatus(block, refusal);
+                return;
+            }
+
+            picked_point = new ReduxWaypoint
+            {
+                name = WaypointChoices.PickedName,
+                body_name = body,
+                latitude = lat,
+                longitude = lon,
+                from_mission = false,
+            };
+            buildWaypointList(block);
+            foreach (var entry in block.choices)
+            {
+                if (entry.Value.name == WaypointChoices.PickedName && !entry.Value.from_mission)
+                {
+                    block.drop.SetValueWithoutNotify(entry.Key);
+                    break;
+                }
+            }
+            // Written last: the rebuild above may have auto-selected another entry.
+            block.settings.target_latitude.V = (float)lat;
+            block.settings.target_longitude.V = (float)lon;
+
+            pilot.logger.LogInfo(string.Format(CultureInfo.InvariantCulture,
+                "[Landing] target: target set from the map to ({0:0.0000}, {1:0.0000}) on {2} ({3} profile).",
+                lat, lon, body, block.suffix.TrimStart('_')));
+            SetStatus(block, string.Format(CultureInfo.InvariantCulture, "Target set to ({0:0.00}, {1:0.00}).", lat, lon));
+        }
+
+        /// <summary>
+        /// Abandons a waiting pick (or one waiting for the map): Redux placement cancelled, our
+        /// handlers removed, button text restored. Safe to call when nothing waits. Called by the
+        /// per-tick checks below and by LandingPilot.onReset (vessel change, scene change, a pilot start).
+        /// </summary>
+        internal void CancelPick(string reason)
+        {
+            if (pick_owner == null && !ReduxPlacement.Waiting)
+                return;
+            var block = pick_owner;
+            pick_owner = null;
+            pick_begin_pending = false;
+            ReduxPlacement.Cancel();
+            if (block != null)
+                block.pick.text = PickText;
+            pilot.logger.LogInfo($"[Landing] target: pick cancelled ({reason}).");
+        }
+
+        // Every UI tick, visible or not: drives ReduxPlacement.Tick (how a cancel in Redux is seen),
+        // the delayed start once the map is up, and the cancel conditions.
+        void UpdatePick()
+        {
+            ReduxPlacement.Tick();
+
+            if (pick_count_check != null)
+            {
+                var block = pick_count_check;
+                pick_count_check = null;
+                int after = CountPlayerWaypoints();
+                if (pick_waypoints_before >= 0 && after > pick_waypoints_before)
+                {
+                    pilot.logger.LogWarning($"[Landing] target: Redux's Waypoints window saved a waypoint from the pick (player waypoints {pick_waypoints_before} -> {after}).");
+                    SetStatus(block, string.IsNullOrEmpty(block.status.text)
+                        ? ReduxAlsoSavedText
+                        : block.status.text + "\n" + ReduxAlsoSavedText);
+                }
+            }
+
+            if (pick_owner == null)
+                return;
+
+            var state = CurrentState();
+            string reason = null;
+            if (!isVisible)
+                reason = "Land tab hidden";
+            else if (!K2D2_Plugin.IsMainWindowOpen)
+                reason = "window closed";
+            else if (pilot.isRunning)
+                reason = "landing started";
+            else if (!ReferenceEquals(pilot.current_vessel?.VesselComponent, pick_vessel))
+                reason = "vessel changed";
+            else if (state != GameState.FlightView && state != GameState.Map3DView)
+                reason = "left flight and map view";
+            else if (pick_owner != VisibleTarget)
+                reason = "landing profile changed";
+            else if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Escape))
+                reason = "Escape";
+
+            if (reason != null)
+            {
+                CancelPick(reason);
+                return;
+            }
+
+            if (pick_begin_pending)
+            {
+                if (state == GameState.Map3DView)
+                    StartPlacement();
+                else if (UnityEngine.Time.realtimeSinceStartup > pick_begin_deadline)
+                {
+                    pilot.logger.LogInfo("[Landing] target: the map view did not open, starting the pick anyway.");
+                    SetStatus(pick_owner, OpenMapText);
+                    StartPlacement();
+                }
+            }
         }
 
         void AddInfoRow(string label, string value)
@@ -403,12 +741,21 @@ namespace K2D2.Landing
 
         public override bool onUpdateUI()
         {
+            // Before the visibility gate: a pick must be watched (and cancelled) while hidden too.
+            UpdatePick();
+
             if (!base.onUpdateUI())
                 return false;
 
+            // Atmospheric precision landing is not available yet: keep that toggle off.
+            if (pilot.settings_atmo.precision_landing.V)
+                pilot.settings_atmo.precision_landing.V = false;
+
             updateCollisionStatus();
             updateContext();
-            buildWaypointList();
+            var target = VisibleTarget;
+            buildWaypointList(target);
+            UpdatePickButton(target);
             UpdateOrbitGate();
             UpdateProfilePanels();
 

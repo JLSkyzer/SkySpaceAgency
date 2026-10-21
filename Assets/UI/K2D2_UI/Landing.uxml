@@ -27,14 +27,25 @@
                  (LandingUI.UpdateProfilePanels, based on LandingProfile.IsAtmospheric, same pattern
                  as advanced_foldout's own atmo/vac panel switch below). -->
 
-            <!-- Atmo panel: no controls at all yet - just a short explanation of why, so it's
-                 obvious this isn't a bug/missing feature rather than something silently broken. -->
+            <!-- Atmo panel: landing mode, legs, the target picker (saved for atmospheric precision
+                 landing, not used yet) and a note saying precision landing is not available here. -->
             <ui:VisualElement name="landing_mode_group_atmo" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); margin-top: 8px; display: none;">
                 <!-- Landing mode (LandingSettings.mode, atmo profile only): Propulsive brakes on the
                      engines, Parachute lands without them (ParachuteDescent.cs). -->
                 <K2UI.InlineEnum name="land_mode_atmo" labels="Propulsive;Parachute" />
                 <K2UI.K2Toggle label="Deploy legs early" name="deploy_legs_early_atmo" tooltip="Propulsive landing: deploy the legs when braking starts instead of at Touch Down" />
-                <ui:Label tabindex="-1" text="Precision landing isn't available on atmospheric bodies yet. Propulsive mode: Brake/Touch Down as usual. Parachute mode: one Land button, no engines." display-tooltip-when-elided="true" name="atmo_precision_note" style="color: rgb(180, 180, 180); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
+                <!-- Precision landing toggle: shown but disabled and kept off (LandingUI) until
+                     atmospheric precision landing exists. The target picker below already works:
+                     the target is saved in the atmo profile for later. -->
+                <K2UI.K2Toggle label="Precision Landing" name="precision_landing_atmo" tooltip="Not available on atmospheric bodies yet" />
+                <ui:VisualElement name="target_settings_atmo" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
+                    <ui:DropdownField label="Waypoint :" index="-1" choices="" name="waypoint_drop_atmo" tooltip="KSC, the point picked on the map, and the waypoints on the current body (list refreshes automatically)" />
+                    <ui:Button text="Pick on map" display-tooltip-when-elided="true" name="pick_target_atmo" tooltip="Click the body in the map view to set the landing target" />
+                    <ui:Label tabindex="-1" text="" name="pick_status_atmo" style="display: none; color: rgb(224, 200, 132); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
+                    <ui:FloatField label="Target Latitude" value="0" name="target_latitude_atmo" />
+                    <ui:FloatField label="Target Longitude" value="0" name="target_longitude_atmo" />
+                </ui:VisualElement>
+                <ui:Label tabindex="-1" text="Precision landing on atmospheric bodies: coming with parachute targeting." display-tooltip-when-elided="true" name="atmo_precision_note" style="color: rgb(180, 180, 180); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
             </ui:VisualElement>
 
             <!-- Vacuum panel - promoted up from a buried ADVANCED setting to an obvious choice
@@ -59,6 +70,8 @@
                 <ui:Label tabindex="-1" text="" display-tooltip-when-elided="true" name="precision_landing_orbit_gate_vac" style="display: none; color: rgb(224, 132, 132); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
                 <ui:VisualElement name="target_settings_vac" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
                     <ui:DropdownField label="Waypoint :" index="-1" choices="" name="waypoint_drop_vac" tooltip="Waypoints placed on the current body via Redux's own Waypoints window (list refreshes automatically)" />
+                    <ui:Button text="Pick on map" display-tooltip-when-elided="true" name="pick_target_vac" tooltip="Click the body in the map view to set the landing target" />
+                    <ui:Label tabindex="-1" text="" name="pick_status_vac" style="display: none; color: rgb(224, 200, 132); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
                     <ui:FloatField label="Target Latitude" value="0" name="target_latitude_vac" />
                     <ui:FloatField label="Target Longitude" value="0" name="target_longitude_vac" />
                 </ui:VisualElement>

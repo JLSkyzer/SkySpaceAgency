@@ -20,16 +20,29 @@ namespace K2D2.Landing
     // objects are the PQSSurfaceObject children of the body's local-space view, so the lookup answers only
     // while the home world's local space is loaded (IsLocalSpaceLoaded). It does not need the KSC scene. When
     // the local space is not loaded, TryGet returns false and is retried on the next call; the pad never moves,
-    // so a success is cached for the session.
+    // so a success is cached, for as long as UniverseModel.HomeWorld is the same object (another save loads a
+    // new universe, whose home world may differ: the cache and the logged-once failure are then dropped).
     public static class KscLocation
     {
         static bool cached;
         static string cached_body;
         static double cached_lat, cached_lon;
         static bool failure_logged;
+        // Home world the cache (and failure_logged) belongs to.
+        static object cached_home;
 
         public static bool TryGet(out string bodyName, out double latitude, out double longitude)
         {
+            object current_home = null;
+            try { current_home = GameManager.Instance?.Game?.UniverseModel?.HomeWorld; }
+            catch (Exception) { /* handled below by the full lookup */ }
+            if (!ReferenceEquals(current_home, cached_home))
+            {
+                cached = false;
+                failure_logged = false;
+                cached_home = current_home;
+            }
+
             if (cached)
             {
                 bodyName = cached_body;
