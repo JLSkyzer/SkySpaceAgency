@@ -187,8 +187,9 @@ namespace K2D2.Landing.Precision
         }
 
         // Surface-relative velocity (v − ω×r) when braking starts, turned back to the body's
-        // orientation at ut and projected on the tangent plane at the stop point.
-        static bool GroundTrack(Vector3d r, Vector3d v, double ut, Body body, Impulse burn, StopPrediction stop, out Vector3d track)
+        // orientation at ut and projected on the tangent plane at the stop point. Shared with
+        // CourseCorrection.
+        internal static bool GroundTrack(Vector3d r, Vector3d v, double ut, Body body, Impulse burn, StopPrediction stop, out Vector3d track)
         {
             Vector3d rb = r, vb = v;
             if (burn.UT > ut)
