@@ -31,7 +31,13 @@ namespace K2D2.Landing.Precision
         /// impulses only shorten the step.
         /// </summary>
         public static Correction Solve(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle,
-            Vector3d targetDirNow, double maxDeltaV)
+            Vector3d targetDirNow, double maxDeltaV) =>
+            Solve(r, v, ut, body, targetDirNow, maxDeltaV,
+                (rr, vv, uu, imp) => StopPointPredictor.Predict(rr, vv, uu, body, vehicle, imp));
+
+        /// <summary>The same solve with any stop predictor.</summary>
+        public static Correction Solve(Vector3d r, Vector3d v, double ut, Body body,
+            Vector3d targetDirNow, double maxDeltaV, StopPredictorFn predict)
         {
             int calls = 0;
             Vector3d target = targetDirNow / targetDirNow.magnitude;
@@ -39,7 +45,7 @@ namespace K2D2.Landing.Precision
             Vector3d normal = Vector3d.Cross(r, v);
             normal = normal / normal.magnitude;
 
-            Sample now = Evaluate(r, v, ut, body, vehicle, target, prograde, normal, 0, 0, ref calls);
+            Sample now = Evaluate(r, v, ut, body, predict, target, prograde, normal, 0, 0, ref calls);
             if (!now.Ok)
                 return new Correction { Ok = false, Reason = now.Reason, PredictCalls = calls };
             double missBefore = SurfaceGeometry.GreatCircle(now.Stop.StopDirNow, target, body.Radius);
@@ -51,7 +57,7 @@ namespace K2D2.Landing.Precision
                 return result;
             }
 
-            Sample x = Newton(r, v, ut, body, vehicle, target, prograde, normal, now, ref calls);
+            Sample x = Newton(r, v, ut, body, predict, target, prograde, normal, now, ref calls);
             double size = Math.Sqrt(x.P * x.P + x.N * x.N);
             if (size > maxDeltaV)
             {
@@ -60,7 +66,7 @@ namespace K2D2.Landing.Precision
                 Sample c = default;
                 for (int i = 0; i <= MaxBackoff; i++, k /= 2)
                 {
-                    c = Evaluate(r, v, ut, body, vehicle, target, prograde, normal, k * x.P, k * x.N, ref calls);
+                    c = Evaluate(r, v, ut, body, predict, target, prograde, normal, k * x.P, k * x.N, ref calls);
                     if (c.Ok)
                         break;
                 }
@@ -100,14 +106,14 @@ namespace K2D2.Landing.Precision
 
         // Newton from `start` (Ok), backtracking on refused or worse candidates. Returns the best
         // sample found, unclipped.
-        static Sample Newton(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d target,
+        static Sample Newton(Vector3d r, Vector3d v, double ut, Body body, StopPredictorFn predict, Vector3d target,
             Vector3d prograde, Vector3d normal, Sample start, ref int calls)
         {
             Sample x = start;
             for (int it = 0; it < MaxIterations && x.Norm > Tolerance; it++)
             {
-                if (!Column(r, v, ut, body, vehicle, target, prograde, normal, x, 1, 0, ref calls, out double aP, out double cP)
-                    || !Column(r, v, ut, body, vehicle, target, prograde, normal, x, 0, 1, ref calls, out double aN, out double cN))
+                if (!Column(r, v, ut, body, predict, target, prograde, normal, x, 1, 0, ref calls, out double aP, out double cP)
+                    || !Column(r, v, ut, body, predict, target, prograde, normal, x, 0, 1, ref calls, out double aN, out double cN))
                     break;
                 double det = aP * cN - aN * cP;
                 if (!(Math.Abs(det) > 1e-12))
@@ -120,7 +126,7 @@ namespace K2D2.Landing.Precision
                 double t = 1;
                 for (int b = 0; b <= MaxBackoff; b++, t /= 2)
                 {
-                    Sample c = Evaluate(r, v, ut, body, vehicle, target, prograde, normal, x.P + t * dP, x.N + t * dN, ref calls);
+                    Sample c = Evaluate(r, v, ut, body, predict, target, prograde, normal, x.P + t * dP, x.N + t * dN, ref calls);
                     if (c.Ok && c.Norm < x.Norm)
                     {
                         x = c;
@@ -136,13 +142,13 @@ namespace K2D2.Landing.Precision
 
         // One Jacobian column (∂along, ∂cross per m/s) along (eP, eN): forward difference, or
         // backward when the forward probe is refused.
-        static bool Column(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d target,
+        static bool Column(Vector3d r, Vector3d v, double ut, Body body, StopPredictorFn predict, Vector3d target,
             Vector3d prograde, Vector3d normal, Sample x, double eP, double eN, ref int calls, out double dAlong, out double dCross)
         {
             dAlong = dCross = 0;
             foreach (double h in new[] { JacobianStep, -JacobianStep })
             {
-                Sample s = Evaluate(r, v, ut, body, vehicle, target, prograde, normal, x.P + h * eP, x.N + h * eN, ref calls);
+                Sample s = Evaluate(r, v, ut, body, predict, target, prograde, normal, x.P + h * eP, x.N + h * eN, ref calls);
                 if (!s.Ok)
                     continue;
                 dAlong = (s.Along - x.Along) / h;
@@ -152,12 +158,12 @@ namespace K2D2.Landing.Precision
             return false;
         }
 
-        static Sample Evaluate(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d target,
+        static Sample Evaluate(Vector3d r, Vector3d v, double ut, Body body, StopPredictorFn predict, Vector3d target,
             Vector3d prograde, Vector3d normal, double p, double n, ref int calls)
         {
             var burn = new Impulse { UT = ut, DeltaV = p * prograde + n * normal };
             calls++;
-            StopPrediction stop = StopPointPredictor.Predict(r, v, ut, body, vehicle, burn);
+            StopPrediction stop = predict(r, v, ut, burn);
             var s = new Sample { Ok = stop.Ok, Reason = stop.Reason, P = p, N = n, Stop = stop };
             if (!stop.Ok)
                 return s;

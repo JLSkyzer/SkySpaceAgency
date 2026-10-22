@@ -9,20 +9,20 @@ using NUnit.Framework;
 public class ReentryPredictorTests
 {
     // Synthetic Kerbin: exponential atmosphere, constant sound speed, ideal-gas pressure.
-    const double Mu = 3.5316e12;
-    const double R = 600000;
-    const double RotationPeriod = 21549.425;
+    internal const double Mu = 3.5316e12;
+    internal const double R = 600000;
+    internal const double RotationPeriod = 21549.425;
     const double Rho0 = 1.225;
     const double ScaleHeight = 5600;
-    const double Depth = 70000;
-    const double UT = 1000;
-    static double SurfaceGravity => Mu / (R * R);
+    internal const double Depth = 70000;
+    internal const double UT = 1000;
+    internal static double SurfaceGravity => Mu / (R * R);
 
     static Vector3d Zero => new Vector3d(0, 0, 0);
     static Vector3d OmegaOf(bool rotating) =>
         rotating ? BodyRotation.AngularVelocity(BodyRotation.AngularSpeed(RotationPeriod), 1) : Zero;
 
-    static Body Kerbin(bool rotating) => new Body
+    internal static Body Kerbin(bool rotating) => new Body
     {
         Mu = Mu,
         Radius = R,
@@ -30,7 +30,7 @@ public class ReentryPredictorTests
         TerrainHeight = p => 0,
     };
 
-    static Atmosphere Air(double rho0 = Rho0, double depth = Depth)
+    internal static Atmosphere Air(double rho0 = Rho0, double depth = Depth)
     {
         const double step = 100;
         int n = (int)(depth / step) + 1;
@@ -55,7 +55,7 @@ public class ReentryPredictorTests
     const double ChuteArea = 25;
 
     // 1 t capsule, CdA 1.5 m², one chute of 25 m² (semi-deployed: 10 %).
-    static ReentryVehicle Capsule(int chutes = 1, double maxSpeed = 250, double minSpeed = 0, double deployAltitude = 1000) => new ReentryVehicle
+    internal static ReentryVehicle Capsule(int chutes = 1, double maxSpeed = 250, double minSpeed = 0, double deployAltitude = 1000) => new ReentryVehicle
     {
         MassT = 1,
         Drag = new DragTable { Mach = new double[] { 0 }, CdA = new double[] { 1.5 } },

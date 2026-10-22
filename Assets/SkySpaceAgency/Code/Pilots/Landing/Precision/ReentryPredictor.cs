@@ -291,6 +291,8 @@ namespace K2D2.Landing.Precision
                 StopUT = t,
                 StopDirNow = m > 0 ? stopNow / m : stopNow,
                 StopAltitude = 0,
+                // Where the Kepler arc ends and the drag begins: DeorbitSearch.GroundTrack reads the ground track there.
+                BrakeStartUT = trace.InterfaceUT,
             };
             if (hasChutes && canopy == Canopy.Packed)
             {

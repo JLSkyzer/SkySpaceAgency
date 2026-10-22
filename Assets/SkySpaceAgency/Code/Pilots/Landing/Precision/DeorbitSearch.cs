@@ -16,6 +16,10 @@ namespace K2D2.Landing.Precision
         public int PredictCalls;       // cost of the search, for the log
     }
 
+    /// <summary>Where a candidate trajectory (the optional impulse first) stops: StopPointPredictor
+    /// for a powered descent, ReentryPredictor for a ballistic reentry under parachutes.</summary>
+    public delegate StopPrediction StopPredictorFn(Vector3d r, Vector3d v, double ut, Impulse? impulse);
+
     // Deorbit burn time that puts the predicted stop point on the target (along-track miss zero),
     // and the same burn at the earliest time for the Δv budget. Pure maths, frame body-relative
     // inertial Zup, tested in EditMode.
@@ -26,6 +30,11 @@ namespace K2D2.Landing.Precision
         public const double AlongPrecision = 10;            // m
         public const double TimePrecision = 0.002;          // s
         public const int MaxRefine = 20;
+        public const double ReentryPeriapsisFraction = 0.45;  // of the atmosphere depth
+
+        /// <summary>Descent periapsis of a reentry: R + ReentryPeriapsisFraction * depth (31.5 km on Kerbin).</summary>
+        public static double ReentryPeriapsis(Body body, double atmosphereDepth) =>
+            body.Radius + ReentryPeriapsisFraction * atmosphereDepth;
 
         /// <summary>
         /// Retrograde burn lowering the periapsis to R − DescentPeriapsisMargin, at the earliest time
@@ -36,7 +45,14 @@ namespace K2D2.Landing.Precision
         /// candidate inside the bracket, or a jump of the stop point across it).
         /// </summary>
         public static DeorbitPlan Find(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle,
-            Vector3d targetDirNow, double earliestUT)
+            Vector3d targetDirNow, double earliestUT) =>
+            Find(r, v, ut, body, targetDirNow, earliestUT,
+                (rr, vv, uu, imp) => StopPointPredictor.Predict(rr, vv, uu, body, vehicle, imp),
+                body.Radius - DescentPeriapsisMargin);
+
+        /// <summary>The same search with any stop predictor and the periapsis radius the burn lowers the orbit to.</summary>
+        public static DeorbitPlan Find(Vector3d r, Vector3d v, double ut, Body body,
+            Vector3d targetDirNow, double earliestUT, StopPredictorFn predict, double descentPeriapsisRadius)
         {
             int calls = 0;
             double start = Math.Max(earliestUT, ut);
@@ -47,6 +63,7 @@ namespace K2D2.Landing.Precision
             double period = 2 * Math.PI * Math.Sqrt(a * a * a / body.Mu);
             double window = SearchWindow(period, body);
             Vector3d target = targetDirNow / targetDirNow.magnitude;
+            double wanted = descentPeriapsisRadius;
 
             var plans = new DeorbitPlan[Samples + 1];
             string firstReason = null;
@@ -54,7 +71,7 @@ namespace K2D2.Landing.Precision
             bool found = false;
             for (int i = 0; i <= Samples; i++)
             {
-                plans[i] = Evaluate(r, v, ut, body, vehicle, target, start + window * i / Samples, ref calls);
+                plans[i] = Evaluate(r, v, ut, body, predict, wanted, target, start + window * i / Samples, ref calls);
                 if (!plans[i].Ok && firstReason == null)
                     firstReason = plans[i].Reason;
                 if (i == 0 || !plans[i - 1].Ok || !plans[i].Ok)
@@ -66,7 +83,7 @@ namespace K2D2.Landing.Precision
                     continue;
                 if (Math.Abs(a1 - a0) >= Math.PI * body.Radius)
                     continue;
-                best = Refine(r, v, ut, body, vehicle, target, plans[i - 1], plans[i], ref calls);
+                best = Refine(r, v, ut, body, predict, wanted, target, plans[i - 1], plans[i], ref calls);
                 if (Math.Abs(best.AlongMissM) > AlongPrecision)
                 {
                     best.Ok = false;
@@ -104,11 +121,18 @@ namespace K2D2.Landing.Precision
         }
 
         /// <summary>The same burn at earliestUT, without target (AlongMissM and CrossMissM NaN).</summary>
-        public static DeorbitPlan Baseline(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, double earliestUT)
+        public static DeorbitPlan Baseline(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, double earliestUT) =>
+            Baseline(r, v, ut, body, earliestUT,
+                (rr, vv, uu, imp) => StopPointPredictor.Predict(rr, vv, uu, body, vehicle, imp),
+                body.Radius - DescentPeriapsisMargin);
+
+        /// <summary>The same with any stop predictor and descent periapsis radius.</summary>
+        public static DeorbitPlan Baseline(Vector3d r, Vector3d v, double ut, Body body, double earliestUT,
+            StopPredictorFn predict, double descentPeriapsisRadius)
         {
             double burnUT = Math.Max(earliestUT, ut);
-            Impulse burn = Burn(r, v, ut, body, burnUT);
-            StopPrediction stop = StopPointPredictor.Predict(r, v, ut, body, vehicle, burn);
+            Impulse burn = Burn(r, v, ut, body, burnUT, descentPeriapsisRadius);
+            StopPrediction stop = predict(r, v, ut, burn);
             return new DeorbitPlan
             {
                 Ok = stop.Ok,
@@ -125,7 +149,7 @@ namespace K2D2.Landing.Precision
         // Regula falsi (Illinois) between two Ok plans whose along-track misses bracket zero.
         // A refused candidate inside the bracket ends the refinement with the best plan so far;
         // Find refuses it when it is not within AlongPrecision.
-        static DeorbitPlan Refine(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d target,
+        static DeorbitPlan Refine(Vector3d r, Vector3d v, double ut, Body body, StopPredictorFn predict, double wanted, Vector3d target,
             DeorbitPlan lo, DeorbitPlan hi, ref int calls)
         {
             double tLo = lo.BurnUT, fLo = lo.AlongMissM;
@@ -137,12 +161,12 @@ namespace K2D2.Landing.Precision
                 double t = tLo - fLo * (tHi - tLo) / (fHi - fLo);
                 if (!(t > tLo && t < tHi))
                     t = 0.5 * (tLo + tHi);
-                DeorbitPlan p = Evaluate(r, v, ut, body, vehicle, target, t, ref calls);
+                DeorbitPlan p = Evaluate(r, v, ut, body, predict, wanted, target, t, ref calls);
                 if (!p.Ok)
                 {
                     // Bisect instead, once; a second refusal keeps the best so far.
                     t = 0.5 * (tLo + tHi);
-                    p = Evaluate(r, v, ut, body, vehicle, target, t, ref calls);
+                    p = Evaluate(r, v, ut, body, predict, wanted, target, t, ref calls);
                     if (!p.Ok)
                         break;
                 }
@@ -166,12 +190,12 @@ namespace K2D2.Landing.Precision
 
         // Plan for a burn at burnUT: prediction, then the miss split along the stop point's
         // surface-relative ground track. A refused prediction is a plan with Ok false.
-        static DeorbitPlan Evaluate(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d target,
+        static DeorbitPlan Evaluate(Vector3d r, Vector3d v, double ut, Body body, StopPredictorFn predict, double wanted, Vector3d target,
             double burnUT, ref int calls)
         {
-            Impulse burn = Burn(r, v, ut, body, burnUT);
+            Impulse burn = Burn(r, v, ut, body, burnUT, wanted);
             calls++;
-            StopPrediction stop = StopPointPredictor.Predict(r, v, ut, body, vehicle, burn);
+            StopPrediction stop = predict(r, v, ut, burn);
             var plan = new DeorbitPlan { Ok = stop.Ok, Reason = stop.Reason, BurnUT = burnUT, DeltaV = burn.DeltaV, Stop = stop };
             if (!stop.Ok)
                 return plan;
@@ -209,14 +233,13 @@ namespace K2D2.Landing.Precision
             return true;
         }
 
-        // Retrograde impulse at burnUT that lowers the periapsis to R − DescentPeriapsisMargin.
+        // Retrograde impulse at burnUT that lowers the periapsis to `wanted` (R − DescentPeriapsisMargin for a powered descent).
         // Zero when the periapsis is already that low.
-        static Impulse Burn(Vector3d r, Vector3d v, double ut, Body body, double burnUT)
+        static Impulse Burn(Vector3d r, Vector3d v, double ut, Body body, double burnUT, double wanted)
         {
             Vector3d rb = r, vb = v;
             if (burnUT > ut)
                 KeplerPropagator.Propagate(r, v, body.Mu, burnUT - ut, out rb, out vb);
-            double wanted = body.Radius - DescentPeriapsisMargin;
             if (Periapsis(rb, vb, body.Mu) <= wanted)
                 return new Impulse { UT = burnUT, DeltaV = new Vector3d(0, 0, 0) };
             // Periapsis grows with the speed kept along the current velocity: bisect the factor.

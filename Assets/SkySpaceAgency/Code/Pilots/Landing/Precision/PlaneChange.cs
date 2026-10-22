@@ -64,10 +64,17 @@ namespace K2D2.Landing.Precision
         /// if it fails. Plan does not check the vessel's Δv; consumers re-plan the deorbit after
         /// the burn with DeorbitSearch.Find from EarliestDeorbitUT or later.
         /// </summary>
-        public static PlaneChangePlan Plan(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d targetDirNow)
+        public static PlaneChangePlan Plan(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d targetDirNow) =>
+            Plan(r, v, ut, body, vehicle, targetDirNow,
+                (rr, vv, uu, imp) => StopPointPredictor.Predict(rr, vv, uu, body, vehicle, imp),
+                body.Radius - DeorbitSearch.DescentPeriapsisMargin);
+
+        /// <summary>The same plan with any stop predictor and descent periapsis radius (vehicle: thrust and mass of the plane-change burn).</summary>
+        public static PlaneChangePlan Plan(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Vector3d targetDirNow,
+            StopPredictorFn predict, double descentPeriapsisRadius)
         {
             Vector3d target = targetDirNow / targetDirNow.magnitude;
-            DeorbitPlan current = DeorbitSearch.Find(r, v, ut, body, vehicle, target, ut);
+            DeorbitPlan current = DeorbitSearch.Find(r, v, ut, body, target, ut, predict, descentPeriapsisRadius);
             OrbitElements el = OrbitMath.Elements(r, v, body.Mu);
             Vector3d n = el.AngularMomentum.normalized;
             var plan = new PlaneChangePlan
@@ -100,12 +107,12 @@ namespace K2D2.Landing.Precision
             bool plusFirst = leadPlus >= MinLead && (leadMinus < MinLead || leadPlus <= leadMinus);
             int[] sides = plusFirst ? new[] { 1, -1 } : new[] { -1, 1 };
 
-            PlaneChangePlan first = Iterate(plan, sides[0], r, v, ut, body, vehicle, target, n, current.Stop.StopUT);
+            PlaneChangePlan first = Iterate(plan, sides[0], r, v, ut, body, vehicle, target, n, current.Stop.StopUT, predict, descentPeriapsisRadius);
             if (first.Ok)
                 return first;
             PlaneChangePlan second = first;
             second.Ok = false;
-            second = Iterate(second, sides[1], r, v, ut, body, vehicle, target, n, current.Stop.StopUT);
+            second = Iterate(second, sides[1], r, v, ut, body, vehicle, target, n, current.Stop.StopUT, predict, descentPeriapsisRadius);
             if (second.Ok)
                 return second;
             // Both failed: report the earlier node's attempt, with the total cost.
@@ -119,7 +126,7 @@ namespace K2D2.Landing.Precision
         // The iteration for one node: side +1 is along n × aim, −1 the opposite one. Iterations
         // and PredictCalls add to those already in plan.
         static PlaneChangePlan Iterate(PlaneChangePlan plan, int side, Vector3d r, Vector3d v, double ut, Body body,
-            Vehicle vehicle, Vector3d target, Vector3d n, double arrival)
+            Vehicle vehicle, Vector3d target, Vector3d n, double arrival, StopPredictorFn predict, double descentPeriapsisRadius)
         {
             Vector3d aimOffset = new Vector3d(0, 0, 0);  // −(the stop's drift out of the plane), unit sphere
             for (int i = 1; i <= MaxIterations; i++)
@@ -146,8 +153,8 @@ namespace K2D2.Landing.Precision
                 double dv = (vNew - vb).magnitude;
 
                 Vector3d targetAtBurn = SurfaceGeometry.AtTime(target, body.Omega, burnUT - ut);
-                DeorbitPlan after = DeorbitSearch.Find(rb, vNew, burnUT, body, vehicle, targetAtBurn,
-                    EarliestDeorbitUT(burnUT, dv, vehicle));
+                DeorbitPlan after = DeorbitSearch.Find(rb, vNew, burnUT, body, targetAtBurn,
+                    EarliestDeorbitUT(burnUT, dv, vehicle), predict, descentPeriapsisRadius);
                 plan.PredictCalls += after.PredictCalls;
                 plan.BurnUT = burnUT;
                 plan.BurnStartUT = BurnTiming.CenteredStart(burnUT,
