@@ -16,7 +16,7 @@ namespace K2D2.Landing.Precision
         public const double MaxRatio = 2;
         // Below this surface speed of the rotation × an hour, the sign changes nothing (m).
         public const double NegligibleM = 10;
-        public const string DisagreeMessage = "Rotation direction measurements disagree: precision landing refused.";
+        public const string DisagreeMessage = "Rotation direction measurements disagree: measuring again, press Land again in a few seconds.";
 
         /// <summary>
         /// The surface-speed calibration and the probe both measured the sign (non-zero) and found

@@ -48,6 +48,10 @@ namespace K2D2.Landing
         internal string precision_final_message = null;
         float next_precision_readout = 0;
         bool precision_brake_full_logged = false;
+        // Brake throttle transitions (85 % <-> 100 %): only the first MaxLoggedThrottleSwitches are logged.
+        const int MaxLoggedThrottleSwitches = 10;
+        float brake_throttle_last = float.NaN;
+        int brake_throttle_switches = 0;
 
         // Terminal guidance.
         bool guidance_enabled = false;
@@ -86,6 +90,9 @@ namespace K2D2.Landing
             precision_distance_label = "Predicted Distance";
             precision_final_message = null;
             precision_brake_full_logged = false;
+            brake_throttle_last = float.NaN;
+            brake_throttle_switches = 0;
+            ClearRotationMeasurements();
             guidance_enabled = false;
             guidance_started = false;
             guidance_final_logged = false;
@@ -598,6 +605,8 @@ namespace K2D2.Landing
         {
             brake_burned_start = burn_dV.burned_dV;
             precision_brake_full_logged = false;
+            brake_throttle_last = float.NaN;
+            brake_throttle_switches = 0;
             double now = GeneralTools.Current_UT;
             logger.LogInfo($"[Landing] precision: phase brake start: altitude {altitude:n0} m, speed {current_vessel.VesselVehicle.SurfaceSpeed:n1} m/s, " +
                 $"planned start +{startBurn_UT - now:n1} s, last predicted distance {F(precision_distance_m)} m, " +
@@ -614,12 +623,22 @@ namespace K2D2.Landing
                 logger.LogWarning($"[Landing] precision: brake at full throttle: the brake simulation stops below the hand-over height " +
                     $"({brake_result.Status}, stop {brake_result.StopAltitude:n0} m up) at altitude {altitude:n0} m");
             }
+            if (!float.IsNaN(brake_throttle_last) && throttle != brake_throttle_last)
+            {
+                brake_throttle_switches++;
+                if (brake_throttle_switches <= MaxLoggedThrottleSwitches)
+                    logger.LogInfo($"[Landing] precision: brake throttle -> {throttle * 100:n0} % at UT {GeneralTools.Current_UT:n1}, " +
+                        $"altitude {altitude:n0} m (switch {brake_throttle_switches})");
+            }
+            brake_throttle_last = throttle;
             brake.precision_brake_throttle = throttle;
         }
 
         void OnPrecisionHandOver()
         {
             terminal_burned_start = burn_dV.burned_dV;
+            logger.LogInfo($"[Landing] precision: brake throttle switches: {brake_throttle_switches}" +
+                (brake_throttle_switches > MaxLoggedThrottleSwitches ? $" (only the first {MaxLoggedThrottleSwitches} logged)" : ""));
             guidance_started = false;
             guidance_final_logged = false;
             drop_debounce.Reset();

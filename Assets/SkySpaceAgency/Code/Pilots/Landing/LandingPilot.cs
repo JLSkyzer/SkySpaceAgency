@@ -331,6 +331,19 @@ namespace K2D2.Landing
         internal int probe_sign = 0;
         internal string probe_sign_body = null;
 
+        // Forgets both measurements (and the sign they set) so that the next start measures again.
+        internal void ClearRotationMeasurements()
+        {
+            speed_sign = 0;
+            speed_sign_body = null;
+            probe_sign = 0;
+            probe_sign_body = null;
+            rotation_sign = 1;
+            rotation_sign_body = null;
+            probe_body = null;
+            probe_failure = null;
+        }
+
         internal int SpeedSignFor(string body) => speed_sign_body == body ? speed_sign : 0;
         internal int ProbeSignFor(string body) => probe_sign_body == body ? probe_sign : 0;
 

@@ -174,8 +174,12 @@ namespace K2D2.Landing
                     $"rotation sign {rotationSign}, calibrated {signCalibrated} (surface speed {Measured(pilot.SpeedSignFor(body.Name))}, " +
                     $"rotation probe {Measured(pilot.ProbeSignFor(body.Name))})");
             // Both measurements made and opposite: neither can be trusted.
+            // They are forgotten, so that one bad reading does not refuse every later start.
             if (RotationProbe.Disagree(pilot.SpeedSignFor(body.Name), pilot.ProbeSignFor(body.Name)))
+            {
+                pilot.ClearRotationMeasurements();
                 return RotationProbe.DisagreeMessage;
+            }
 
             if (!Finite(lat) || !Finite(lonA) || !Finite(lonB) || !Finite(latUp))
                 return "The game did not return the vessel's latitude/longitude.";

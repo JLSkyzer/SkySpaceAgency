@@ -200,7 +200,7 @@ public class PrecisionSafetyTests
         Assert.IsFalse(RotationProbe.Disagree(-1, -1));
         Assert.IsFalse(RotationProbe.Disagree(0, -1), "no surface-speed measurement");
         Assert.IsFalse(RotationProbe.Disagree(1, 0), "no probe measurement");
-        Assert.AreEqual("Rotation direction measurements disagree: precision landing refused.", RotationProbe.DisagreeMessage);
+        Assert.AreEqual("Rotation direction measurements disagree: measuring again, press Land again in a few seconds.", RotationProbe.DisagreeMessage);
     }
 
     [Test]
