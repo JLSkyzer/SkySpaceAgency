@@ -1073,6 +1073,10 @@ namespace K2D2.Landing
             {
                 if (PrecisionPhaseMode(mode))
                     OnPrecisionPhaseEnd();
+                // A phase end may stop the run (a precision return whose deorbit fell short):
+                // nextMode() from Off would start it again.
+                if (!isRunning)
+                    return;
                 if (reentry_run && mode == Mode.MidCourse)
                     setMode(Mode.ReentryCoast);
                 else if (reentry_run && mode == Mode.Jettison)

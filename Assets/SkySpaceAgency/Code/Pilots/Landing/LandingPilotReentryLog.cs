@@ -1,15 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using K2D2.KSPService;
 using K2D2.Landing.Braking;
 using K2D2.Landing.Precision;
-using K2D2.OrbitPlanning;
 using KSP.Modules;
 using KSP.Sim;
 using KSP.Sim.impl;
-using KSP2FlightAssistant.MathLibrary;
 using KTools;
 
 namespace K2D2.Landing

@@ -39,11 +39,6 @@ namespace K2D2.Landing.Precision
 
         public StopPredictorFn Fn => (r, v, ut, impulse) => Predict(r, v, ut, impulse, out _);
 
-        public void ResetCounts()
-        {
-            Calls = NeverOpen = Succeeded = 0;
-        }
-
         public StopPrediction Predict(Vector3d r, Vector3d v, double ut, Impulse? impulse, out ReentryTrace trace) =>
             Predict(r, v, ut, impulse, Capsule, out trace);
 

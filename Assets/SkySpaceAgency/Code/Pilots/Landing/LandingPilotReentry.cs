@@ -463,6 +463,32 @@ namespace K2D2.Landing
             {
                 logger.LogWarning($"[Landing] reentry: phase {name} end: Δv used {used:n2} m/s, readout failed ({e.GetType().Name}: {e.Message})");
             }
+            if ((mode == Mode.Deorbit || mode == Mode.MidCourse) && EntersAtmosphereNow() == false)
+            {
+                logger.LogWarning($"[Landing] reentry: phase {name} end: the orbit does not enter the atmosphere ({ShortDeorbitMessage})");
+                StopWithError(ShortDeorbitMessage);
+            }
+        }
+
+        public const string ShortDeorbitMessage = "Deorbit fell short: the orbit does not enter the atmosphere. Precision return stopped.";
+
+        // The current orbit's periapsis is inside the atmosphere (or a collision is predicted);
+        // null when the orbit cannot be read.
+        bool? EntersAtmosphereNow()
+        {
+            try
+            {
+                IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
+                var body = orbit.referenceBody;
+                double t = GeneralTools.Current_UT;
+                OrbitElements el = OrbitMath.Elements(orbit.GetRelativePositionAtUTZup(t), orbit.GetOrbitalVelocityAtUTZup(t), body.gravParameter);
+                return ReentryFailurePolicy.EntersAtmosphere(el.PeriapsisRadius, body.radius, body.atmosphereDepth, collision_detected);
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning($"[Landing] reentry: orbit not read after the phase ({e.GetType().Name}: {e.Message})");
+                return null;
+            }
         }
 
         void LogReentryPhaseEnd(string name, double used)
@@ -539,6 +565,8 @@ namespace K2D2.Landing
                     current_vessel.SetThrottle(0);
                     Warn(ReentryFailurePolicy.SkipMessage(reason));
                     OnReentryPhaseEnd();
+                    if (!isRunning)
+                        break;   // the deorbit fell short: stopped
                     current_executor.setController(null);
                     setMode(Mode.ReentryCoast);
                     break;
@@ -696,14 +724,42 @@ namespace K2D2.Landing
         // The landing pilot survives the vessel change of the jettison split (the game makes the
         // capsule's piece active, VesselChangedMessage resets every pilot) when the new active
         // vessel holds the capsule; Jettison checks the rest.
+        //
+        // Kept whenever the stage has fired, in Jettison or in Parachute (a message one frame late):
+        // Jettison's own checks decide (VerifySeconds, one switch, capsule_lost), and so does the
+        // check after it. Stopped only when the new active vessel is known to hold none of the
+        // capsule's or the service module's parts (the player switched to another vessel); a check
+        // that throws keeps the landing.
         internal bool KeepThroughVesselChange()
         {
-            if (!(reentry_run && isRunning && mode == Mode.Jettison && jettison.Activated))
+            if (!(reentry_run && isRunning && jettison.Activated && (mode == Mode.Jettison || mode == Mode.Parachute)))
                 return false;
-            bool holds = ActiveHoldsCapsule() == true;
-            logger.LogInfo($"[Landing] reentry: vessel change during the jettison: the active vessel holds the capsule {holds} -> " +
-                (holds ? "the landing goes on" : "the landing stops"));
-            return holds;
+            bool? unrelated = ActiveHoldsNoneOfTheStack();
+            bool keep = unrelated != true;
+            logger.LogInfo($"[Landing] reentry: vessel change in {mode} after the jettison stage: the active vessel is unrelated to the stack " +
+                $"{(unrelated.HasValue ? unrelated.Value.ToString() : "unknown")} -> {(keep ? "the landing goes on" : "the landing stops")}");
+            return keep;
+        }
+
+        // The active vessel holds none of the jettison plan's parts (capsule or service module);
+        // null when the game does not tell.
+        bool? ActiveHoldsNoneOfTheStack()
+        {
+            try
+            {
+                VesselComponent active = current_vessel?.GetActiveSimVessel();
+                if (active?.SimulationObject?.PartOwner == null || jettison.plan.CapsuleIds == null || jettison.plan.ServiceIds == null)
+                    return null;
+                foreach (PartComponent part in active.SimulationObject.PartOwner.Parts)
+                    if (part != null && (jettison.plan.CapsuleIds.Contains(part.Guid) || jettison.plan.ServiceIds.Contains(part.Guid)))
+                        return false;
+                return true;
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning($"[Landing] reentry: vessel change check failed ({e.GetType().Name}: {e.Message})");
+                return null;
+            }
         }
 
         // ---- Descent ----
@@ -724,6 +780,14 @@ namespace K2D2.Landing
                 string message = $"{e.GetType().Name}: {e.Message}";
                 if (reentry_errors_logged.Add(message))
                     logger.LogWarning($"[Landing] reentry: update failed in {mode}: {e}");
+                // No warp toward a jettison that may not happen.
+                if (mode == Mode.ReentryCoast && !reentry_warp_stopped)
+                {
+                    reentry_warp_stopped = true;
+                    TimeWarpTools.SetRateIndex(0, false);
+                    current_executor.setController(null);
+                    logger.LogWarning("[Landing] reentry: coast: warp stopped after an update error");
+                }
                 reentry_error_frames++;
                 if (reentry_error_frames < MaxReentryErrors || !ReentryMode(mode))
                     return;
