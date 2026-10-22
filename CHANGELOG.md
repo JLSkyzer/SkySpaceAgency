@@ -7,7 +7,16 @@
 - **Landing target picker** (Land tab, precision landing part 1).
   - **Pick on map**: the button opens the map view and waits for a click on the body; the latitude and longitude of the clicked point become the target. Esc or a second click cancels. A click on another body than the one orbited is refused. The click does not add a waypoint of its own; if Redux's Waypoints window also saves it, the tab says so.
   - **Target list**: KSC (the launch pad, read from the game) first on Kerbin, then the picked point, the player's waypoints and the `[Mission]` waypoints. The saved target is never replaced by the list: when it matches no entry it shows as "Custom (lat, lon)".
-  - **Atmospheric bodies**: the target picker is now shown there too, so a target can be set; precision itself stays unavailable until parachute targeting (part 3).
+  - **Atmospheric bodies**: the target picker is now shown there too (used by the parachute precision return below).
+
+- **Parachute precision return** (Land tab, Parachute mode + Precision, precision landing part 3, 2026-10-22; not yet flown in game). From a closed orbit above the atmosphere (Kerbin), the pilot brings the capsule back under parachutes close to the target (KSC by default).
+  - **Plan at start**: plane change if the target is not under the orbit, deorbit time and size from a reentry model (atmosphere read from the game, the capsule's drag at retrograde, the parachutes' opening rules), one mid-course correction before the atmosphere. The tab shows the Δv of each burn and the expected accuracy ("expected within about N km", from the model's sensitivity to drag; about 20 km until calibrated).
+  - **Jettison**: after the correction and above the atmosphere, the pilot fires the next stage itself, only when that stage holds the decoupler between the capsule and the service module and nothing else on the capsule side. It refuses at start when the stage would also fire a parachute, drop the heat shield, leave the control part on the service module, or use a docking port as the separator ("Cannot jettison the service module safely: …"). It leaves time warp before staging and checks the part counts 3 s later.
+  - **Reentry**: the existing parachute descent (retrograde hold, chutes armed, opened by the game, legs). The predicted distance is refreshed every 5 s before the atmosphere; the final distance is shown after landing.
+  - **Calibration**: after a return, the tab suggests the reentry drag scale that would have matched the actual touchdown ("Suggested reentry drag scale: x.xx (current y.yy)") with an Apply button; the setting is never changed by itself (also in ADVANCED). Once calibrated, the expected accuracy uses ±10 % drag instead of ±20 %.
+  - **Refusals**: no engine able to deorbit, orbit too low, not enough Δv, parachutes that would never open in the model, a body rotation direction that cannot be measured. Plain Parachute mode stays available.
+  - **Failures**: once the deorbit has started, a failure lands under parachutes without target ("Precision return aborted: …"). A deorbit that ends without entering the atmosphere stops the pilot ("Deorbit fell short …"); if the capsule is not the active vessel after the split, the pilot stops and says so.
+  - The precision toggle is enabled on atmospheric bodies in Parachute mode only; Propulsive mode keeps it off.
 
 - **VAB tools** (VAB AppBar → "SkySpaceAgency VAB tools"), a small window that only opens in the VAB. Files go to `mods/SkySpaceAgency/vab/`.
   - **Export** writes `vab/exports/<vessel>_<date>.json`, made to be handed to an AI:
@@ -43,7 +52,6 @@
   - Refuses a starting orbit that is too low for the terrain under it (raise it with the Orbit tab) or whose periapsis is above 100 km.
   - Once the vessel is on an impact course, a precision failure never turns the pilot off: the correction is skipped, or the pilot lands without target.
   - The old empirical rotation factor (×1.307) and the 36-sample deorbit scan are gone, with their Extend/Shorten/RCS fine-correction settings.
-- **Closed-loop burns align early and manage time warp** (Lift circularization, Node tab Circularize buttons, Orbit-tab plans, precision burns). The vessel turns toward the burn during the warp, the warp stops at a lead based on its measured turn rate (20 to 120 s), a late alignment waits instead of burning off-centre (and fails with a message after a while if the vessel never aligns), and during the burn the mod caps the warp (and raises it for long burns when auto-warp is on) so it cannot overshoot; the throttle accounts for the frame length.
 
 - **Precision landing safety** (2026-10-21, airless bodies).
   - Once the deorbit has lowered the orbit into the ground, a failed precision burn no longer stops the autopilot. A failed mid-course correction is skipped ("Course correction skipped: …") and the descent goes on with the brake and the terminal guidance. A deorbit burn that fails after lowering the orbit switches to a landing without target ("Precision landing aborted: …. Landing without target."). A burn that fails while the orbit still clears the ground stops as before.

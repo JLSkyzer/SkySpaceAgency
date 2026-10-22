@@ -15,7 +15,7 @@ K2-D2 gives you one panel (`Alt-O` or the AppBar icon) with a set of autopilots:
 - **Node** - executes the next maneuver node, with auto-circularize at Ap/Pe and one-click buttons to create a node at the next apoapsis or periapsis
 - **Orbit** - set a target apoapsis, periapsis and/or inclination and create every maneuver node needed to get there in one click; execute them with Node
 - **Lift** - automated ascent guidance with a configurable altitude/heading profile, an optional roll program, and automatic circularization at the end of the climb
-- **Landing** - automated descent, braking, and touchdown (propulsive with automatic legs, or parachute on bodies with an atmosphere), with an optional Precision Landing mode (currently bodies with no atmosphere only) that targets a specific site via Redux's waypoint system
+- **Landing** - automated descent, braking, and touchdown (propulsive with automatic legs, or parachute on bodies with an atmosphere), with an optional Precision Landing mode that targets a site picked on the map, the KSC or a waypoint: powered precision landing on bodies with no atmosphere, parachute precision return (with automatic service module jettison) on bodies with an atmosphere
 - **Docking** - automated final approach and docking
 - **Attitude** - point-and-hold attitude control (a simple plane autopilot)
 - **VAB tools** - in the VAB: export the rocket to JSON for an AI (summary with Δv per stage), import a corrected rocket (only unlocked parts, with an automatic backup), and dump the parts of the campaign
@@ -28,13 +28,13 @@ This is a from-scratch port of the original code onto Redux's APIs, not a compat
 - Full UI - all tabs, styling, custom controls
 - Node autopilot
 - Lift/ascent autopilot - flies the configured profile to orbit, including an optional roll program, then creates and flies its own circularization node
-- Landing autopilot - descent, braking, and touchdown, including collision detection and precision landing on bodies with no atmosphere
+- Landing autopilot - descent, braking, and touchdown, including collision detection, precision landing on bodies with no atmosphere and parachute precision returns on bodies with an atmosphere
 - Docking autopilot - final approach and main-thrust kill-speed/brake
 - Attitude hold
 - Auto-staging, with a player-facing on/off toggle in the window's title bar
 
 **Known limitations:**
-- Precision Landing on atmospheric bodies is still a work in progress: the target can be chosen there (map click, KSC, waypoints), but precision itself is only available on bodies with no atmosphere for now.
+- Parachute precision return (atmospheric bodies) uses a reentry model whose drag is uncertain: expect about 20 km until the suggested drag scale is applied after a first return. No steering under canopy; heating is not modelled (the entry periapsis is about 35 % of the atmosphere depth).
 - Landing's braking plan ignores atmospheric drag (which only helps) and assumes the active engines stay as they are: auto-staging during the landing burn is not planned for.
 - VAB tools: the import replaces the main rocket through the game's workspace restore (or, as a fallback, its assembly loader); it is not an undo step - the `before_import_…` backup in `vab/exports/` is the way back. Engine Isp in the parts dump comes from the part definitions and may differ from the VAB's figures.
 
