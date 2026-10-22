@@ -24,9 +24,12 @@ namespace K2D2.Landing
     // - It and the semi -> full switch read VesselComponent.AltitudeFromSurface against
     //   deployAltitude: above the ground, not above sea level as documented.
     // - SAFE mode (DeploymentMode 0) opens only while the safety state is SAFE, which
-    //   UpdateDeploySafety sets when Mach < MachSafetyScalar (and the heat flux is under
-    //   FluxSafetyScalar, not modelled). Module_Parachute.MaxSafeVelocityAtLocalBody() is a
-    //   different, display formula evaluated at the vessel's current pressure (0 in vacuum).
+    //   UpdateDeploySafety grants when Mach < MachSafetyScalar (and the heat flux is under
+    //   FluxSafetyScalar), and also, at any Mach, while the chute is cooling down. Only the
+    //   Mach limit is modelled (Chutes.MaxDeployMach, against the local sound speed); the
+    //   thermal terms are not, and the log says so. RISKY / IMMEDIATE have no Mach limit, only
+    //   the thermal one, not modelled either. Module_Parachute.MaxSafeVelocityAtLocalBody() is
+    //   a different, display formula evaluated at the vessel's current pressure (0 in vacuum).
     // - Data_Drag.GetEstimatedChuteDragForCube (the part manager's chute drag) is
     //   ComputeAreaDragSimple(cube, up, Mach) * DragCubeMultiplier * DragCurvePseudoReynolds(ρ·100)
     //   * DragMultiplier at 1000 m and 100 m/s: the chute drag area below uses the same formula.
@@ -129,7 +132,7 @@ namespace K2D2.Landing
             if (!(table.At(0.5) > 0))
                 return "The capsule's drag area is zero.";
 
-            Chutes chutes = ReadChutes(vessel, body, air, precision, side.Ids, chuteData, names, out string chuteLog);
+            Chutes chutes = ReadChutes(vessel, body, air, precision, side.Ids, chuteData, names, out string chuteLog, out string mixedSources);
             if (!(chutes.Count > 0) || !(chutes.AreaDeployed > 0))
                 return "The capsule's parachutes have no drag area.";
 
@@ -153,6 +156,9 @@ namespace K2D2.Landing
                     $"DragMultiplier {PhysicsSettings.DragMultiplier:0.###}, pseudo-Reynolds {pseudoReynolds:0.###} at ρ·v {RepresentativeRhoV:n0} " +
                     $"(curve: {string.Join(", ", LoggedRhoV.Select(x => $"{x:n0} -> {PhysicsSettings.DragCurvePseudoReynolds.Evaluate(x):0.###}"))}) | drag scale {dragScale:0.00}");
                 logger.LogInfo("[Landing] reentry: " + chuteLog);
+                if (mixedSources != null)
+                    logger.LogWarning("[Landing] reentry: chute drag areas come from mixed sources (" + mixedSources +
+                        "): the drag cube and areaDeployed may not be in the same scale, and the semi area fraction counts the cube chutes only");
             }
 
             ctx = new ReentryContext
@@ -211,14 +217,17 @@ namespace K2D2.Landing
             }
         }
 
-        static readonly MethodInfo ComputeAreaDragSimple =
-            typeof(Data_Drag).GetMethod("ComputeAreaDragSimple", BindingFlags.Instance | BindingFlags.NonPublic);
-
         // The capsule's parachutes: drag area from their DEPLOYED and SEMIDEPLOYED drag cubes, as
         // the game estimates it (else areaDeployed), opening gates from the largest chute.
         static Chutes ReadChutes(VesselComponent vessel, CelestialBodyComponent body, Atmosphere air, PrecisionContext precision,
-            HashSet<string> capsuleIds, Dictionary<string, Data_Parachute> chuteData, Dictionary<string, string> names, out string log)
+            HashSet<string> capsuleIds, Dictionary<string, Data_Parachute> chuteData, Dictionary<string, string> names, out string log,
+            out string mixedSources)
         {
+            mixedSources = null;
+            // Resolved here, inside TryBuild's try: a reflection failure is a refusal, not a type
+            // initializer exception. Null = not found: areaDeployed is used.
+            MethodInfo computeAreaDragSimple =
+                typeof(Data_Drag).GetMethod("ComputeAreaDragSimple", BindingFlags.Instance | BindingFlags.NonPublic);
             var behaviors = new Dictionary<string, PartBehavior>();
             foreach (PartBehavior b in vessel.SimulationObject.objVesselBehavior.parts)
                 if (b != null && b.Model != null)
@@ -234,7 +243,7 @@ namespace K2D2.Landing
 
             var lines = new List<string>();
             double totalFull = 0, totalSemi = 0, largest = -1;
-            int count = 0;
+            int count = 0, fromCube = 0;
             Data_Parachute main = null;
             double mainMaxSafe = double.NaN;
             foreach (string id in capsuleIds)
@@ -245,7 +254,7 @@ namespace K2D2.Landing
                 string source = "areaDeployed";
                 if (components.TryGetValue(id, out PartComponent part)
                     && part.TryGetModuleData<PartComponentModule_Drag, Data_Drag>(out Data_Drag dragData) && dragData?.cubes != null
-                    && ComputeAreaDragSimple != null)
+                    && computeAreaDragSimple != null)
                 {
                     try
                     {
@@ -254,9 +263,9 @@ namespace K2D2.Landing
                             if (cube == null)
                                 continue;
                             if (cube.Name == "DEPLOYED")
-                                full = Convert.ToDouble(ComputeAreaDragSimple.Invoke(dragData, new object[] { cube, Vector3.up, (double)mach1k })) * estimateFactor;
+                                full = Convert.ToDouble(computeAreaDragSimple.Invoke(dragData, new object[] { cube, Vector3.up, (double)mach1k })) * estimateFactor;
                             else if (cube.Name == "SEMIDEPLOYED")
-                                semi = Convert.ToDouble(ComputeAreaDragSimple.Invoke(dragData, new object[] { cube, Vector3.up, (double)mach1k })) * estimateFactor;
+                                semi = Convert.ToDouble(computeAreaDragSimple.Invoke(dragData, new object[] { cube, Vector3.up, (double)mach1k })) * estimateFactor;
                         }
                     }
                     catch (Exception e)
@@ -271,6 +280,8 @@ namespace K2D2.Landing
                 if (!(area > 0))
                     continue;
                 count++;
+                if (Finite(full) && full > 0)
+                    fromCube++;
                 totalFull += area;
                 if (Finite(semi) && semi > 0 && Finite(full) && full > 0)
                     totalSemi += semi;
@@ -305,24 +316,18 @@ namespace K2D2.Landing
             chutes.DeployAltitude = main.deployAltitude.GetValue();
             chutes.MinDeploySpeed = main.minimumSpeedToDeploy > 0 ? Math.Sqrt(main.minimumSpeedToDeploy) : 0;
 
-            // SAFE: Mach < MachSafetyScalar, as one air speed at the lowest sound speed between the
-            // target's terrain and the highest altitude where the chute may open (pressure gate or
-            // deployAltitude above the target). RISKY / IMMEDIATE: no speed limit (0).
+            if (fromCube > 0 && fromCube < count)
+                mixedSources = $"{fromCube} of {count} from the DEPLOYED cube, the others from areaDeployed";
+
+            // SAFE: Mach < MachSafetyScalar, checked by the predictor against the sound speed at the
+            // current altitude (the game's own test). Not modelled: the heat flux limit
+            // (FluxSafetyScalar) and the SAFE state granted at any Mach while the chute cools.
+            // RISKY / IMMEDIATE: no Mach limit; their thermal limit is not modelled.
             Data_Parachute.DeployMode mode = main.DeploymentMode.GetValue();
             double terrain = Math.Max(0, precision.TargetTerrainM);
             double gate = PressureGateAltitude(air, chutes.MinPressureToOpen);
-            double top = Math.Max(Finite(gate) ? gate : terrain, terrain + chutes.DeployAltitude);
-            double aMin = double.PositiveInfinity;
-            for (double h = terrain; h <= Math.Min(top, air.Depth); h += SampleStep)
-            {
-                double a = air.SoundSpeedAt(h);
-                if (a > 0)
-                    aMin = Math.Min(aMin, a);
-            }
-            if (double.IsInfinity(aMin))
-                aMin = air.SoundSpeedAt(terrain);
-            chutes.MaxDeploySpeed = mode == Data_Parachute.DeployMode.SAFE && main.MachSafetyScalar > 0 && aMin > 0
-                ? main.MachSafetyScalar * aMin : 0;
+            chutes.MaxDeploySpeed = 0;
+            chutes.MaxDeployMach = mode == Data_Parachute.DeployMode.SAFE && main.MachSafetyScalar > 0 ? main.MachSafetyScalar : 0;
 
             bool mixed = chuteData.Where(kv => capsuleIds.Contains(kv.Key)).Select(kv => kv.Value).Any(d =>
                 d.minAirPressureToOpen.GetValue() != main.minAirPressureToOpen.GetValue() || d.deployAltitude.GetValue() != main.deployAltitude.GetValue()
@@ -333,10 +338,12 @@ namespace K2D2.Landing
                 $"full at {chutes.DeployAltitude:n0} m above the ground (the game reads AltitudeFromSurface; " +
                 $"{terrain + chutes.DeployAltitude:n0} m above sea level at the target, {chutes.DeployAltitude:n0} m if it were sea level), " +
                 $"air speed >= {chutes.MinDeploySpeed:0.0} m/s, " +
-                (chutes.MaxDeploySpeed > 0
-                    ? $"<= {chutes.MaxDeploySpeed:n0} m/s (mode {mode}: Mach {main.MachSafetyScalar:0.###} × lowest sound speed {aMin:n0} m/s from {terrain:n0} to {top:n0} m; " +
-                      $"MaxSafeVelocityAtLocalBody now {mainMaxSafe:n0} m/s, not used)"
-                    : $"no upper limit (mode {mode})") +
+                (chutes.MaxDeployMach > 0
+                    ? $"Mach <= {chutes.MaxDeployMach:0.###} at the local sound speed (mode {mode}: MachSafetyScalar; heat flux limit (FluxSafetyScalar " +
+                      $"{main.FluxSafetyScalar:0.###}) and the SAFE state while the chute cools not modelled; MaxSafeVelocityAtLocalBody now {mainMaxSafe:n0} m/s, not used)"
+                    : mode == Data_Parachute.DeployMode.RISKY
+                        ? $"no Mach limit (mode {mode}: thermal limit not modelled)"
+                        : $"no upper limit (mode {mode}: thermal limit not modelled)") +
                 (mixed ? " - chutes with different settings: drogues and mains are modelled as one" : "") +
                 " | " + string.Join("; ", lines);
             return chutes;

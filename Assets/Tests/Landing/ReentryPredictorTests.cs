@@ -319,4 +319,46 @@ public class ReentryPredictorTests
         Assert.IsTrue(mach.Ok, mach.Reason);
         Assert.Less(machRange, flatRange - 1000);
     }
+
+    [Test]
+    public void MaxDeployMach_OpensUnderTheMachLimitAtTheLocalSoundSpeed()
+    {
+        // Sound speed 340 m/s above 8 km, 260 m/s below (linear in between over one sample).
+        Atmosphere air = Air();
+        for (int i = 0; i < air.SoundSpeed.Length; i++)
+            air.SoundSpeed[i] = i * air.SampleStep >= 8000 ? 340 : 260;
+        ReentryVehicle vehicle = Capsule(maxSpeed: 0);
+        vehicle.Chutes.MaxDeployMach = 0.5;
+        StopPrediction p = Predict(true, air, vehicle, out ReentryTrace trace, out _);
+        double mach = trace.SemiAirSpeed / air.SoundSpeedAt(trace.SemiAltitude);
+        TestContext.Out.WriteLine($"Mach 0.5 limit: ok {p.Ok} ({p.Reason}), {trace}, Mach at semi {mach:F3}");
+        Assert.IsTrue(p.Ok, p.Reason);
+        Assert.LessOrEqual(mach, 0.5 + 1e-9);
+        Assert.Greater(mach, 0.45, "opens as soon as the limit allows");
+
+        // 0 and NaN: no limit, the same opening as without the field.
+        ReentryPredictor.Predict(R0, V0, UT, Kerbin(true), air, Capsule(maxSpeed: 0), null, out ReentryTrace none);
+        foreach (double unlimited in new[] { 0, double.NaN })
+        {
+            ReentryVehicle v = Capsule(maxSpeed: 0);
+            v.Chutes.MaxDeployMach = unlimited;
+            ReentryPredictor.Predict(R0, V0, UT, Kerbin(true), air, v, null, out ReentryTrace t);
+            Assert.AreEqual(none.SemiUT, t.SemiUT, 1e-9, "MaxDeployMach " + unlimited);
+        }
+        Assert.Less(none.SemiUT, trace.SemiUT);
+        Assert.Greater(none.SemiAirSpeed / air.SoundSpeedAt(none.SemiAltitude), 0.5);
+    }
+
+    [Test]
+    public void MaxDeployMachBelowTheDescentMach_NeverOpens()
+    {
+        ReentryVehicle vehicle = Capsule(maxSpeed: 0);
+        vehicle.Chutes.MaxDeployMach = 0.01;   // 3.4 m/s, under the canopy-less terminal speed
+        StopPrediction p = Predict(true, Air(), vehicle, out ReentryTrace trace, out _);
+        TestContext.Out.WriteLine($"Mach 0.01 limit: ok {p.Ok} ({p.Reason}), {trace}");
+        Assert.IsFalse(p.Ok);
+        StringAssert.Contains("never open", p.Reason);
+        StringAssert.Contains("at most Mach", p.Reason);
+        Assert.IsTrue(double.IsNaN(trace.SemiUT));
+    }
 }

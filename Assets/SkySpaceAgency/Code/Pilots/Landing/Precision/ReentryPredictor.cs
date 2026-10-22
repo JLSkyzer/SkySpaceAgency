@@ -71,6 +71,10 @@ namespace K2D2.Landing.Precision
         /// <summary>Upper bound of the air speed (m/s) for a safe opening, from the SAFE deployment
         /// mode's limit (Module_Parachute.MaxSafeVelocityAtLocalBody). 0 or NaN = no limit.</summary>
         public double MaxDeploySpeed;
+        /// <summary>Upper bound of the Mach number (air speed / the sound speed at the current
+        /// altitude) for the chutes to open: the SAFE deployment mode's Data_Parachute.MachSafetyScalar.
+        /// 0 or NaN = no limit. Checked with MinDeploySpeed and MaxDeploySpeed.</summary>
+        public double MaxDeployMach;
         public double SemiToFullDelay;       // s, calibration; <= 0 = ReentryPredictor.DefaultSemiToFullDelay
     }
 
@@ -266,7 +270,7 @@ namespace K2D2.Landing.Precision
                 {
                     double pressure = air.PressureAt(altitude);
                     double airSpeed = (v - Vector3d.Cross(omega, r)).magnitude;
-                    if (pressure > 0 && pressure >= chutes.MinPressureToOpen && SpeedAllowsOpening(chutes, airSpeed))
+                    if (pressure > 0 && pressure >= chutes.MinPressureToOpen && SpeedAllowsOpening(chutes, airSpeed, air.SoundSpeedAt(altitude)))
                     {
                         canopy = Canopy.Semi;
                         trace.SemiUT = t;
@@ -323,11 +327,16 @@ namespace K2D2.Landing.Precision
 
         static bool HasMaxSpeed(Chutes c) => c.MaxDeploySpeed > 0;   // false for 0 and NaN
 
-        static bool SpeedAllowsOpening(Chutes c, double airSpeed) =>
-            airSpeed >= c.MinDeploySpeed && (!HasMaxSpeed(c) || airSpeed <= c.MaxDeploySpeed);
+        static bool HasMaxMach(Chutes c) => c.MaxDeployMach > 0;     // false for 0 and NaN
+
+        // A Mach limit with no sound speed (no table) cannot be met: the chute stays packed.
+        static bool SpeedAllowsOpening(Chutes c, double airSpeed, double soundSpeed) =>
+            airSpeed >= c.MinDeploySpeed && (!HasMaxSpeed(c) || airSpeed <= c.MaxDeploySpeed)
+            && (!HasMaxMach(c) || (soundSpeed > 0 && airSpeed / soundSpeed <= c.MaxDeployMach));
 
         static string SpeedWindow(Chutes c) =>
-            HasMaxSpeed(c) ? $"between {c.MinDeploySpeed:F0} and {c.MaxDeploySpeed:F0} m/s" : $"at least {c.MinDeploySpeed:F0} m/s";
+            (HasMaxSpeed(c) ? $"between {c.MinDeploySpeed:F0} and {c.MaxDeploySpeed:F0} m/s" : $"at least {c.MinDeploySpeed:F0} m/s")
+            + (HasMaxMach(c) ? $" and at most Mach {c.MaxDeployMach:0.###}" : "");
 
         static StopPrediction Fail(string reason, ref ReentryTrace trace, double peak)
         {
