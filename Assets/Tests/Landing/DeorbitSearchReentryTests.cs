@@ -197,6 +197,68 @@ public class DeorbitSearchReentryTests
         Assert.Less(c.MissAfterM, 500);
     }
 
+    // Why the descent periapsis is 0.45 of the atmosphere depth (31.5 km on Kerbin), on the synthetic
+    // capsule from a 100 km circular orbit. Neither the peak deceleration nor the chute opening
+    // tells the fractions apart: the hypersonic peak stays near 2.5 g from 0.15 to 0.75, and the chute
+    // opens at the same air speed limit (about 7.9 km up) and the same terminal speed everywhere.
+    // What changes is the Δv against the stop's sensitivity to the drag model (±20 %) and to the
+    // deorbit burn (±1 %): the sensitivity grows faster and faster with the periapsis (×1.3 from
+    // 0.3 to 0.45, ×1.5 to 0.6, ×2.2 to 0.75), so 0.45 is the last step before the knee, and going
+    // lower buys little precision per m/s (0.3: −22 % for +9.7 m/s). Heating, which a steeper entry
+    // increases, is not modelled.
+    [Test]
+    public void ReentryPeriapsisFraction_SitsBelowTheKneeOfTheStopSensitivity()
+    {
+        Atmosphere air = ReentryPredictorTests.Air();
+        ReentryVehicle capsule = ReentryPredictorTests.Capsule();
+        var results = new System.Collections.Generic.Dictionary<double, (double dv, double g, double semiAlt, double dragShift, double dvShift)>();
+        double[] fractions = { 0.15, 0.3, 0.45, 0.6, 0.75 };
+        foreach (double fraction in fractions)
+        {
+            double rp = R + fraction * ReentryPredictorTests.Depth;
+            DeorbitPlan plan = DeorbitSearch.Baseline(R0Vec, V0Vec, UT, Kerbin, UT + 30, Reentry(), rp);
+            Assert.IsTrue(plan.Ok, plan.Reason);
+            var burn = new Impulse { UT = plan.BurnUT, DeltaV = plan.DeltaV };
+            ReentryPredictor.Predict(R0Vec, V0Vec, UT, Kerbin, air, capsule, burn, out ReentryTrace trace);
+            double Shift(ReentryVehicle vehicle, Impulse impulse)
+            {
+                StopPrediction p = ReentryPredictor.Predict(R0Vec, V0Vec, UT, Kerbin, air, vehicle, impulse);
+                Assert.IsTrue(p.Ok, p.Reason);
+                return SurfaceGeometry.GreatCircle(plan.Stop.StopDirNow, p.StopDirNow, R);
+            }
+            ReentryVehicle low = capsule, high = capsule;
+            low.DragScale = 0.8;
+            high.DragScale = 1.2;
+            double dragShift = Math.Max(Shift(low, burn), Shift(high, burn));
+            var longer = new Impulse { UT = burn.UT, DeltaV = 1.01 * burn.DeltaV };
+            var shorter = new Impulse { UT = burn.UT, DeltaV = 0.99 * burn.DeltaV };
+            double dvShift = Math.Max(Shift(capsule, longer), Shift(capsule, shorter));
+            // The peak of the trace is the opening shock of the full canopy: the reentry's own peak without the chute.
+            ReentryPredictor.Predict(R0Vec, V0Vec, UT, Kerbin, air, ReentryPredictorTests.Capsule(chutes: 0), burn, out ReentryTrace bare);
+            results[fraction] = (plan.DeltaV.magnitude, bare.PeakDecel / 9.80665, trace.SemiAltitude, dragShift, dvShift);
+            TestContext.Out.WriteLine($"[periapsis {fraction:F2} = {(rp - R) / 1000:F1} km] deorbit {plan.DeltaV.magnitude:F1} m/s, hypersonic peak {bare.PeakDecel / 9.80665:F2} g, canopy peak {trace.PeakDecel / 9.80665:F1} g, "
+                + $"semi at {trace.SemiAltitude:F0} m ({trace.SemiAirSpeed:F0} m/s), full at {trace.FullAltitude:F0} m, touchdown {trace.TouchdownSpeed:F1} m/s, "
+                + $"interface->ground {(plan.Stop.StopUT - trace.InterfaceUT) / 60:F1} min; stop shift: drag ±20 % {dragShift / 1000:F1} km, Δv ±1 % {dvShift / 1000:F1} km");
+            Assert.IsFalse(double.IsNaN(trace.FullUT), "the chute opens fully at " + fraction);
+        }
+        for (int i = 1; i < fractions.Length; i++)
+        {
+            var lower = results[fractions[i - 1]];
+            var higher = results[fractions[i]];
+            Assert.Less(higher.dv, lower.dv, "Δv falls with the periapsis");
+            Assert.Greater(higher.dragShift, lower.dragShift, "drag sensitivity grows with the periapsis");
+            Assert.Greater(higher.dvShift, lower.dvShift, "burn sensitivity grows with the periapsis");
+            Assert.AreEqual(lower.semiAlt, higher.semiAlt, 200, "the chute opens at the same height");
+            Assert.Less(higher.g, 3, "no deceleration penalty");
+        }
+        // The knee: each step up costs more sensitivity than the one before, and 0.45 stays within 1.5 × of 0.3.
+        double Growth(double from, double to) => results[to].dragShift / results[from].dragShift;
+        Assert.Greater(Growth(0.45, 0.6), Growth(0.3, 0.45));
+        Assert.Greater(Growth(0.6, 0.75), Growth(0.45, 0.6));
+        Assert.Less(Growth(0.3, 0.45), 1.5);
+        Assert.Greater(Growth(0.45, 0.6), 1.4);
+    }
+
     // The miss is split along the track where the capsule arrives (StopPrediction.TrackDirNow), not
     // along the interface velocity projected at the stop: that projection shrinks to nothing when the
     // arc from the interface to the stop nears 90° (along and cross then mix) and points backwards
