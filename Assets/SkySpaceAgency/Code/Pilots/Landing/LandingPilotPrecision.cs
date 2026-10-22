@@ -241,7 +241,8 @@ namespace K2D2.Landing
             var body = vessel.Orbit.referenceBody;
             if (body == null || rotation_sign_body == body.Name)
                 return;
-            if (!precision_calibrating && !(settings.precision_landing.V && !LandingProfile.IsAtmospheric))
+            if (!precision_calibrating && !(settings.precision_landing.V && !LandingProfile.IsAtmospheric)
+                && !(parachute_mode && settings_atmo.precision_landing.V))
                 return;
             double now = GeneralTools.Current_UT;
             try
@@ -299,7 +300,9 @@ namespace K2D2.Landing
         void UpdateCalibrate()
         {
             var body = current_vessel.VesselComponent.Orbit.referenceBody;
-            if (rotation_sign_body == body.Name)
+            if (rotation_sign_body == body.Name && reentry_run)
+                UpdateCalibrateReentry();
+            else if (rotation_sign_body == body.Name)
             {
                 precision_calibrating = false;
                 if (!PrecisionContext.TryBuild(this, out PrecisionContext ctx, out string reason, log: true))
@@ -332,17 +335,20 @@ namespace K2D2.Landing
                     precision_phase.Start("orbit preparation", now, PlanOrbitPrep);
                     break;
                 case Mode.PlaneChange:
-                    precision_phase.Start("plane change", now, PlanPlaneChange);
+                    precision_phase.Start("plane change", now, reentry_run ? PlanReentryPlaneChange : (Func<PrecisionPhase.Plan>)PlanPlaneChange);
                     break;
                 case Mode.Deorbit:
-                    precision_phase.Start("deorbit", now, PlanDeorbit);
+                    precision_phase.Start("deorbit", now, reentry_run ? PlanReentryDeorbit : (Func<PrecisionPhase.Plan>)PlanDeorbit);
                     break;
                 case Mode.MidCourse:
-                    precision_phase.Start("mid-course correction", PrecisionPhases.CorrectionPlanUT(now, predicted_brake_start_UT), PlanCorrection);
+                    precision_phase.Start("mid-course correction", PrecisionPhases.CorrectionPlanUT(now, predicted_brake_start_UT),
+                        reentry_run ? PlanReentryCorrection : (Func<PrecisionPhase.Plan>)PlanCorrection);
                     break;
             }
-            logger.LogInfo($"[Landing] precision: phase {precision_phase.Name} start" + (m == Mode.MidCourse
-                ? $", planned in {PrecisionPhases.CorrectionPlanUT(now, predicted_brake_start_UT) - now:n0} s (brake start +{F(predicted_brake_start_UT - now)} s)"
+            // A parachute precision return: the brake start is the atmosphere interface.
+            logger.LogInfo($"[Landing] {(reentry_run ? "reentry" : "precision")}: phase {precision_phase.Name} start" + (m == Mode.MidCourse
+                ? $", planned in {PrecisionPhases.CorrectionPlanUT(now, predicted_brake_start_UT) - now:n0} s " +
+                  $"({(reentry_run ? "interface" : "brake start")} +{F(predicted_brake_start_UT - now)} s)"
                 : ""));
         }
 
@@ -489,6 +495,11 @@ namespace K2D2.Landing
         // skipped; a failure that leaves the vessel on an impact course lands without target.
         void OnPrecisionPhaseFailed(string reason)
         {
+            if (reentry_run)
+            {
+                OnReentryPhaseFailed(reason);
+                return;
+            }
             bool hits;
             string orbit_text;
             try
@@ -545,6 +556,11 @@ namespace K2D2.Landing
         // After a precision phase: the Δv really used, and the prediction from the orbit reached.
         void OnPrecisionPhaseEnd()
         {
+            if (reentry_run)
+            {
+                OnReentryPhaseEnd();
+                return;
+            }
             double used = burn_dV.burned_dV - phase_burned_start;
             string name = precision_phase.Name;
             string after;

@@ -42,6 +42,10 @@ namespace K2D2.Landing
         public bool capsule_lost;
         int parts_before, stage_count;
         bool activated, switched;
+
+        // The stage was activated: the split may have happened, the active vessel must be checked.
+        public bool Activated => activated;
+        public int PartsBefore => parts_before;
         double check_from_ut;
         float warp_exit_time;
 

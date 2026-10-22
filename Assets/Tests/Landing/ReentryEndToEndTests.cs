@@ -13,10 +13,11 @@ using NUnit.Framework;
 // reentry under the chute to the ground.
 //
 // The pre-jettison vessel (service module + capsule) only flies above the atmosphere, where the
-// coast is Kepler whatever the vehicle: the predictor used by the searches (WithJettison) predicts
-// the capsule alone (mass and drag) from the jettison on, and refuses a trajectory that leaves no
-// JettisonLead between the last burn and the interface. The capsule's mass does not change with
-// the burns (the propellant is in the service module), so the impulses carry no Isp.
+// coast is Kepler whatever the vehicle: the predictor used by the searches (JettisonAwarePredictor,
+// the one the pilot flies with) predicts the capsule alone (mass and drag) from the jettison on,
+// and refuses a trajectory that leaves no JettisonLead between the last burn and the interface.
+// The capsule's mass does not change with the burns (the propellant is in the service module), so
+// the impulses carry no Isp.
 //
 // The "truth" applies each burn impulsively at its planned time and propagates with
 // KeplerPropagator between them, switches to the capsule at the planned jettison UT, and then
@@ -35,7 +36,7 @@ public class ReentryEndToEndTests
     const double ServiceModuleT = 4, CapsuleT = 1.2, ThrustKN = 60, Isp = 300;
     const double MaxCorrection = 30;       // m/s
     const double DeorbitError = 1.01;      // the deorbit burn ends 1 % long
-    const double JettisonLead = 120;       // s between the jettison and the interface
+    const double JettisonLead = JettisonAwarePredictor.JettisonLead;
     const double MaxDistance = 5000;       // m
 
     static Vehicle Stack(double massT) => new Vehicle { MassT = massT, ThrustKN = ThrustKN, Isp = Isp };
@@ -66,24 +67,6 @@ public class ReentryEndToEndTests
         TerrainHeight = p => 0,
     };
 
-    /// <summary>The searches' predictor: the capsule from the jettison (JettisonLead before the
-    /// interface) on; the Kepler coast before it is the same for the whole stack.</summary>
-    static StopPredictorFn WithJettison(Body body, Atmosphere air, ReentryVehicle capsule) =>
-        (r, v, ut, impulse) =>
-        {
-            StopPrediction p = ReentryPredictor.Predict(r, v, ut, body, air, capsule, impulse, out ReentryTrace trace);
-            if (!p.Ok)
-                return p;
-            double lastBurn = impulse.HasValue ? Math.Max(impulse.Value.UT, ut) : ut;
-            if (!(trace.InterfaceUT - JettisonLead >= lastBurn))
-                return new StopPrediction
-                {
-                    Ok = false,
-                    Reason = $"No time to jettison the service module: the interface is {trace.InterfaceUT - lastBurn:F0} s after the burn",
-                };
-            return p;
-        };
-
     [TestCase(1)]
     [TestCase(-1)]
     public void InclinedOrbitToTheKsc_LandsUnderTheChuteWithin5km(int sign)
@@ -93,7 +76,7 @@ public class ReentryEndToEndTests
         log.AppendLine($"rotation sign {sign}");
         Body body = Kerbin(sign);
         Atmosphere air = ReentryPredictorTests.Air();
-        StopPredictorFn predict = WithJettison(body, air, Capsule);
+        StopPredictorFn predict = new JettisonAwarePredictor(body, air, Capsule).Fn;
         double descentRp = DeorbitSearch.ReentryPeriapsis(body, air.Depth);
 
         // 1. Circular 100 km orbit inclined 3°, the vessel at the ascending node (lat 0, lon 0);

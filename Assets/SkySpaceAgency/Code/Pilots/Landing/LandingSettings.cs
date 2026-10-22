@@ -20,10 +20,8 @@ namespace K2D2.Landing
     // The UI side is split into two methods: setupUI (the full binding, used for the Vacuum
     // panel) and setupBasicUI (a smaller subset for the Atmo panel: warp timing, brake timing, and
     // touchdown speed profile - the settings that are actually meaningful on an atmospheric body
-    // today), plus the target lat/lon and a disabled, always-off precision landing toggle. Plane
-    // trim still exists as a real, independently-persisted setting on the Atmo profile too -
-    // it's just not wired to a visible control yet, since atmospheric precision landing isn't
-    // built.
+    // today), plus the target lat/lon, the precision landing toggle (enabled in Parachute mode
+    // only: the parachute precision return) and the reentry drag scale.
     // TouchDown's own tunables (touch_down_max_angle etc.) are bound from TouchDown.cs's own
     // SetupFullUI/SetupBasicUI, not here.
     public class LandingSettings
@@ -50,10 +48,9 @@ namespace K2D2.Landing
 
         public ClampSetting<float> touch_down_speed;
 
-        // TARGET (precision landing). Waypoint list, map picker or manual lat/lon (LandingUI). Precision
-        // landing flies on vacuum bodies only (see LandingPilot.cs's atmosphere guard): the Atmo
-        // profile shows its target and a disabled toggle that is kept off (setupBasicUI), so a target
-        // can already be saved there for atmospheric precision landing.
+        // TARGET (precision landing). Waypoint list, map picker or manual lat/lon (LandingUI). On the
+        // Atmo profile precision flies in Parachute mode only (the parachute precision return,
+        // LandingPilotReentry.cs): setupBasicUI disables the toggle and keeps it off in Propulsive mode.
         public Setting<bool> precision_landing;
         public Setting<float> target_latitude;
         public Setting<float> target_longitude;
@@ -67,7 +64,8 @@ namespace K2D2.Landing
 
         // Parachute precision return: multiplies the capsule's drag in the reentry predictor
         // (ReentryContext -> ReentryVehicle.DragScale), the calibration the in-game accuracy rests
-        // on. Atmo profile only (null on the vacuum profile). No UI binding yet.
+        // on. Atmo profile only (null on the vacuum profile). Set by the player only: the slider in
+        // ADVANCED, or Apply on the suggestion shown after a precision return (never applied alone).
         public ClampSetting<float> reentry_drag_scale;
 
         public LandingSettings(SettingsFile file, bool atmospheric)
@@ -147,15 +145,19 @@ namespace K2D2.Landing
         // class comment).
         public void setupBasicUI(VisualElement root)
         {
-            // TARGET - the toggle is shown but disabled and kept off: precision landing is not
-            // available on atmospheric bodies yet (LandingPilot's atmospheric block is unchanged).
-            // LandingUI also forces it off every tick, in case a saved file turns it back on.
+            // TARGET - the precision toggle is enabled in Parachute mode only (the parachute
+            // precision return); in Propulsive mode it is disabled and kept off. LandingUI also
+            // forces it off every tick in Propulsive mode, in case a saved file turns it back on.
             var precision_toggle = root.Q<K2Toggle>("precision_landing_atmo").Bind(precision_landing);
-            precision_toggle.SetEnabled(false);
-            precision_landing.V = false;
+            mode.listen(m =>
+            {
+                precision_toggle.SetEnabled(m == LandingMethod.Parachute);
+                if (m != LandingMethod.Parachute && precision_landing.V)
+                    precision_landing.V = false;
+            });
             precision_landing.listeners += v =>
             {
-                if (v) precision_landing.V = false;
+                if (v && mode.V != LandingMethod.Parachute) precision_landing.V = false;
             };
             var target_settings = root.Q<VisualElement>("target_settings_atmo");
             target_settings.Q<FloatField>("target_latitude_atmo").Bind(target_latitude);
@@ -181,6 +183,9 @@ namespace K2D2.Landing
 
             root.Q<K2Slider>("touch_down_ratio_atmo").Bind(touch_down_ratio);
             root.Q<K2Slider>("touch_down_speed_atmo").Bind(touch_down_speed);
+
+            // PRECISION RETURN
+            root.Q<K2Slider>("reentry_drag_scale_atmo").Bind(reentry_drag_scale);
         }
 
         public float compute_limit_speed(float altitude)

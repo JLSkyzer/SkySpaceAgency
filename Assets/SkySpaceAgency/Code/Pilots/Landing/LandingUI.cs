@@ -80,8 +80,15 @@ namespace K2D2.Landing
         // the start check (PrecisionStart.MaxPeriapsisAltitude and its message), so the two can
         // never drift apart. Vacuum-only (precision_landing_orbit_gate_vac).
         Label orbit_gate_label;
-        // The last precision plan, its warnings or the final distance (precision_plan_vac).
+        // The last precision plan, its warnings or the final distance (precision_plan_vac, and
+        // precision_plan_atmo for a parachute precision return).
         Label precision_plan_label;
+        Label precision_plan_label_atmo;
+        // Atmo: the note under the precision toggle, and the calibration suggestion after a
+        // precision return with its Apply button.
+        Label atmo_precision_note;
+        VisualElement reentry_calibration;
+        Label reentry_suggestion;
 
         // Atmo/Vacuum profile panels (see LandingSettings.cs's class comment) - shown/hidden
         // together every UI tick by UpdateProfilePanels, based on LandingProfile.IsAtmospheric.
@@ -97,8 +104,9 @@ namespace K2D2.Landing
 
         // The mode the tab is about: the running one, else the selector. Flipping the selector
         // during a propulsive run must not change what the tab shows (Touch Down in particular).
+        // A parachute precision return is a parachute landing from its first burn.
         bool ParachuteLanding => pilot.isRunning
-            ? pilot.mode == LandingPilot.Mode.Parachute
+            ? pilot.mode == LandingPilot.Mode.Parachute || pilot.reentry_run
             : pilot.parachute_mode;
 
         // Logged once per session, then silent: the readout runs every UI tick.
@@ -193,6 +201,11 @@ namespace K2D2.Landing
             // as the toggle itself.
             orbit_gate_label = panel.Q<Label>("precision_landing_orbit_gate_vac");
             precision_plan_label = panel.Q<Label>("precision_plan_vac");
+            precision_plan_label_atmo = panel.Q<Label>("precision_plan_atmo");
+            atmo_precision_note = panel.Q<Label>("atmo_precision_note");
+            reentry_calibration = panel.Q<VisualElement>("reentry_calibration_atmo");
+            reentry_suggestion = panel.Q<Label>("reentry_suggestion_atmo");
+            panel.Q<Button>("reentry_apply_atmo").clicked += () => pilot.ApplySuggestedDragScale();
             pilot.settings_vac.precision_landing.listeners += v =>
             {
                 if (!v) return;
@@ -717,6 +730,20 @@ namespace K2D2.Landing
             }
             precision_plan_label.text = text;
             precision_plan_label.Show(text.Length > 0);
+            precision_plan_label_atmo.text = text;
+            precision_plan_label_atmo.Show(text.Length > 0);
+        }
+
+        // Atmo: the note (Propulsive mode: precision is for Parachute mode) and, after a precision
+        // return, the suggested reentry drag scale (applied only by the Apply button).
+        void UpdateReentrySuggestion()
+        {
+            bool parachute = pilot.settings_atmo.mode.V == LandingMethod.Parachute;
+            atmo_precision_note.Show(!parachute);
+            bool suggestion = !double.IsNaN(pilot.suggested_drag_scale) && !pilot.isRunning;
+            reentry_calibration.Show(suggestion);
+            if (suggestion)
+                reentry_suggestion.text = Precision.DragCalibration.SuggestionMessage(pilot.suggested_drag_scale, pilot.settings_atmo.reentry_drag_scale.V);
         }
 
         static string PrecisionPhaseText(LandingPilot.Mode mode)
@@ -728,6 +755,8 @@ namespace K2D2.Landing
                 case LandingPilot.Mode.PlaneChange: return "Precision: plane change";
                 case LandingPilot.Mode.Deorbit: return "Precision: deorbit burn";
                 case LandingPilot.Mode.MidCourse: return "Precision: mid-course correction";
+                case LandingPilot.Mode.ReentryCoast: return "Precision: coast to the service module jettison";
+                case LandingPilot.Mode.Jettison: return "Precision: jettisoning the service module";
                 default: return null;
             }
         }
@@ -806,8 +835,8 @@ namespace K2D2.Landing
             if (!base.onUpdateUI())
                 return false;
 
-            // Atmospheric precision landing is not available yet: keep that toggle off.
-            if (pilot.settings_atmo.precision_landing.V)
+            // Atmospheric precision landing is for Parachute mode only: keep the toggle off otherwise.
+            if (pilot.settings_atmo.precision_landing.V && pilot.settings_atmo.mode.V != LandingMethod.Parachute)
                 pilot.settings_atmo.precision_landing.V = false;
 
             updateCollisionStatus();
@@ -817,6 +846,7 @@ namespace K2D2.Landing
             UpdatePickButton(target);
             UpdateOrbitGate();
             UpdatePrecisionPlanLabel();
+            UpdateReentrySuggestion();
             UpdateProfilePanels();
 
             status_bar.Reset();
@@ -846,6 +876,8 @@ namespace K2D2.Landing
                     case LandingPilot.Mode.PlaneChange:
                     case LandingPilot.Mode.Deorbit:
                     case LandingPilot.Mode.MidCourse:
+                    case LandingPilot.Mode.ReentryCoast:
+                    case LandingPilot.Mode.Jettison:
                         status_bar.Status(PrecisionPhaseText(pilot.mode));
                         break;
                     case LandingPilot.Mode.Pause:

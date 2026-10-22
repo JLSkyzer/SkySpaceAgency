@@ -13,7 +13,8 @@ using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.Landing
 {
-    // The precision sequence (OrbitPrep → … → terminal guidance) is in LandingPilotPrecision.cs.
+    // The precision sequence (OrbitPrep → … → terminal guidance) is in LandingPilotPrecision.cs,
+    // the parachute precision return (PlaneChange → … → Jettison → Parachute) in LandingPilotReentry.cs.
     public partial class LandingPilot : Pilot
     {
         public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.LandingController");
@@ -64,6 +65,7 @@ namespace K2D2.Landing
             settings_vac = new LandingSettings(vac_file, atmospheric: false);
             brake = new TouchDown(this, atmo_file, vac_file);
             parachute_descent = new ParachuteDescent(this);
+            jettison = new Jettison(this);
             _page = new LandingUI(this);
 
             Instance = this;
@@ -97,9 +99,14 @@ namespace K2D2.Landing
             Waiting,
             Brake,
             TouchDown,
-            // Parachute landing (ParachuteDescent), entered straight from Off. Last on purpose:
-            // nextMode() never runs from it, and TouchDown never falls through into it.
-            Parachute
+            // Parachute landing (ParachuteDescent), entered straight from Off, or after Jettison in
+            // a parachute precision return. nextMode() never runs from it, and TouchDown never
+            // falls through into it.
+            Parachute,
+            // Parachute precision return only (LandingPilotReentry.cs), after MidCourse: the coast to
+            // the jettison, then the jettison itself. Left by explicit transitions, never nextMode().
+            ReentryCoast,
+            Jettison
         }
 
         public Mode mode = Mode.Off;
@@ -193,6 +200,15 @@ namespace K2D2.Landing
                     current_executor.setController(parachute_descent);
                     parachute_descent.Start();
                     break;
+                case Mode.ReentryCoast:
+                    StartReentryCoast();
+                    break;
+                case Mode.Jettison:
+                    current_vessel.SetThrottle(0);
+                    TimeWarpTools.SetRateIndex(0, false);
+                    current_executor.setController(jettison);
+                    jettison.Start();
+                    break;
             }
 
             logger.LogInfo("current_pilot " + mode);
@@ -207,8 +223,9 @@ namespace K2D2.Landing
                 return;
             }
 
-            // TouchDown and Parachute are both final phases: the run ends on contact.
-            if (mode == Mode.TouchDown || mode == Mode.Parachute)
+            // TouchDown and Parachute are both final phases: the run ends on contact. The reentry
+            // coast and jettison leave by explicit transitions (LandingPilotReentry.cs).
+            if (mode == Mode.TouchDown || mode == Mode.Parachute || ReentryMode(mode))
                 return;
 
             var next = this.mode + 1;
@@ -251,17 +268,19 @@ namespace K2D2.Landing
 
                     _active = true;
 
-                    // Precision landing (vacuum only, decided by CheckCanStart: precision_run)
-                    // starts with its four planned burns (orbit preparation, plane change, deorbit,
-                    // mid-course correction; each skipped when not needed), or with Calibrate when
-                    // the rotation sign must be measured first, before falling into the normal
-                    // Pause->QuickWarp->...->TouchDown sequence.
+                    // Precision landing (decided by CheckCanStart: precision_run) starts with its
+                    // four planned burns (orbit preparation, plane change, deorbit, mid-course
+                    // correction; each skipped when not needed), or with Calibrate when the rotation
+                    // sign must be measured first, before falling into the normal
+                    // Pause->QuickWarp->...->TouchDown sequence. A parachute precision return
+                    // (reentry_run) has no orbit preparation and goes on to the jettison and the
+                    // parachute descent.
                     gear.Reset();
                     net_start_ut = double.NaN;
-                    if (parachute_mode)
+                    if (parachute_mode && !precision_run)
                         setMode(Mode.Parachute);
                     else if (precision_run)
-                        setMode(precision_calibrating ? Mode.Calibrate : Mode.OrbitPrep);
+                        setMode(precision_calibrating ? Mode.Calibrate : reentry_run ? Mode.PlaneChange : Mode.OrbitPrep);
                     else
                         setMode(Mode.QuickWarp);
                 }
@@ -273,6 +292,9 @@ namespace K2D2.Landing
 
         public override void onReset()
         {
+            // The jettison split may change the active vessel to the capsule: not a reason to stop.
+            if (KeepThroughVesselChange())
+                return;
             isRunning = false;
             // Vessel change, scene change or another pilot's start: drop a pending leg check, it
             // must not fire against another vessel. (A landing's own end keeps it, see FinishLanding.)
@@ -584,7 +606,7 @@ namespace K2D2.Landing
         // TouchDown and Parachute, which do not read the result.
         void UpdateBrakeSimulation(bool force)
         {
-            if (!force && (mode == Mode.TouchDown || mode == Mode.Parachute))
+            if (!force && (mode == Mode.TouchDown || mode == Mode.Parachute || ReentryMode(mode)))
                 return;
 
             float now_real = UnityEngine.Time.realtimeSinceStartup;
@@ -731,8 +753,14 @@ namespace K2D2.Landing
 
             precision_run = false;
             precision_calibrating = false;
+            reentry_run = false;
             if (parachute_mode)
-                return CheckCanStartParachute();
+            {
+                if (!CheckCanStartParachute())
+                    return false;
+                // Parachute precision return: its own plans and checks (LandingPilotReentry.cs).
+                return settings_atmo.precision_landing.V ? CheckCanStartReentry() : true;
+            }
 
             burn_dV.Compute_Thrust();
             LogEngines();
@@ -834,7 +862,9 @@ namespace K2D2.Landing
                 (landed_or_splashed ? "LandedOrSplashed" : "altitude/fall-speed net") +
                 $", altitude {altitude:n1} m, fall speed {current_falling_speed:n2} m/s");
             current_vessel.SetThrottle(0);
-            if (precision_run)
+            if (reentry_run)
+                OnReentryFinish();
+            else if (precision_run)
                 OnPrecisionFinish();
             // Release the last aim: setAutoPilot does nothing when SAS is already in
             // StabilityAssist, which would leave fly-by-wire on the final descent's tilted target.
@@ -899,7 +929,7 @@ namespace K2D2.Landing
                 if (isRunning)
                 {
                     // A parachute landing has no Touch Down phase to fall back to.
-                    if (mode != Mode.Parachute && altitude < settings.start_touchdown_altitude.V)
+                    if (mode != Mode.Parachute && !ReentryMode(mode) && altitude < settings.start_touchdown_altitude.V)
                         setMode(Mode.TouchDown);
                 }
                 else
@@ -936,7 +966,12 @@ namespace K2D2.Landing
                 return;
             }
             if (PrecisionActive)
-                UpdatePrecisionReadout();
+            {
+                if (reentry_run)
+                    UpdateReentry();
+                else
+                    UpdatePrecisionReadout();
+            }
             if (mode == Mode.Pause)
             {
                 if (GeneralTools.Current_UT > end_pause_Ut)
@@ -1026,6 +1061,8 @@ namespace K2D2.Landing
             {
                 if (precision_run && PrecisionPhaseMode(mode))
                     OnPrecisionPhaseFailed(current_executor.failure_reason);
+                else if (reentry_run && mode == Mode.Jettison)
+                    OnJettisonFailed(current_executor.failure_reason);
                 else
                     StopWithError(current_executor.failure_reason);
                 return;
@@ -1035,8 +1072,13 @@ namespace K2D2.Landing
             {
                 if (PrecisionPhaseMode(mode))
                     OnPrecisionPhaseEnd();
-                // auto next
-                nextMode();
+                if (reentry_run && mode == Mode.MidCourse)
+                    setMode(Mode.ReentryCoast);
+                else if (reentry_run && mode == Mode.Jettison)
+                    OnJettisonDone();
+                else
+                    // auto next
+                    nextMode();
             }
         }
 

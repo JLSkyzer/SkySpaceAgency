@@ -91,6 +91,7 @@ namespace K2D2.Landing.Precision
     {
         public double InterfaceUT;            // first crossing of the atmosphere interface
         public double SemiUT, SemiAltitude, SemiAirSpeed;
+        public Vector3d SemiDirNow;           // unit, where the chutes open, in the body orientation at the prediction's UT (zero if they never do)
         public double FullUT, FullAltitude;
         public double TouchdownSpeed;         // m/s relative to the surface
         public double TouchdownVerticalSpeed; // m/s, negative = down
@@ -276,6 +277,7 @@ namespace K2D2.Landing.Precision
                         trace.SemiUT = t;
                         trace.SemiAltitude = h;
                         trace.SemiAirSpeed = airSpeed;
+                        trace.SemiDirNow = SurfaceGeometry.AtTime(r, omega, -(t - ut)) / r.magnitude;
                     }
                 }
                 else if (canopy == Canopy.Semi)
