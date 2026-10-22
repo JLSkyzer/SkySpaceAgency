@@ -62,7 +62,8 @@ public class DeorbitSearchReentryTests
     [Test]
     public void ReentryPeriapsis_IsAFractionOfTheAtmosphereDepth()
     {
-        Assert.AreEqual(R + 31500, DescentRp, 1e-6);
+        Assert.AreEqual(R + DeorbitSearch.ReentryPeriapsisFraction * ReentryPredictorTests.Depth, DescentRp, 1e-6);
+        Assert.AreEqual(R + 24500, DescentRp, 1e-6);
     }
 
     [TestCase(0)]
@@ -197,22 +198,26 @@ public class DeorbitSearchReentryTests
         Assert.Less(c.MissAfterM, 500);
     }
 
-    // Why the descent periapsis is 0.45 of the atmosphere depth (31.5 km on Kerbin), on the synthetic
-    // capsule from a 100 km circular orbit. Neither the peak deceleration nor the chute opening
-    // tells the fractions apart: the hypersonic peak stays near 2.5 g from 0.15 to 0.75, and the chute
-    // opens at the same air speed limit (about 7.9 km up) and the same terminal speed everywhere.
-    // What changes is the Δv against the stop's sensitivity to the drag model (±20 %) and to the
-    // deorbit burn (±1 %): the sensitivity grows faster and faster with the periapsis (×1.3 from
-    // 0.3 to 0.45, ×1.5 to 0.6, ×2.2 to 0.75), so 0.45 is the last step before the knee, and going
-    // lower buys little precision per m/s (0.3: −22 % for +9.7 m/s). Heating, which a steeper entry
-    // increases, is not modelled.
+    // Why the descent periapsis is DeorbitSearch.ReentryPeriapsisFraction (0.35) of the atmosphere
+    // depth (24.5 km on Kerbin), on the synthetic capsule from a 100 km circular orbit, evaluated
+    // around the constant. Neither the peak deceleration nor the chute opening tells the fractions
+    // apart: the hypersonic peak stays under 3 g from 0.15 to 0.75, and the chute opens at the same
+    // air speed limit (about 7.9 km up) and the same terminal speed everywhere. What changes is the
+    // Δv against the stop's sensitivity to the drag model (±20 %) and to the deorbit burn (±1 %):
+    // the sensitivity grows with the periapsis, faster and faster. The drag error dominates the
+    // in-game miss, so the fraction is taken a step below the old 0.45 (25.0 km for ±20 % of drag
+    // instead of 29.8, for +6.5 m/s; ×1.15, 1.19, 1.30, 1.69 per 0.1 of periapsis from 0.25 up),
+    // and not lower: heating, which a steeper entry increases, is not modelled, and the steps below
+    // buy less and less.
     [Test]
     public void ReentryPeriapsisFraction_SitsBelowTheKneeOfTheStopSensitivity()
     {
+        const double F = DeorbitSearch.ReentryPeriapsisFraction;
+        Assert.AreEqual(0.35, F, 1e-12);
         Atmosphere air = ReentryPredictorTests.Air();
         ReentryVehicle capsule = ReentryPredictorTests.Capsule();
         var results = new System.Collections.Generic.Dictionary<double, (double dv, double g, double semiAlt, double dragShift, double dvShift)>();
-        double[] fractions = { 0.15, 0.3, 0.45, 0.6, 0.75 };
+        double[] fractions = { F - 0.2, F - 0.1, F, F + 0.1, F + 0.25, F + 0.4 };
         foreach (double fraction in fractions)
         {
             double rp = R + fraction * ReentryPredictorTests.Depth;
@@ -251,12 +256,19 @@ public class DeorbitSearchReentryTests
             Assert.AreEqual(lower.semiAlt, higher.semiAlt, 200, "the chute opens at the same height");
             Assert.Less(higher.g, 3, "no deceleration penalty");
         }
-        // The knee: each step up costs more sensitivity than the one before, and 0.45 stays within 1.5 × of 0.3.
-        double Growth(double from, double to) => results[to].dragShift / results[from].dragShift;
-        Assert.Greater(Growth(0.45, 0.6), Growth(0.3, 0.45));
-        Assert.Greater(Growth(0.6, 0.75), Growth(0.45, 0.6));
-        Assert.Less(Growth(0.3, 0.45), 1.5);
-        Assert.Greater(Growth(0.45, 0.6), 1.4);
+        // The knee: per 0.1 of periapsis, each step up costs more drag sensitivity than the one
+        // below it; the step up from the constant still costs Δv-wise little, the drag sensitivity
+        // at the constant stays under 1.4 km per % of drag error.
+        double PerTenth(int i) => Math.Pow(results[fractions[i + 1]].dragShift / results[fractions[i]].dragShift,
+            0.1 / (fractions[i + 1] - fractions[i]));
+        for (int i = 0; i < fractions.Length - 1; i++)
+            TestContext.Out.WriteLine($"[periapsis growth {fractions[i]:F2} -> {fractions[i + 1]:F2}] ×{PerTenth(i):F3} per 0.1");
+        for (int i = 1; i < fractions.Length - 1; i++)
+            Assert.Greater(PerTenth(i), PerTenth(i - 1), "the sensitivity grows faster and faster");
+        var at = results[F];
+        var above = results[F + 0.1];
+        Assert.Less(at.dragShift / 20, 1400, "m per % of drag error at the constant");
+        Assert.Less(at.dv - above.dv, 10, "Δv paid for the step below F + 0.1");
     }
 
     // The miss is split along the track where the capsule arrives (StopPrediction.TrackDirNow), not
@@ -264,7 +276,7 @@ public class DeorbitSearchReentryTests
     // arc from the interface to the stop nears 90° (along and cross then mix) and points backwards
     // beyond. Equatorial prograde descent, so the arrival track is east along the equator; the 0.75
     // periapsis is a shallow entry with a long arc in the air.
-    [TestCase(0.45)]
+    [TestCase(DeorbitSearch.ReentryPeriapsisFraction)]
     [TestCase(0.75)]
     public void ReentryTrack_IsTheArrivalDirection(double fraction)
     {

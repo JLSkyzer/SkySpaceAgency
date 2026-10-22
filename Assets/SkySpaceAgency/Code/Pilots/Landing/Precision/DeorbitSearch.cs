@@ -30,9 +30,9 @@ namespace K2D2.Landing.Precision
         public const double AlongPrecision = 10;            // m
         public const double TimePrecision = 0.002;          // s
         public const int MaxRefine = 20;
-        public const double ReentryPeriapsisFraction = 0.45;  // of the atmosphere depth
+        public const double ReentryPeriapsisFraction = 0.35;  // of the atmosphere depth
 
-        /// <summary>Descent periapsis of a reentry: R + ReentryPeriapsisFraction * depth (31.5 km on Kerbin).</summary>
+        /// <summary>Descent periapsis of a reentry: R + ReentryPeriapsisFraction * depth (24.5 km on Kerbin).</summary>
         public static double ReentryPeriapsis(Body body, double atmosphereDepth) =>
             body.Radius + ReentryPeriapsisFraction * atmosphereDepth;
 
