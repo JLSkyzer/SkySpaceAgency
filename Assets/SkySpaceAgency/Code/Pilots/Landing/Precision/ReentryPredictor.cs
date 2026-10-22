@@ -64,7 +64,13 @@ namespace K2D2.Landing.Precision
         public double SemiAreaFraction;      // calibration; <= 0 = ReentryPredictor.DefaultSemiAreaFraction
         public double MinPressureToOpen;     // same unit as Atmosphere.Pressure
         public double DeployAltitude;        // m above the terrain
-        public double MinimumSpeedToDeploy;  // m/s of air speed
+        /// <summary>Lower bound of the air speed (m/s) for the chutes to open: the game's
+        /// Data_Parachute.minimumSpeedToDeploy ("minimum vessel speed required for the parachute to
+        /// deploy"). 0 = none.</summary>
+        public double MinDeploySpeed;
+        /// <summary>Upper bound of the air speed (m/s) for a safe opening, from the SAFE deployment
+        /// mode's limit (Module_Parachute.MaxSafeVelocityAtLocalBody). 0 or NaN = no limit.</summary>
+        public double MaxDeploySpeed;
         public double SemiToFullDelay;       // s, calibration; <= 0 = ReentryPredictor.DefaultSemiToFullDelay
     }
 
@@ -251,7 +257,7 @@ namespace K2D2.Landing.Precision
                 {
                     double pressure = air.PressureAt(altitude);
                     double airSpeed = (v - Vector3d.Cross(omega, r)).magnitude;
-                    if (pressure > 0 && pressure >= chutes.MinPressureToOpen && airSpeed <= chutes.MinimumSpeedToDeploy)
+                    if (pressure > 0 && pressure >= chutes.MinPressureToOpen && SpeedAllowsOpening(chutes, airSpeed))
                     {
                         canopy = Canopy.Semi;
                         trace.SemiUT = t;
@@ -289,7 +295,7 @@ namespace K2D2.Landing.Precision
             if (hasChutes && canopy == Canopy.Packed)
             {
                 prediction.Ok = false;
-                prediction.Reason = $"The chutes never open (they need air speed at most {chutes.MinimumSpeedToDeploy:F0} m/s " +
+                prediction.Reason = $"The chutes never open (they need air speed {SpeedWindow(chutes)} " +
                                     $"and pressure at least {chutes.MinPressureToOpen:G3}); touchdown at {trace.TouchdownSpeed:F0} m/s";
             }
             else if (hasChutes && canopy == Canopy.Semi)
@@ -301,6 +307,14 @@ namespace K2D2.Landing.Precision
         }
 
         static StopPrediction Fail(string reason) => new StopPrediction { Ok = false, Reason = reason };
+
+        static bool HasMaxSpeed(Chutes c) => c.MaxDeploySpeed > 0;   // false for 0 and NaN
+
+        static bool SpeedAllowsOpening(Chutes c, double airSpeed) =>
+            airSpeed >= c.MinDeploySpeed && (!HasMaxSpeed(c) || airSpeed <= c.MaxDeploySpeed);
+
+        static string SpeedWindow(Chutes c) =>
+            HasMaxSpeed(c) ? $"between {c.MinDeploySpeed:F0} and {c.MaxDeploySpeed:F0} m/s" : $"at least {c.MinDeploySpeed:F0} m/s";
 
         static StopPrediction Fail(string reason, ref ReentryTrace trace, double peak)
         {

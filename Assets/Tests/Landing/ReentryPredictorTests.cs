@@ -55,7 +55,7 @@ public class ReentryPredictorTests
     const double ChuteArea = 25;
 
     // 1 t capsule, CdA 1.5 m², one chute of 25 m² (semi-deployed: 10 %).
-    static ReentryVehicle Capsule(int chutes = 1, double minSpeed = 250) => new ReentryVehicle
+    static ReentryVehicle Capsule(int chutes = 1, double maxSpeed = 250, double minSpeed = 0, double deployAltitude = 1000) => new ReentryVehicle
     {
         MassT = 1,
         Drag = new DragTable { Mach = new double[] { 0 }, CdA = new double[] { 1.5 } },
@@ -66,8 +66,9 @@ public class ReentryPredictorTests
             AreaDeployed = ChuteArea,
             SemiAreaFraction = 0.1,
             MinPressureToOpen = 1000,   // Pa, as the synthetic Atmosphere.Pressure
-            DeployAltitude = 1000,
-            MinimumSpeedToDeploy = minSpeed,
+            DeployAltitude = deployAltitude,
+            MinDeploySpeed = minSpeed,
+            MaxDeploySpeed = maxSpeed,
             SemiToFullDelay = 4,
         },
     };
@@ -194,8 +195,8 @@ public class ReentryPredictorTests
     [Test]
     public void ChuteThatNeverOpens_ReasonSaysSo()
     {
-        StopPrediction p = Predict(true, Air(), Capsule(minSpeed: 1), out ReentryTrace trace, out _);
-        TestContext.Out.WriteLine($"never opens: ok {p.Ok} ({p.Reason}), {trace}");
+        StopPrediction p = Predict(true, Air(), Capsule(maxSpeed: 1), out ReentryTrace trace, out _);
+        TestContext.Out.WriteLine($"never opens (max 1 m/s): ok {p.Ok} ({p.Reason}), {trace}");
         Assert.IsFalse(p.Ok);
         StringAssert.Contains("never open", p.Reason);
         Assert.IsTrue(double.IsNaN(trace.SemiUT));
@@ -266,5 +267,56 @@ public class ReentryPredictorTests
         }
         TestContext.Out.WriteLine($"timing: mean {total / runs:F2} ms, worst {worst:F2} ms");
         Assert.Less(worst, 50);
+    }
+
+    [Test]
+    public void MinDeploySpeedAboveTheSpeedInTheAir_NeverOpens()
+    {
+        // Above any air speed of this reentry (about 2.3 km/s at the interface), no upper bound.
+        StopPrediction p = Predict(true, Air(), Capsule(maxSpeed: 0, minSpeed: 3000), out ReentryTrace trace, out _);
+        TestContext.Out.WriteLine($"never opens (min 3000 m/s): ok {p.Ok} ({p.Reason}), {trace}");
+        Assert.IsFalse(p.Ok);
+        StringAssert.Contains("never open", p.Reason);
+        Assert.IsTrue(double.IsNaN(trace.SemiUT));
+        AssertFinite(p);
+
+        // A lower bound under the opening speed changes nothing.
+        StopPrediction ok = Predict(true, Air(), Capsule(minSpeed: 50), out ReentryTrace okTrace, out _);
+        Assert.IsTrue(ok.Ok, ok.Reason);
+        Assert.Greater(okTrace.SemiAirSpeed, 50);
+    }
+
+    [Test]
+    public void DeployAltitudeTooLowForTheDelay_NeverFullyOpens()
+    {
+        // Semi at about 63 m/s: the 4 s delay needs ~250 m, more than the 100 m deploy altitude.
+        StopPrediction p = Predict(true, Air(), Capsule(deployAltitude: 100), out ReentryTrace trace, out _);
+        TestContext.Out.WriteLine($"never full: ok {p.Ok} ({p.Reason}), {trace}");
+        Assert.IsFalse(p.Ok);
+        StringAssert.Contains("never fully open", p.Reason);
+        Assert.IsFalse(double.IsNaN(trace.SemiUT));
+        Assert.IsTrue(double.IsNaN(trace.FullUT));
+        AssertFinite(p);
+    }
+
+    [Test]
+    public void DragTable_InterpolatesMachAndMoreSupersonicDragLandsShorter()
+    {
+        var table = new DragTable { Mach = new double[] { 0, 1, 3 }, CdA = new double[] { 1.5, 1.5, 3.0 } };
+        Assert.AreEqual(1.5, table.At(-1), 1e-12);
+        Assert.AreEqual(1.5, table.At(0.5), 1e-12);
+        Assert.AreEqual(2.25, table.At(2), 1e-12);
+        Assert.AreEqual(3.0, table.At(5), 1e-12);
+
+        StopPrediction flat = Predict(true, Air(), Capsule(chutes: 0), out _, out _);
+        ReentryVehicle draggy = Capsule(chutes: 0);
+        draggy.Drag = table;
+        StopPrediction mach = Predict(true, Air(), draggy, out ReentryTrace trace, out _);
+        Vector3d start = R0 / R0.magnitude;
+        double flatRange = SurfaceGeometry.GreatCircle(start, flat.StopDirNow, R);
+        double machRange = SurfaceGeometry.GreatCircle(start, mach.StopDirNow, R);
+        TestContext.Out.WriteLine($"mach table: range {flatRange / 1000:F2} -> {machRange / 1000:F2} km, peak {trace.PeakDecel / 9.80665:F1} g");
+        Assert.IsTrue(mach.Ok, mach.Reason);
+        Assert.Less(machRange, flatRange - 1000);
     }
 }
