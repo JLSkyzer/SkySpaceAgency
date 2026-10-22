@@ -125,8 +125,9 @@ public class ReentryReturnTests
         ExpectedAccuracy none = ReentryAccuracy.Estimate(s => new StopPrediction { Ok = false }, 1.0, R);
         Assert.IsFalse(none.Ok);
         Assert.AreEqual(3000, none.ExpectedM);
-        StringAssert.Contains("expected within about 20 km", ReentryAccuracy.PlanMessage(85.2, 750, 19400));
-        StringAssert.Contains("T+12m 30s", ReentryAccuracy.PlanMessage(85.2, 750, 19400));
+        Assert.AreEqual("Deorbit 85 m/s at T+12m 30s, expected within about 20 km" + ReentryAccuracy.UncalibratedNote,
+            ReentryAccuracy.PlanMessage(85.2, 750, 19400, calibrated: false));
+        Assert.AreEqual("Deorbit 85 m/s at T+12m 30s, expected within about 20 km", ReentryAccuracy.PlanMessage(85.2, 750, 19400, calibrated: true));
     }
 
     // ---- DragCalibration ----

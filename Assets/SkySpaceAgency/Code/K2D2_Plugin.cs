@@ -397,7 +397,16 @@ namespace K2D2
                 // The registry's nodes, and the Orbit plan in progress, belonged to the previous vessel.
                 NodeTargets.Clear();
                 OrbitPlanRun.Clear();
-                ResetControllers();
+                // The landing pilot may survive this reset (the jettison split): it is told why.
+                Landing.LandingPilot.reset_by_vessel_change = true;
+                try
+                {
+                    ResetControllers();
+                }
+                finally
+                {
+                    Landing.LandingPilot.reset_by_vessel_change = false;
+                }
             });
         }
 

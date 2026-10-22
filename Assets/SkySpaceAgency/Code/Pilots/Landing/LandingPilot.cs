@@ -293,7 +293,8 @@ namespace K2D2.Landing
         public override void onReset()
         {
             // The jettison split may change the active vessel to the capsule: not a reason to stop.
-            if (KeepThroughVesselChange())
+            // Only for a VesselChangedMessage reset; any other reset stops the landing as before.
+            if (reset_by_vessel_change && KeepThroughVesselChange())
                 return;
             isRunning = false;
             // Vessel change, scene change or another pilot's start: drop a pending leg check, it
@@ -968,7 +969,7 @@ namespace K2D2.Landing
             if (PrecisionActive)
             {
                 if (reentry_run)
-                    UpdateReentry();
+                    UpdateReentryGuarded();
                 else
                     UpdatePrecisionReadout();
             }

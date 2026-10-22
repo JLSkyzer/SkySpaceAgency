@@ -30,7 +30,8 @@ namespace K2D2.Landing
     // parachutes without target (ReentryFailurePolicy), except when the active vessel is not the
     // capsule. After the landing: the final distance and a suggested reentry_drag_scale
     // (DragCalibration), applied only by the player. Every line logged here starts with
-    // "[Landing] reentry:".
+    // "[Landing] reentry:". The descent logs, the finish and the calibration are in
+    // LandingPilotReentryLog.cs.
     public partial class LandingPilot
     {
         public Jettison jettison;
@@ -69,6 +70,16 @@ namespace K2D2.Landing
         // Calibration suggestion (LandingUI shows it with an Apply button).
         internal double suggested_drag_scale = double.NaN;
 
+        // Set by K2D2_Plugin around the reset of a VesselChangedMessage (onReset tells it apart
+        // from a pilot start, an invalid scene or the mod being disabled).
+        internal static bool reset_by_vessel_change = false;
+
+        // UpdateReentry errors: each message logged once; after MaxReentryErrors frames in a row
+        // in the coast or the jettison, the pilot falls back to the parachute descent.
+        readonly HashSet<string> reentry_errors_logged = new HashSet<string>();
+        int reentry_error_frames = 0;
+        public const int MaxReentryErrors = 30;
+
         public const double ReadoutIntervalReentry = 5;     // s of real time between predictions above the interface
         public const double HeatLogInterval = 10;           // s of real time
         public const double NoWarpAboveInterface = 10000;   // m: no warp below the interface + this
@@ -94,6 +105,8 @@ namespace K2D2.Landing
             reentry_max_temp_part = null;
             chute_semi_logged = chute_full_logged = false;
             suggested_drag_scale = double.NaN;
+            reentry_errors_logged.Clear();
+            reentry_error_frames = 0;
         }
 
         static string Km(double m) => double.IsNaN(m) ? "?" : $"{m / 1000:n2} km";
@@ -245,7 +258,7 @@ namespace K2D2.Landing
             reentry_expected_m = accuracy.ExpectedM;
             reentry_interface_UT = trace.InterfaceUT;
             reentry_jettison_UT = JettisonAwarePredictor.JettisonUT(trace);
-            precision_summary = ReentryAccuracy.PlanMessage(d.DeltaV.magnitude, d.BurnUT - now, accuracy.ExpectedM) +
+            precision_summary = ReentryAccuracy.PlanMessage(d.DeltaV.magnitude, d.BurnUT - now, accuracy.ExpectedM, ReentryAccuracy.IsCalibrated(scale)) +
                 (pc.Needed ? $" (after a plane change of {pc.DeltaV:n0} m/s)" : "");
             precision_distance_m = SurfaceGeometry.GreatCircle(nominal.StopDirNow, ctx.TargetDirNow, R);
             precision_run = true;
@@ -435,11 +448,25 @@ namespace K2D2.Landing
             return true;
         }
 
-        // After a reentry burn: the Δv used and the prediction from the orbit reached.
+        // After a reentry burn: the Δv used and the prediction from the orbit reached. Never
+        // throws: the caller moves to the next phase right after it, whatever the readout does.
         void OnReentryPhaseEnd()
         {
             double used = burn_dV.burned_dV - phase_burned_start;
             string name = precision_phase.Name;
+            phase_log.Add($"{name} {used:n1}/{precision_phase.PlannedDeltaV:n1}");
+            try
+            {
+                LogReentryPhaseEnd(name, used);
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning($"[Landing] reentry: phase {name} end: Δv used {used:n2} m/s, readout failed ({e.GetType().Name}: {e.Message})");
+            }
+        }
+
+        void LogReentryPhaseEnd(string name, double used)
+        {
             string after;
             if (mode == Mode.PlaneChange)
             {
@@ -460,7 +487,6 @@ namespace K2D2.Landing
                 after = "no prediction: " + stop.Reason;
             logger.LogInfo($"[Landing] reentry: phase {name} end{(precision_phase.Skipped ? " (not needed)" : "")}: " +
                 $"Δv used {used:n2} m/s (planned {precision_phase.PlannedDeltaV:n2}) | {after}");
-            phase_log.Add($"{name} {used:n1}/{precision_phase.PlannedDeltaV:n1}");
         }
 
         static string AlongCross(StopPrediction stop, Vector3d target, double radius)
@@ -478,7 +504,6 @@ namespace K2D2.Landing
                 case Mode.PlaneChange: return ReentryStage.PlaneChange;
                 case Mode.Deorbit: return ReentryStage.Deorbit;
                 case Mode.MidCourse: return ReentryStage.MidCourse;
-                case Mode.ReentryCoast: return ReentryStage.Coast;
                 default: return ReentryStage.Jettison;
             }
         }
@@ -577,36 +602,58 @@ namespace K2D2.Landing
                 setMode(Mode.Jettison);
         }
 
-        // The active vessel holds every capsule part of the jettison plan.
-        bool ActiveHoldsCapsule()
+        // The active vessel holds every capsule part of the jettison plan; null when the game
+        // does not tell (an exception, logged).
+        bool? ActiveHoldsCapsule()
         {
-            HashSet<string> capsule = jettison.plan.CapsuleIds;
-            VesselComponent active = current_vessel?.GetActiveSimVessel();
-            if (capsule == null || active?.SimulationObject?.PartOwner == null)
-                return false;
-            var ids = new HashSet<string>(active.SimulationObject.PartOwner.Parts.Where(p => p != null).Select(p => p.Guid));
-            return capsule.All(ids.Contains);
+            try
+            {
+                HashSet<string> capsule = jettison.plan.CapsuleIds;
+                VesselComponent active = current_vessel?.GetActiveSimVessel();
+                if (capsule == null || active?.SimulationObject?.PartOwner == null)
+                    return false;
+                var ids = new HashSet<string>(active.SimulationObject.PartOwner.Parts.Where(p => p != null).Select(p => p.Guid));
+                return capsule.All(ids.Contains);
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning($"[Landing] reentry: active vessel check failed ({e.GetType().Name}: {e.Message})");
+                return null;
+            }
         }
 
+        // Jettison finished: the reference prediction and the log, then always the descent.
         void OnJettisonDone()
         {
             current_executor.setController(null);
-            if (!ActiveHoldsCapsule())
+            // Jettison itself has checked the active vessel; unknown here = trust it.
+            if (ActiveHoldsCapsule() == false)
             {
                 OnJettisonFailed("the active vessel does not hold the capsule after the jettison");
                 return;
             }
-            if (PredictNow(out Vector3d r, out Vector3d v, out double now, out Precision.Body body, out Vector3d target, out StopPrediction stop, out ReentryTrace trace))
+            try
             {
-                SetReference("jettison", r, v, now, body, target, stop, trace);
-                if (stop.Ok)
-                    precision_distance_m = SurfaceGeometry.GreatCircle(stop.StopDirNow, target, body.Radius);
+                if (PredictNow(out Vector3d r, out Vector3d v, out double now, out Precision.Body body, out Vector3d target, out StopPrediction stop, out ReentryTrace trace))
+                {
+                    SetReference("jettison", r, v, now, body, target, stop, trace);
+                    if (stop.Ok)
+                        precision_distance_m = SurfaceGeometry.GreatCircle(stop.StopDirNow, target, body.Radius);
+                }
+                var vessel = current_vessel.VesselComponent;
+                logger.LogInfo($"[Landing] reentry: phase jettison end: {jettison.PartsBefore} -> {vessel.SimulationObject.PartOwner.PartCount} part(s) " +
+                    $"({jettison.plan.ServiceIds.Count} dropped, {jettison.plan.CapsuleIds.Count} kept) at T{now:F1}, {altitude:n0} m, " +
+                    $"mass {vessel.totalMass:n3} t (modelled capsule {reentry_capsule.MassT:n3} t), interface planned +{F(reentry_interface_UT - now)} s");
             }
-            var vessel = current_vessel.VesselComponent;
-            logger.LogInfo($"[Landing] reentry: phase jettison end: {jettison.PartsBefore} -> {vessel.SimulationObject.PartOwner.PartCount} part(s) " +
-                $"({jettison.plan.ServiceIds.Count} dropped, {jettison.plan.CapsuleIds.Count} kept) at T{now:F1}, {altitude:n0} m, " +
-                $"mass {vessel.totalMass:n3} t (modelled capsule {reentry_capsule.MassT:n3} t), interface planned +{F(reentry_interface_UT - now)} s");
-            setMode(Mode.Parachute);
+            catch (Exception e)
+            {
+                logger.LogWarning($"[Landing] reentry: phase jettison end: reference prediction or log failed ({e.GetType().Name}: {e.Message}); " +
+                    "the descent goes on (the touchdown is compared with the interface prediction, if any)");
+            }
+            finally
+            {
+                setMode(Mode.Parachute);
+            }
         }
 
         void SetReference(string name, Vector3d r, Vector3d v, double ut, Precision.Body body, Vector3d target, StopPrediction stop, ReentryTrace trace)
@@ -632,7 +679,8 @@ namespace K2D2.Landing
         void OnJettisonFailed(string reason)
         {
             bool activated = jettison.Activated;
-            bool holds = !activated || ActiveHoldsCapsule();
+            // Unknown (the check threw): capsule_lost alone decides.
+            bool holds = !activated || ActiveHoldsCapsule() != false;
             ReentryAction action = ReentryFailurePolicy.Decide(ReentryStage.Jettison, true, activated, holds, jettison.capsule_lost);
             logger.LogWarning($"[Landing] reentry: phase jettison failed: {reason} | stage activated {activated}, active vessel holds the capsule {holds}, " +
                 $"capsule lost {jettison.capsule_lost} -> {action}");
@@ -652,13 +700,40 @@ namespace K2D2.Landing
         {
             if (!(reentry_run && isRunning && mode == Mode.Jettison && jettison.Activated))
                 return false;
-            bool holds = ActiveHoldsCapsule();
+            bool holds = ActiveHoldsCapsule() == true;
             logger.LogInfo($"[Landing] reentry: vessel change during the jettison: the active vessel holds the capsule {holds} -> " +
                 (holds ? "the landing goes on" : "the landing stops"));
             return holds;
         }
 
         // ---- Descent ----
+
+        // UpdateReentry inside a try/catch, so that ParachuteDescent and the other controllers
+        // keep running: each message logged once. Errors in the descent are only logged (the game
+        // opens the chutes anyway); MaxReentryErrors frames in a row in the coast or the jettison
+        // (after the deorbit, which these modes would never leave) fall back to the descent.
+        void UpdateReentryGuarded()
+        {
+            try
+            {
+                UpdateReentry();
+                reentry_error_frames = 0;
+            }
+            catch (Exception e)
+            {
+                string message = $"{e.GetType().Name}: {e.Message}";
+                if (reentry_errors_logged.Add(message))
+                    logger.LogWarning($"[Landing] reentry: update failed in {mode}: {e}");
+                reentry_error_frames++;
+                if (reentry_error_frames < MaxReentryErrors || !ReentryMode(mode))
+                    return;
+                reentry_error_frames = 0;
+                if (mode == Mode.Jettison)
+                    OnJettisonFailed(message);
+                else
+                    ReentryFallBack(ReentryFailurePolicy.FallBackMessage(message));
+            }
+        }
 
         // Every frame of a precision return outside the burns: coast and descent readouts and logs.
         void UpdateReentry()
@@ -689,210 +764,6 @@ namespace K2D2.Landing
             }
             if (mode == Mode.Parachute)
                 UpdateReentryDescent();
-        }
-
-        void UpdateReentryDescent()
-        {
-            var vessel = current_vessel.VesselComponent;
-            double sea = vessel.AltitudeFromSeaLevel;
-            double now = GeneralTools.Current_UT;
-            if (!reentry_interface_seen && sea <= reentry_depth)
-            {
-                reentry_interface_seen = true;
-                bool hadReference = reentry_reference;
-                if (ReentryState(out Vector3d r, out Vector3d v, out double ut, out Precision.Body body, out Vector3d target))
-                {
-                    logger.LogInfo($"[Landing] reentry: interface at T{ut:F1} (predicted T{F(reentry_interface_UT, "F1")}, {F(ut - reentry_interface_UT, "n1")} s late), " +
-                        $"speed {current_vessel.VesselVehicle.SurfaceSpeed:n0} m/s surface, {v.magnitude:n0} m/s orbital");
-                    if (!hadReference)
-                    {
-                        StopPrediction stop = ReentryPredictorFor(body, jettisoned: true).Predict(r, v, ut, null, out ReentryTrace trace);
-                        SetReference("interface", r, v, ut, body, target, stop, trace);
-                    }
-                }
-            }
-
-            // Predicted distance above the interface.
-            float now_real = UnityEngine.Time.realtimeSinceStartup;
-            if (sea > reentry_depth && now_real >= next_precision_readout)
-            {
-                next_precision_readout = now_real + (float)ReadoutIntervalReentry;
-                if (PredictNow(out _, out _, out _, out Precision.Body b, out Vector3d target, out StopPrediction stop, out _))
-                    precision_distance_m = stop.Ok ? SurfaceGeometry.GreatCircle(stop.StopDirNow, target, b.Radius) : double.NaN;
-                precision_distance_label = "Predicted Distance";
-            }
-            else if (sea <= reentry_depth)
-                precision_distance_label = "Predicted Distance (at the interface)";
-
-            if (sea <= reentry_depth && !chute_full_logged)
-                UpdateHeating(vessel, sea, now_real);
-            UpdateChuteOpening(vessel, now);
-        }
-
-        // Peak deceleration and the hottest part (temperature / max temperature) in the air, logged
-        // every HeatLogInterval s until the chutes are fully open: the 0.35 descent periapsis was
-        // chosen without a heating model.
-        void UpdateHeating(VesselComponent vessel, double sea, float now_real)
-        {
-            double g = vessel.geeForce;
-            if (g > reentry_peak_g)
-            {
-                reentry_peak_g = g;
-                reentry_peak_g_altitude = sea;
-            }
-            double hottest = 0;
-            string hottest_part = null;
-            try
-            {
-                foreach (PartComponent part in vessel.SimulationObject.PartOwner.Parts)
-                {
-                    if (part == null || !(part.MaxTemp > 0))
-                        continue;
-                    double ratio = part.Temperature / part.MaxTemp;
-                    if (ratio > hottest)
-                    {
-                        hottest = ratio;
-                        hottest_part = part.PartName;
-                    }
-                }
-            }
-            catch (Exception) { /* temperatures not readable: logged as 0 */ }
-            if (hottest > reentry_max_temp_ratio)
-            {
-                reentry_max_temp_ratio = hottest;
-                reentry_max_temp_part = hottest_part;
-            }
-            if (now_real < next_heat_log)
-                return;
-            next_heat_log = now_real + (float)HeatLogInterval;
-            logger.LogInfo($"[Landing] reentry: heating: altitude {sea:n0} m, speed {current_vessel.VesselVehicle.SurfaceSpeed:n0} m/s, Mach {vessel.MachNumber:n2}, " +
-                $"{g:n2} g (peak {reentry_peak_g:n2} g at {F(reentry_peak_g_altitude)} m), hottest part {hottest_part ?? "?"} at {hottest * 100:n0} % of its max temperature " +
-                $"(peak {reentry_max_temp_ratio * 100:n0} %, {reentry_max_temp_part ?? "?"}) | predicted peak drag {ref_trace.PeakDecel / BrakeSimulator.G0:n2} g");
-        }
-
-        // The game opening the chutes (semi, then full), against the prediction.
-        void UpdateChuteOpening(VesselComponent vessel, double now)
-        {
-            if (chute_full_logged)
-                return;
-            ParachuteCounts counts = Parachutes.Count(vessel);
-            bool semi = counts.SemiDeployed + counts.Deployed > 0;
-            bool full = counts.Deployed > 0;
-            if (semi && !chute_semi_logged)
-            {
-                chute_semi_logged = true;
-                LogChuteOpening("open (semi-deployed)", vessel, now, ref_trace.SemiUT, ref_trace.SemiAltitude, ref_trace.SemiDirNow);
-                logger.LogInfo($"[Landing] reentry: heating summary at the chute opening: peak {reentry_peak_g:n2} g at {F(reentry_peak_g_altitude)} m " +
-                    $"(predicted {ref_trace.PeakDecel / BrakeSimulator.G0:n2} g), hottest part {reentry_max_temp_part ?? "?"} at {reentry_max_temp_ratio * 100:n0} % of its max temperature");
-            }
-            if (full && !chute_full_logged)
-            {
-                chute_full_logged = true;
-                LogChuteOpening("fully deployed", vessel, now, ref_trace.FullUT, ref_trace.FullAltitude, new Vector3d(0, 0, 0));
-            }
-        }
-
-        void LogChuteOpening(string what, VesselComponent vessel, double now, double predictedUT, double predictedAltitude, Vector3d predictedDirAtRef)
-        {
-            var states = new List<string>();
-            try
-            {
-                foreach (PartComponent part in vessel.SimulationObject.PartOwner.Parts)
-                {
-                    if (part != null && part.TryGetModuleData<PartComponentModule_Parachute, Data_Parachute>(out Data_Parachute chute) && chute != null)
-                        states.Add($"{part.PartName} {chute.deployState.GetValue()} safety {chute.deploymentSafetyState.GetValue()}");
-                }
-            }
-            catch (Exception e)
-            {
-                states.Add($"not readable ({e.GetType().Name})");
-            }
-            string position = "";
-            if (reentry_reference && ReentryState(out Vector3d r, out _, out _, out Precision.Body body, out _))
-            {
-                Vector3d here = SurfaceGeometry.AtTime(r, ref_body.Omega, -(now - ref_ut));
-                position = predictedDirAtRef.sqrMagnitude > 0
-                    ? $", {SurfaceGeometry.GreatCircle(here, predictedDirAtRef, ref_body.Radius):n0} m from the predicted opening point"
-                    : "";
-                position += $", {SurfaceGeometry.GreatCircle(here, ref_target, ref_body.Radius):n0} m from the target";
-            }
-            logger.LogInfo($"[Landing] reentry: chutes {what} at T{now:F1}, {vessel.AltitudeFromSurface:n0} m above the ground ({vessel.AltitudeFromSeaLevel:n0} m above sea level), " +
-                $"air speed {current_vessel.VesselVehicle.SurfaceSpeed:n1} m/s, Mach {vessel.MachNumber:n2}{position} | predicted from the {reentry_reference_name ?? "?"}: " +
-                $"T{F(predictedUT, "F1")} ({F(now - predictedUT, "n1")} s late) at {F(predictedAltitude)} m | {string.Join("; ", states)}");
-        }
-
-        // ---- End ----
-
-        void OnReentryFinish()
-        {
-            try
-            {
-                var vessel = current_vessel.VesselComponent;
-                var cb = vessel.Orbit.referenceBody;
-                double now = GeneralTools.Current_UT;
-                Vector3d r = vessel.Orbit.GetRelativePositionAtUTZup(now);
-                PrecisionContext.GameLatLon(cb, r, out double lat, out double lon);
-                double d = HaversineDistanceMeters(lat, lon, precision_target_lat, precision_target_lon, cb.radius);
-                precision_final_message = PrecisionPhases.LandedMessage(d);
-                precision_distance_label = "Distance to Target";
-                precision_distance_m = d;
-                string compare = "no reference prediction";
-                if (reentry_reference)
-                {
-                    Vector3d here = SurfaceGeometry.AtTime(r, ref_body.Omega, -(now - ref_ut));
-                    double fromPredicted = SurfaceGeometry.GreatCircle(here, ref_stop.StopDirNow, ref_body.Radius);
-                    double predictedMiss = SurfaceGeometry.GreatCircle(ref_stop.StopDirNow, ref_target, ref_body.Radius);
-                    string split = "";
-                    if (ref_stop.TrackDirNow.sqrMagnitude > 0)
-                    {
-                        SurfaceGeometry.Split(ref_stop.StopDirNow, here, ref_stop.TrackDirNow, ref_body.Radius, out double along, out double cross);
-                        split = $" (touchdown {along:n0} m along the predicted track, {cross:n0} m across)";
-                    }
-                    compare = $"predicted from the {reentry_reference_name}: {predictedMiss:n0} m from the target{AlongCross(ref_stop, ref_target, ref_body.Radius)}, " +
-                        $"touchdown T{ref_stop.StopUT:F1} ({now - ref_stop.StopUT:n1} s late); actual touchdown {fromPredicted:n0} m from the predicted one{split}";
-                    Calibrate(here);
-                }
-                logger.LogInfo($"[Landing] reentry: landed {d:n1} m from the target (expected within about {Km(reentry_expected_m)}): at ({lat:0.00000}, {lon:0.00000}), " +
-                    $"target ({precision_target_lat:0.00000}, {precision_target_lon:0.00000}) | {compare} | Δv used total {burn_dV.burned_dV:n1} m/s: " +
-                    string.Join(", ", phase_log) + $" | drag scale {reentry_capsule.DragScale:0.00}");
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning("[Landing] reentry: final distance not available: " + e);
-            }
-        }
-
-        // The drag scale that would have put the reference prediction on the touchdown point.
-        void Calibrate(Vector3d touchdownAtRef)
-        {
-            ReentryVehicle capsule = reentry_capsule;
-            JettisonAwarePredictor p = ReentryPredictorFor(ref_body, jettisoned: true);
-            var timer = Stopwatch.StartNew();
-            DragCalibrationResult c = DragCalibration.Solve(s =>
-            {
-                ReentryVehicle scaled = capsule;
-                scaled.DragScale = s;
-                return p.Predict(ref_r, ref_v, ref_ut, null, scaled, out _);
-            }, touchdownAtRef, ref_body.Radius);
-            timer.Stop();
-            double current = settings_atmo.reentry_drag_scale.V;
-            if (c.Ok)
-                suggested_drag_scale = c.Scale;
-            logger.LogInfo($"[Landing] reentry: calibration from the {reentry_reference_name}: " + (c.Ok
-                ? $"{DragCalibration.SuggestionMessage(c.Scale, current)}{(c.AtLimit ? " (at the limit of the range)" : "")}, residual {c.AlongM:n0} m along, " +
-                  $"{c.CrossM:n0} m across (not a drag error), {c.Predictions} predictions, {timer.Elapsed.TotalMilliseconds:n0} ms - not applied"
-                : $"no suggestion ({c.Reason}), {c.Predictions} predictions"));
-        }
-
-        // LandingUI's Apply button: writes the suggestion to the setting, never done on its own.
-        internal void ApplySuggestedDragScale()
-        {
-            if (double.IsNaN(suggested_drag_scale))
-                return;
-            float before = settings_atmo.reentry_drag_scale.V;
-            settings_atmo.reentry_drag_scale.V = (float)suggested_drag_scale;
-            logger.LogInfo($"[Landing] reentry: drag scale applied by the player: {before:0.00} -> {settings_atmo.reentry_drag_scale.V:0.00}");
-            suggested_drag_scale = double.NaN;
         }
     }
 }

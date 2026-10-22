@@ -136,10 +136,13 @@ namespace K2D2.Landing.Precision
 
         static double Value(double x) => double.IsNaN(x) ? 0 : x;
 
-        /// <summary>"Deorbit 85 m/s at T+12m 30s, expected within about 4 km" (time in seconds from now).</summary>
-        public static string PlanMessage(double deorbitDeltaV, double secondsFromNow, double expectedM) =>
-            string.Format(CultureInfo.InvariantCulture, "Deorbit {0:F0} m/s at T+{1}, expected within about {2:F0} km",
-                deorbitDeltaV, Duration(secondsFromNow), Math.Ceiling(expectedM / 1000));
+        public const string UncalibratedNote = " (uncalibrated: apply the suggested drag scale after the first return)";
+
+        /// <summary>"Deorbit 85 m/s at T+12m 30s, expected within about 4 km" (time in seconds from now),
+        /// with UncalibratedNote while the drag scale is still 1.</summary>
+        public static string PlanMessage(double deorbitDeltaV, double secondsFromNow, double expectedM, bool calibrated) =>
+            string.Format(CultureInfo.InvariantCulture, "Deorbit {0:F0} m/s at T+{1}, expected within about {2:F0} km{3}",
+                deorbitDeltaV, Duration(secondsFromNow), Math.Ceiling(expectedM / 1000), calibrated ? "" : UncalibratedNote);
 
         static string Duration(double s)
         {
@@ -255,7 +258,7 @@ namespace K2D2.Landing.Precision
     }
 
     // The stages of a parachute precision return, in flight order.
-    public enum ReentryStage { PlaneChange, Deorbit, MidCourse, Coast, Jettison }
+    public enum ReentryStage { PlaneChange, Deorbit, MidCourse, Jettison }
 
     public enum ReentryAction
     {
@@ -285,7 +288,6 @@ namespace K2D2.Landing.Precision
                 case ReentryStage.MidCourse:
                     return ReentryAction.Skip;
                 case ReentryStage.Jettison:
-                case ReentryStage.Coast:
                     if (capsuleLost || (stageActivated && !activeHoldsCapsule))
                         return ReentryAction.StopCapsuleLost;
                     return ReentryAction.FallBackParachute;
