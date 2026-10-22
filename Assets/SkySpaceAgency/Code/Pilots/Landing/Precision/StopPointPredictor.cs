@@ -47,6 +47,11 @@ namespace K2D2.Landing.Precision
         // prediction's start) stops below StopHeight but at or above SafeAltitude. Safe, so Ok;
         // the hand-over to terminal guidance then starts lower. Reason says so.
         public bool BelowHandOver;
+        // Ground track where the descent arrives (unit, surface-relative, body-fixed in the
+        // orientation at the prediction's UT); zero = not given, DeorbitSearch.GroundTrack then
+        // reads it at BrakeStartUT. ReentryPredictor gives it: its arc from the interface to the
+        // stop can exceed 90°, where the interface velocity projected at the stop points backwards.
+        public Vector3d TrackDirNow;
     }
 
     // Where a powered descent really stops: coast (after the optional impulse) to the terrain

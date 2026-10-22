@@ -196,4 +196,42 @@ public class DeorbitSearchReentryTests
         Assert.Greater(c.MissBeforeM, 1000);
         Assert.Less(c.MissAfterM, 500);
     }
+
+    // The miss is split along the track where the capsule arrives (StopPrediction.TrackDirNow), not
+    // along the interface velocity projected at the stop: that projection shrinks to nothing when the
+    // arc from the interface to the stop nears 90° (along and cross then mix) and points backwards
+    // beyond. Equatorial prograde descent, so the arrival track is east along the equator; the 0.75
+    // periapsis is a shallow entry with a long arc in the air.
+    [TestCase(0.45)]
+    [TestCase(0.75)]
+    public void ReentryTrack_IsTheArrivalDirection(double fraction)
+    {
+        double rp = R + fraction * ReentryPredictorTests.Depth;
+        DeorbitPlan plan = DeorbitSearch.Baseline(R0Vec, V0Vec, UT, Kerbin, UT + 30, Reentry(), rp);
+        Assert.IsTrue(plan.Ok, plan.Reason);
+        Vector3d n = plan.Stop.StopDirNow;
+        Vector3d track = plan.Stop.TrackDirNow;
+        Vector3d east = Vector3d.Cross(new Vector3d(0, 0, 1), n).normalized;
+        // The interface state, the point body-fixed in the orientation at UT; the old track from its velocity.
+        var burn = new Impulse { UT = plan.BurnUT, DeltaV = plan.DeltaV };
+        ReentryPredictor.Predict(R0Vec, V0Vec, UT, Kerbin, ReentryPredictorTests.Air(), ReentryPredictorTests.Capsule(), burn, out ReentryTrace trace);
+        KeplerPropagator.Propagate(R0Vec, V0Vec, Mu, plan.BurnUT - UT, out Vector3d rb, out Vector3d vb);
+        KeplerPropagator.Propagate(rb, vb + plan.DeltaV, Mu, trace.InterfaceUT - plan.BurnUT, out Vector3d ri, out Vector3d vi);
+        Vector3d interfaceNow = SurfaceGeometry.AtTime(ri, Kerbin.Omega, -(trace.InterfaceUT - UT)).normalized;
+        Vector3d old = SurfaceGeometry.AtTime(vi - Vector3d.Cross(Kerbin.Omega, ri), Kerbin.Omega, -(trace.InterfaceUT - UT));
+        old = old - Vector3d.Dot(old, n) * n;
+        TestContext.Out.WriteLine($"[reentry track {fraction:F2}] arc interface->stop {SurfaceGeometry.GreatCircle(interfaceNow, n, R) / 1000:F0} km, "
+            + $"track·east {Vector3d.Dot(track, east):F6}, track·stop {Vector3d.Dot(track, n):E2}; interface velocity projected at the stop: "
+            + $"{old.magnitude:F0} m/s, ·east {Vector3d.Dot(old.normalized, east):F3}");
+        Assert.AreEqual(1, track.magnitude, 1e-9);
+        Assert.Greater(Vector3d.Dot(track, east), 0.9999);
+
+        // A target 2 km east of the stop is reached, nothing across.
+        Vector3d target = (n * Math.Cos(2000 / R) + east * Math.Sin(2000 / R)).normalized;
+        calls = 0; predictMs = 0;
+        DeorbitPlan aimed = DeorbitSearch.Find(R0Vec, V0Vec, UT, Kerbin, target, UT + 30, Reentry(), rp);
+        Assert.IsTrue(aimed.Ok, aimed.Reason);
+        Assert.Less(Math.Abs(aimed.CrossMissM), 50);
+        Assert.Less(SurfaceGeometry.GreatCircle(aimed.Stop.StopDirNow, target, R), 500);
+    }
 }

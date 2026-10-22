@@ -210,11 +210,14 @@ namespace K2D2.Landing.Precision
             return plan;
         }
 
-        // Surface-relative velocity (v − ω×r) when braking starts, turned back to the body's
-        // orientation at ut and projected on the tangent plane at the stop point. Shared with
+        // The prediction's arrival track (StopPrediction.TrackDirNow) when it gives one, else the
+        // surface-relative velocity (v − ω×r) when braking starts, turned back to the body's
+        // orientation at ut; projected on the tangent plane at the stop point. Shared with
         // CourseCorrection.
         internal static bool GroundTrack(Vector3d r, Vector3d v, double ut, Body body, Impulse burn, StopPrediction stop, out Vector3d track)
         {
+            if (stop.TrackDirNow.sqrMagnitude > 0)
+                return Tangent(stop.TrackDirNow, stop.StopDirNow, 1, out track);
             Vector3d rb = r, vb = v;
             if (burn.UT > ut)
                 KeplerPropagator.Propagate(r, v, body.Mu, burn.UT - ut, out rb, out vb);
@@ -224,10 +227,15 @@ namespace K2D2.Landing.Precision
                 KeplerPropagator.Propagate(rb, vb, body.Mu, stop.BrakeStartUT - burn.UT, out rs, out vs);
             Vector3d surface = vs - Vector3d.Cross(body.Omega, rs);
             Vector3d now = SurfaceGeometry.AtTime(surface, body.Omega, -(stop.BrakeStartUT - ut));
-            Vector3d n = stop.StopDirNow;
-            track = now - Vector3d.Dot(now, n) * n;
+            return Tangent(now, stop.StopDirNow, Math.Max(surface.magnitude, 1), out track);
+        }
+
+        // Unit projection of `direction` on the tangent plane at n; false when it is (nearly) vertical.
+        static bool Tangent(Vector3d direction, Vector3d n, double scale, out Vector3d track)
+        {
+            track = direction - Vector3d.Dot(direction, n) * n;
             double m = track.magnitude;
-            if (!(m > 1e-6 * Math.Max(surface.magnitude, 1)))
+            if (!(m > 1e-6 * scale))
                 return false;
             track = track / m;
             return true;

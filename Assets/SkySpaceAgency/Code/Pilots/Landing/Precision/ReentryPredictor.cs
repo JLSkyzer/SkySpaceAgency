@@ -113,6 +113,9 @@ namespace K2D2.Landing.Precision
         public const double MinCoastStep = 0.5, MaxCoastStep = 60, InterfacePrecision = 0.01;  // s
         public const double DefaultSemiAreaFraction = 0.1;
         public const double DefaultSemiToFullDelay = 4;      // s
+        // Horizontal air speed (m/s) above which the arrival track is still read: under a canopy
+        // the horizontal speed decays to the Coriolis drift (cm/s), whose direction is not the track.
+        public const double TrackMinSpeed = 10;
 
         enum Canopy { Packed, Semi, Full }
 
@@ -183,6 +186,7 @@ namespace K2D2.Landing.Precision
             double fullAt = double.NaN;
             double airTime = 0;
             double peak = 0;
+            Vector3d trackNow = new Vector3d(0, 0, 0);   // arrival track, body orientation at ut
 
             Vector3d Accel(Vector3d p, Vector3d u, Canopy c)
             {
@@ -250,6 +254,11 @@ namespace K2D2.Landing.Precision
                 t = tNext;
                 h = hNext;
 
+                Vector3d airVelocity = v - Vector3d.Cross(omega, r);
+                Vector3d horizontal = airVelocity - (Vector3d.Dot(airVelocity, r) / r.sqrMagnitude) * r;
+                if (horizontal.magnitude >= TrackMinSpeed)
+                    trackNow = SurfaceGeometry.AtTime(horizontal, omega, -(t - ut));
+
                 if (!hasChutes)
                     continue;
                 double altitude = r.magnitude - body.Radius;
@@ -291,8 +300,10 @@ namespace K2D2.Landing.Precision
                 StopUT = t,
                 StopDirNow = m > 0 ? stopNow / m : stopNow,
                 StopAltitude = 0,
-                // Where the Kepler arc ends and the drag begins: DeorbitSearch.GroundTrack reads the ground track there.
+                // Where the Kepler arc ends and the drag begins.
                 BrakeStartUT = trace.InterfaceUT,
+                // The last horizontal air velocity above TrackMinSpeed: DeorbitSearch.GroundTrack splits the miss along it.
+                TrackDirNow = trackNow.sqrMagnitude > 0 ? trackNow / trackNow.magnitude : trackNow,
             };
             if (hasChutes && canopy == Canopy.Packed)
             {
