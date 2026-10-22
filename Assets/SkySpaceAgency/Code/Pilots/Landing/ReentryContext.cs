@@ -89,31 +89,9 @@ namespace K2D2.Landing
             PartOwnerComponent owner = vessel.GetControlOwner()?.PartOwner;
             if (owner == null)
                 return "The vessel's parts are not available.";
-            var parts = new List<CapsulePart>();
             var chuteData = new Dictionary<string, Data_Parachute>();
             var names = new Dictionary<string, string>();
-            int unknownNodes = 0;
-            foreach (PartComponent part in owner.Parts)
-            {
-                if (part == null)
-                    continue;
-                var p = new CapsulePart { Id = part.Guid, ParentId = part.ParentPart?.Guid, MassT = part.TotalMass };
-                names[part.Guid] = part.PartName;
-                if (part.TryGetModuleData<PartComponentModule_Parachute, Data_Parachute>(out Data_Parachute chute) && chute != null
-                    && chute.deployState.GetValue() != Data_Parachute.DeploymentStates.CUT)
-                {
-                    p.IsParachute = true;
-                    chuteData[part.Guid] = chute;
-                }
-                if (part.TryGetModuleData<PartComponentModule_Decouple, Data_Decouple>(out Data_Decouple decouple) && decouple != null)
-                {
-                    p.IsDecoupler = true;
-                    p.DetachesFromId = DetachesFrom(part, decouple);
-                    if (p.DetachesFromId == null)
-                        unknownNodes++;
-                }
-                parts.Add(p);
-            }
+            List<CapsulePart> parts = ReadParts(owner, chuteData, names, out _, out int unknownNodes);
             CapsuleSideResult side = CapsuleSide.Find(parts);
             if (!side.Ok)
                 return side.Reason;
@@ -171,6 +149,40 @@ namespace K2D2.Landing
                 VesselMassT = vesselMass,
             };
             return null;
+        }
+
+        // The vessel's part tree as CapsuleSide reads it (also used by Jettison): parent, mass,
+        // usable (not cut) parachutes, decouplers and their explosive node. Fills the chute data
+        // and the part names by id; components holds the PartComponents in the order of the list.
+        internal static List<CapsulePart> ReadParts(PartOwnerComponent owner, Dictionary<string, Data_Parachute> chuteData,
+            Dictionary<string, string> names, out List<PartComponent> components, out int unknownNodes)
+        {
+            var parts = new List<CapsulePart>();
+            components = new List<PartComponent>();
+            unknownNodes = 0;
+            foreach (PartComponent part in owner.Parts)
+            {
+                if (part == null)
+                    continue;
+                var p = new CapsulePart { Id = part.Guid, ParentId = part.ParentPart?.Guid, MassT = part.TotalMass };
+                names[part.Guid] = part.PartName;
+                if (part.TryGetModuleData<PartComponentModule_Parachute, Data_Parachute>(out Data_Parachute chute) && chute != null
+                    && chute.deployState.GetValue() != Data_Parachute.DeploymentStates.CUT)
+                {
+                    p.IsParachute = true;
+                    chuteData[part.Guid] = chute;
+                }
+                if (part.TryGetModuleData<PartComponentModule_Decouple, Data_Decouple>(out Data_Decouple decouple) && decouple != null)
+                {
+                    p.IsDecoupler = true;
+                    p.DetachesFromId = DetachesFrom(part, decouple);
+                    if (p.DetachesFromId == null)
+                        unknownNodes++;
+                }
+                parts.Add(p);
+                components.Add(part);
+            }
+            return parts;
         }
 
         // Pressure (atm), density and sound speed every SampleStep m above sea level, up to the depth.

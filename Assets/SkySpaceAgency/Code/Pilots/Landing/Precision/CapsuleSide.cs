@@ -18,6 +18,16 @@ namespace K2D2.Landing.Precision
         public double MassT;
     }
 
+    // A tree edge between the capsule and the rest of the vessel. Every such edge is cut by a
+    // decoupler (CapsuleSide never crosses one otherwise): the capsule part, the outside part,
+    // and which of the two is the decoupler doing the cut (one or both).
+    public struct CapsuleCut
+    {
+        public string InsideId;
+        public string OutsideId;
+        public List<string> DecouplerIds;
+    }
+
     public struct CapsuleSideResult
     {
         public bool Ok;
@@ -26,6 +36,7 @@ namespace K2D2.Landing.Precision
         // Capsule parts attached to a part that is not in the capsule: their faces toward the rest
         // of the vessel are occluded now and exposed after the separation.
         public HashSet<string> BoundaryIds;
+        public List<CapsuleCut> Cuts;    // the edges whose separation frees the capsule
         public bool WholeVessel;         // no decoupler separates the chutes from anything
         public int Parachutes;
         public double MassT;             // Σ MassT of the capsule's parts
@@ -95,11 +106,23 @@ namespace K2D2.Landing.Precision
                 return Refuse($"{apart} of the {chutes.Count} parachutes are on a part that a decoupler separates from the others.");
 
             var boundary = new HashSet<string>(capsule.Where(id => neighbours[id].Any(n => !capsule.Contains(n))));
+            var cuts = new List<CapsuleCut>();
+            foreach (string id in capsule)
+                foreach (string n in neighbours[id])
+                {
+                    if (capsule.Contains(n))
+                        continue;
+                    var by = new List<string>();
+                    if (Separates(byId[id], n)) by.Add(id);
+                    if (Separates(byId[n], id)) by.Add(n);
+                    cuts.Add(new CapsuleCut { InsideId = id, OutsideId = n, DecouplerIds = by });
+                }
             return new CapsuleSideResult
             {
                 Ok = true,
                 Ids = capsule,
                 BoundaryIds = boundary,
+                Cuts = cuts,
                 WholeVessel = capsule.Count == byId.Count,
                 Parachutes = chutes.Count,
                 MassT = capsule.Sum(id => byId[id].MassT),
