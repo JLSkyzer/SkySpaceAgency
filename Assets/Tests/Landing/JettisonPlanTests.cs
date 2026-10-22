@@ -159,4 +159,103 @@ public class JettisonPlanTests
         CollectionAssert.AreEquivalent(new[] { "engine", "tank" }, r.ServiceIds);
         Assert.AreEqual(0, r.ServiceWithDecoupleStage);
     }
+
+    [Test]
+    public void DroppedHeatshieldWithNoneKept_Refused()
+    {
+        // The shield sits below the decoupler, on the tank: it would fall with the service module.
+        var parts = new List<JettisonPart>
+        {
+            P("pod", null, control: true), Chute("chute", "pod", 0), Decoupler("dec", "pod", "shield", Next),
+            Heatshield("shield", "dec"), P("tank", "shield"), P("engine", "tank", 2),
+        };
+        JettisonPlanResult r = JettisonPlan.Plan(parts, Next);
+        Assert.IsFalse(r.Ok);
+        Assert.AreEqual("Cannot jettison the service module safely: the heat shield would be dropped with it.", r.Message);
+
+        // Another shield kept on the capsule: Ok, one of two kept.
+        parts.Add(Heatshield("shield2", "pod"));
+        r = JettisonPlan.Plan(parts, Next);
+        Assert.IsTrue(r.Ok, r.Reason);
+        Assert.AreEqual(2, r.Heatshields);
+        Assert.AreEqual(1, r.HeatshieldsKept);
+    }
+
+    [Test]
+    public void StageAlsoFiresAPartOnTheCapsule_Refused()
+    {
+        List<JettisonPart> parts = Stack();
+        parts.Add(P("podEngine", "pod", Next));
+        AssertRefused(JettisonPlan.Plan(parts, Next), "on the capsule");
+
+        // Another decoupler inside the capsule, not on its boundary (its node holds nothing).
+        parts = Stack();
+        parts.Add(Decoupler("spare", "pod", "", Next));
+        AssertRefused(JettisonPlan.Plan(parts, Next), "on the capsule");
+    }
+
+    [Test]
+    public void BoundaryDecouplerWithAnUnknownNode_Refused()
+    {
+        var parts = new List<JettisonPart>
+        {
+            P("pod", null, control: true), Chute("chute", "pod", 0), Decoupler("dec", "pod", null, Next), P("tank", "dec"), P("engine", "tank", 2),
+        };
+        AssertRefused(JettisonPlan.Plan(parts, Next), "unknown explosive node");
+    }
+
+    [Test]
+    public void RadialDecouplerOnTheServiceSide_Ok()
+    {
+        // Radial booster on the tank, dropped by the same stage: it leaves with the service module.
+        List<JettisonPart> parts = Stack();
+        parts.Add(Decoupler("radial", "tank", "booster", Next));
+        parts.Add(P("booster", "radial"));
+        JettisonPlanResult r = JettisonPlan.Plan(parts, Next);
+        Assert.IsTrue(r.Ok, r.Reason);
+        CollectionAssert.AreEquivalent(new[] { "dec" }, r.Decouplers);
+        CollectionAssert.AreEquivalent(new[] { "radial" }, r.OtherActivated);
+        CollectionAssert.AreEquivalent(new[] { "tank", "engine", "radial", "booster" }, r.ServiceIds);
+    }
+
+    [Test]
+    public void Fairing_OkOnTheServiceSideRefusedOnTheCapsule()
+    {
+        List<JettisonPart> parts = Stack();
+        parts.Add(P("fairing", "tank", Next));
+        JettisonPlanResult r = JettisonPlan.Plan(parts, Next);
+        Assert.IsTrue(r.Ok, r.Reason);
+        CollectionAssert.AreEquivalent(new[] { "fairing" }, r.OtherActivated);
+
+        parts = Stack();
+        parts.Add(P("fairing", "pod", Next));
+        AssertRefused(JettisonPlan.Plan(parts, Next), "on the capsule");
+    }
+
+    [Test]
+    public void StagedDockingPort_Refused()
+    {
+        List<JettisonPart> parts = Stack();
+        JettisonPart port = P("port", "tank", Next);
+        port.IsDockingPort = true;
+        parts.Add(port);
+        AssertRefused(JettisonPlan.Plan(parts, Next), "docking port");
+    }
+
+    [Test]
+    public void NoControlOwner_TheRootMustBeOnTheCapsule()
+    {
+        // Pod root: the root piece stays the active vessel.
+        List<JettisonPart> parts = Stack();
+        parts[0] = P("pod", null);
+        JettisonPlanResult r = JettisonPlan.Plan(parts, Next);
+        Assert.IsTrue(r.Ok, r.Reason);
+
+        // Engine root: the service module would stay active.
+        parts = new List<JettisonPart>
+        {
+            P("engine", null, 2), P("tank", "engine"), Decoupler("dec", "tank", "tank", Next), P("pod", "dec"), Chute("chute", "pod", 0),
+        };
+        AssertRefused(JettisonPlan.Plan(parts, Next), "root part");
+    }
 }
