@@ -65,6 +65,11 @@ namespace K2D2.Landing
         // Deploy the legs on entering Brake instead of Touch Down. Both profiles.
         public Setting<bool> deploy_legs_early;
 
+        // Parachute precision return: multiplies the capsule's drag in the reentry predictor
+        // (ReentryContext -> ReentryVehicle.DragScale), the calibration the in-game accuracy rests
+        // on. Atmo profile only (null on the vacuum profile). No UI binding yet.
+        public ClampSetting<float> reentry_drag_scale;
+
         public LandingSettings(SettingsFile file, bool atmospheric)
         {
             auto_warp = new("land.auto_warp", true, file);
@@ -82,7 +87,10 @@ namespace K2D2.Landing
 
             deploy_legs_early = new("land.deploy_legs_early", false, file);
             if (atmospheric)
+            {
                 mode = new("land.mode", LandingMethod.Propulsive, file);
+                reentry_drag_scale = new("land.reentry_drag_scale", 1f, 0.3f, 3f, file);
+            }
         }
 
         // Full binding - Vacuum panel. Element names carry a "_vac" suffix in Landing.uxml so they

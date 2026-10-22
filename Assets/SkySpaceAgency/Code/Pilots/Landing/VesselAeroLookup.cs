@@ -787,6 +787,123 @@ namespace K2D2.Landing
             return result;
         }
 
+        // Σ cube.AreaDrag of a subset of the vessel's parts, at pure retrograde attitude (angle 0 of
+        // BuildFixedAttitudeDragProfile: the control transform's forward turned onto -velocity),
+        // against Mach. For the reentry capsule (ReentryContext) before it separates.
+        //
+        // Data_Drag.GetAeroDataForDirection scales each face by weightedExposedArea / weightedArea
+        // (IL of Redux 26w42c): a face hidden by an attached part counts for nothing. The faces of
+        // the parts in exposedGuids that touch the rest of the vessel are hidden now and exposed
+        // after the separation, so for those parts the call is repeated with weightedExposedArea
+        // temporarily set to weightedArea (restored in a finally, synchronously on the main
+        // thread). That also exposes their faces toward other capsule parts: an over-estimate,
+        // which areaDragAttached (no exposure change) brackets from below.
+        public struct SubsetDragTable
+        {
+            public bool found;
+            public float[] machSamples;
+            public double[] areaDrag;          // with exposedGuids' faces exposed
+            public double[] areaDragAttached;  // as the parts are attached now
+            public int partsEvaluated;
+            public int partsSkipped;
+            public int partsExposed;
+        }
+
+        public static SubsetDragTable BuildRetrogradeDragTable(VesselComponent vessel, ICollection<string> partGuids,
+            ICollection<string> exposedGuids, float[] machSamples = null)
+        {
+            var result = new SubsetDragTable();
+            if (vessel == null || partGuids == null)
+                return result;
+            machSamples ??= DefaultDragProfileMachSamples;
+
+            var vesselBehavior = vessel.SimulationObject != null ? vessel.SimulationObject.objVesselBehavior : null;
+            var controlTransform = vesselBehavior != null ? vesselBehavior.ControlTransform : null;
+            var owner = vessel.GetControlOwner()?.PartOwner;
+            if (vesselBehavior == null || controlTransform == null || owner == null)
+                return result;
+
+            var behaviorsByGuid = new Dictionary<string, PartBehavior>();
+            PartBehavior referencePart = null;
+            foreach (var behavior in vesselBehavior.parts)
+            {
+                if (behavior == null)
+                    continue;
+                referencePart ??= behavior;
+                behaviorsByGuid[behavior.Guid.ToString()] = behavior;
+            }
+            if (referencePart == null)
+                return result;
+            Vector3 referenceVelocityWorld = referencePart.VelocityRelativeToSOIBodyFrameInPhysicsSpace;
+            if (referenceVelocityWorld.sqrMagnitude < 0.01f)
+                return result;
+            Quaternion inverseDelta = Quaternion.Inverse(
+                Quaternion.FromToRotation(controlTransform.forward, (-referenceVelocityWorld).normalized));
+
+            result.machSamples = machSamples;
+            result.areaDrag = new double[machSamples.Length];
+            result.areaDragAttached = new double[machSamples.Length];
+            foreach (var part in owner.Parts)
+            {
+                if (part == null || part.PartData == null || !partGuids.Contains(part.Guid))
+                    continue;
+                try
+                {
+                    if (!behaviorsByGuid.TryGetValue(part.Guid, out PartBehavior partBehavior) || partBehavior == null
+                        || !part.TryGetModuleData<PartComponentModule_Drag, Data_Drag>(out Data_Drag dragData) || dragData == null)
+                    {
+                        result.partsSkipped++;
+                        continue;
+                    }
+                    Vector3 flowDirectionWorld = inverseDelta * partBehavior.VelocityRelativeToSOIBodyFrameInPhysicsSpace.normalized;
+                    Vector3 directionLocal = partBehavior.ModelTransform.InverseTransformDirection(flowDirectionWorld);
+                    var attached = new double[machSamples.Length];
+                    for (int m = 0; m < machSamples.Length; m++)
+                    {
+                        var cube = default(Data_Drag.CubeData);
+                        dragData.GetAeroDataForDirection(directionLocal, machSamples[m], ref cube);
+                        attached[m] = cube.AreaDrag;
+                    }
+                    var exposed = attached;
+                    bool expose = exposedGuids != null && exposedGuids.Contains(part.Guid)
+                        && dragData.weightedArea != null && dragData.weightedExposedArea != null;
+                    if (expose)
+                    {
+                        exposed = new double[machSamples.Length];
+                        float[] saved = dragData.weightedExposedArea;
+                        try
+                        {
+                            dragData.weightedExposedArea = (float[])dragData.weightedArea.Clone();
+                            for (int m = 0; m < machSamples.Length; m++)
+                            {
+                                var cube = default(Data_Drag.CubeData);
+                                dragData.GetAeroDataForDirection(directionLocal, machSamples[m], ref cube);
+                                exposed[m] = cube.AreaDrag;
+                            }
+                        }
+                        finally
+                        {
+                            dragData.weightedExposedArea = saved;
+                        }
+                        result.partsExposed++;
+                    }
+                    for (int m = 0; m < machSamples.Length; m++)
+                    {
+                        result.areaDragAttached[m] += attached[m];
+                        result.areaDrag[m] += exposed[m];
+                    }
+                    result.partsEvaluated++;
+                }
+                catch (Exception ex)
+                {
+                    L.Log($"[VesselAeroLookup] part {part.Name} threw building the retrograde drag table: {ex.Message}");
+                    result.partsSkipped++;
+                }
+            }
+            result.found = result.partsEvaluated > 0;
+            return result;
+        }
+
         // Bilinear interpolation into the 2D table above - mach and angle are independent axes
         // (genuinely different degrees of freedom, one from speed/environment, one from attitude
         // history), so this interpolates each axis independently and combines the result the
