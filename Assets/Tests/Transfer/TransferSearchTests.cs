@@ -17,7 +17,14 @@ public class TransferSearchTests
     BodySystem _s;
 
     [SetUp]
-    public void SetUp() => _s = KerbolFixture.Build();
+    public void SetUp()
+    {
+        _s = KerbolFixture.Build();
+        TransferSearch.Trace = line => TestContext.Out.WriteLine(line);
+    }
+
+    [TearDown]
+    public void TearDown() => TransferSearch.Trace = null;
 
     int B(string name) => _s[name].Index;
 
@@ -311,6 +318,113 @@ public class TransferSearchTests
             Assert.IsTrue(plan.Warnings.Any(w => w.Contains("Mun")), "a Mun crossing must be warned about");
         else
             Assert.Greater(Math.Abs(Injection(plan, B("Kerbin")).UT - burn.UT), 1, "the departure should have moved");
+    }
+
+    [Test]
+    public void KerbinToDuna_SingleLeg_CorrectionsAimAtDuna()
+    {
+        var plan = Find(Request("Kerbin", "Duna", 700_000), "Kerbin -> Duna, targets");
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.IsTrue(plan.Steps.All(st => st.LegIndex == 0 && !st.ReplanAtLegStart));
+        foreach (var st in plan.Steps.Where(st => st.Kind == StepKind.Correction || st.Kind == StepKind.Capture))
+        {
+            Assert.AreEqual(B("Duna"), st.TargetBody);
+            Assert.AreEqual(_s["Duna"].LowOrbitRadius, st.TargetPeriapsisRadius, 1e-6);
+            Assert.AreEqual(_s["Duna"].LowOrbitRadius, st.TargetApoapsisRadius, 1e-6);
+            Assert.IsNaN(st.TargetInclinationDeg);
+        }
+        Assert.AreEqual(B("Kerbin"), plan.ExcessBody);
+    }
+
+    [Test]
+    public void IkeToLaythe_FirstLeg_LeavesDunaWithTheRequiredExcess()
+    {
+        var plan = Find(Request("Ike", "Laythe", _s["Ike"].LowOrbitRadius), "Ike -> Laythe, climb flown");
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.AreEqual(B("Duna"), plan.ExcessBody);
+        // Every leg after the first is re-planned in flight; corrections aim at their own leg's arrival.
+        Assert.IsTrue(plan.Steps.All(st => st.ReplanAtLegStart == (st.LegIndex > 0)));
+        Assert.IsTrue(plan.Steps.Where(st => st.Kind == StepKind.Correction && st.Body == B("Kerbol"))
+            .All(st => st.TargetBody == B("Jool")), "cruise corrections must aim at Jool, the leg's first arrival");
+        Assert.IsTrue(plan.Steps.All(st => st.TargetBody >= 0), "every step has a target");
+
+        // Fly the climb (Ike and Duna burns) through the propagator.
+        double dunaExit = plan.Steps.First(st => st.Kind == StepKind.Escape && st.Body == B("Duna")).UT;
+        var q = plan.Request;
+        var burns = plan.Steps.Where(st => st.DeltaV.magnitude > 0 && st.UT <= dunaExit).Select(st => new Impulse(st.UT, st.DeltaV)).ToList();
+        double start = burns.Min(b => b.UT);
+        KeplerPropagator.Propagate(q.R0, q.V0, _s["Ike"].Mu, start - q.UT0, out var r, out var v);
+        var patches = PatchedPropagator.Propagate(_s, B("Ike"), r, v, start, dunaExit + 3600, burns);
+        Assert.IsFalse(patches.Any(pa => pa.End == PatchEnd.Impact), "the climb hits a body");
+        var leaving = patches.First(pa => pa.Body == B("Duna") && pa.End == PatchEnd.Escape);
+        var excess = Hyperbola.Asymptote(leaving.EndR, leaving.EndV, _s["Duna"].Mu);
+        double error = (excess - plan.RequiredExcess).magnitude / plan.RequiredExcess.magnitude;
+        TestContext.Out.WriteLine($"leaves Duna at {excess.magnitude:F1} m/s for {plan.RequiredExcess.magnitude:F1} m/s required, error {100 * error:F2} %");
+        Assert.Less(error, 0.05);
+    }
+
+    [Test]
+    public void KerbinToIke_StagedArrival_DunaCaptureThenIkeLeg()
+    {
+        // A very light Ike (test data, not stock): the capture at Ike gets no Oberth help, so a capture
+        // into a low Duna orbit first, then a leg to Ike, is cheaper.
+        _s["Ike"].Mu = 1e8;
+        var plan = Find(Request("Kerbin", "Ike", 700_000), "Kerbin -> light Ike");
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.AreEqual(TransferSearch.DifferentBranches, plan.CaseName);
+        var duna = plan.Steps.Single(st => st.Kind == StepKind.Capture && st.Body == B("Duna"));
+        Assert.AreEqual(B("Duna"), duna.TargetBody);
+        Assert.AreEqual(_s["Duna"].LowOrbitRadius, duna.TargetPeriapsisRadius, 1e-6);
+        Assert.AreEqual(_s["Duna"].LowOrbitRadius, duna.TargetApoapsisRadius, 1e-6);
+        var ikeLeg = plan.Steps.Where(st => st.LegIndex > duna.LegIndex).ToList();
+        Assert.IsTrue(ikeLeg.Any(st => st.Kind == StepKind.Injection && st.Body == B("Duna")), "no transfer burn from the low Duna orbit");
+        Assert.IsTrue(ikeLeg.All(st => st.ReplanAtLegStart));
+        var ike = plan.Steps.Last();
+        Assert.AreEqual(StepKind.Capture, ike.Kind);
+        Assert.AreEqual(B("Ike"), ike.Body);
+        Assert.Greater(ike.UT, duna.UT);
+    }
+
+    [Test]
+    public void KerbinToMinmus_FromLko()
+    {
+        var plan = Find(Request("Kerbin", "Minmus", 700_000), "Kerbin -> Minmus");
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.AreEqual(TransferSearch.ParentToChild, plan.CaseName);
+        // EXTERNAL ESTIMATE: 930 m/s from LKO to a Minmus transfer, community Δv map (not measured).
+        Assert.That(Injection(plan, B("Kerbin")).DeltaVMagnitude, Is.InRange(930 * 0.9, 930 * 1.1));
+        var patches = FlyDeparture(plan, plan.ArrivalUT + 3600);
+        bool reached = patches.Any(pa => pa.Body == B("Minmus"));
+        Assert.IsTrue(reached || plan.Warnings.Count > 0, "neither reaches Minmus nor warns");
+    }
+
+    [Test]
+    public void OrbitDippingIntoTheAtmosphere_Refused()
+    {
+        // 40 km × 1400 km around Kerbin: the periapsis is inside the 70 km atmosphere.
+        double mu = _s["Kerbin"].Mu, rp = 640_000, ra = 2_000_000;
+        var q = Request("Kerbin", "Duna", rp);
+        q.V0 = Math.Sqrt(mu * (2 / rp - 2 / (rp + ra))) / q.V0.magnitude * q.V0;
+        var plan = Find(q, "Kerbin -> Duna from a dipping orbit");
+        Assert.IsFalse(plan.Ok);
+        Assert.AreEqual(TransferSearch.LowOrbit("Kerbin"), plan.Refusal);
+    }
+
+    [Test]
+    public void HighOrbit_LowersThePeriapsisFirst()
+    {
+        var plan = Find(Request("Kerbin", "Jool", 10_000_000), "Kerbin -> Jool from 10 Mm");
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        var change = plan.Steps.First(st => st.DeltaVMagnitude > 0);
+        Assert.AreEqual(StepKind.OrbitChange, change.Kind);
+        StringAssert.Contains("saves", change.Explanation);
+        StringAssert.Contains("lower the periapsis", change.Explanation);
+        TestContext.Out.WriteLine(change.Explanation);
+        // The lowered orbit really has its periapsis at the low orbit.
+        var q = plan.Request;
+        KeplerPropagator.Propagate(q.R0, q.V0, _s["Kerbin"].Mu, change.UT - q.UT0, out var r, out var v);
+        var el = K2D2.OrbitPlanning.OrbitMath.Elements(r, v + change.DeltaV, _s["Kerbin"].Mu);
+        Assert.AreEqual(_s["Kerbin"].LowOrbitRadius, el.PeriapsisRadius, 1000);
     }
 
     double Escape(TransferPlan p) => p.Steps.First(st => st.Kind == StepKind.Escape && st.Body == p.Request.FromBody).UT + 1;

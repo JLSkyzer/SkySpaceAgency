@@ -39,6 +39,19 @@ namespace K2D2.Transfer
         public Vector3d DeltaV = Vector3d.zero;
         public double DeltaVMagnitude;
         public string Explanation = "";
+
+        // What the step's leg aims at: the first body the leg arrives at, and the orbit wanted there
+        // (NaN when free). Corrections aim here; a capture's target orbit is here.
+        public int TargetBody = -1;
+        public double TargetPeriapsisRadius = double.NaN;
+        public double TargetApoapsisRadius = double.NaN;
+        public double TargetInclinationDeg = double.NaN;
+
+        // Multi-level plans are flown leg by leg: a new leg starts at each SOI change of the climb, at
+        // each SOI entry of a direct descent, and after a staged capture. Every leg after the first is
+        // an estimate, re-planned from the actual state when the vessel reaches it.
+        public int LegIndex;
+        public bool ReplanAtLegStart;
     }
 
     public class TransferPlan
@@ -56,6 +69,11 @@ namespace K2D2.Transfer
 
         // Things the player must know before flying, such as an unplanned SOI on the way.
         public List<string> Warnings = new List<string>();
+
+        // The excess velocity the climb must leave ExcessBody with (relative to it, in its parent's
+        // frame), toward the transfer at the common ancestor. -1 / zero when there is no such climb.
+        public int ExcessBody = -1;
+        public Vector3d RequiredExcess = Vector3d.zero;
 
         public double TripSeconds => ArrivalUT - DepartureUT;
     }
