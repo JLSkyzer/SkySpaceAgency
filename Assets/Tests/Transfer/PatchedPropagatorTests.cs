@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using K2D2.Transfer;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
@@ -312,5 +313,185 @@ public class PatchedPropagatorTests
         var patches = PatchedPropagator.Propagate(_s, _kerbin, r, v, 0, 5000, impulses, maxPatches: 4);
         Assert.That(patches.Count, Is.EqualTo(4));
         Assert.That(patches[3].End, Is.EqualTo(PatchEnd.Impulse));
+        Assert.That(patches[3].NextBody, Is.Not.EqualTo(-1), "cut by maxPatches: the trajectory goes on");
+    }
+
+    [Test]
+    public void UntilBeforeStart_SinglePatchAtHorizon()
+    {
+        Circular(700000, 0, out var r, out var v);
+        foreach (double until in new[] { 100.0, 50.0 })
+        {
+            var patches = PatchedPropagator.Propagate(_s, _kerbin, r, v, 100, until, new[] { new Impulse(100, new Vector3d(0, 10, 0)) });
+            Assert.That(patches.Count, Is.EqualTo(1));
+            var p = patches[0];
+            Assert.That(p.End, Is.EqualTo(PatchEnd.HorizonReached));
+            Assert.That(p.NextBody, Is.EqualTo(-1));
+            Assert.That(p.StartUT, Is.EqualTo(100));
+            Assert.That(p.EndUT, Is.EqualTo(100));
+            Assert.That((p.EndR - r).magnitude, Is.EqualTo(0));
+            Assert.That((p.EndV - v).magnitude, Is.EqualTo(0), "no impulse at or after the horizon");
+        }
+    }
+
+    // A closed orbit entirely inside the atmosphere: it is already "impacted" at the start.
+    [Test]
+    public void Impact_ClosedOrbitBelowLimit_AtStart()
+    {
+        double mu = _s[_kerbin].Mu;
+        double rp = 610000, ra = 650000; // both below the 670 km atmosphere top
+        double a = 0.5 * (rp + ra);
+        double vp = Math.Sqrt(mu * (2 / rp - 1 / a));
+        KeplerPropagator.Propagate(new Vector3d(rp, 0, 0), new Vector3d(0, vp, 0), mu, 300, out var r, out var v);
+        Assert.That(Vector3d.Dot(r, v), Is.GreaterThan(0), "climbing");
+
+        var patches = PatchedPropagator.Propagate(_s, _kerbin, r, v, 1000, 1e5, None);
+        Assert.That(patches.Count, Is.EqualTo(1));
+        Assert.That(patches[0].End, Is.EqualTo(PatchEnd.Impact));
+        Assert.That(patches[0].EndUT, Is.EqualTo(1000));
+    }
+
+    [Test]
+    public void Impact_OnAirlessBody_AtSurface()
+    {
+        double mu = _s[_mun].Mu;
+        double radius = _s[_mun].Radius;
+        Assert.That(_s[_mun].AtmosphereDepth, Is.EqualTo(0));
+        double ra = 250000, rp = 150000; // the periapsis is below the surface
+        var r = new Vector3d(ra, 0, 0);
+        var v = new Vector3d(0, Math.Sqrt(mu * (2 / ra - 2 / (ra + rp))), 0);
+
+        var patches = PatchedPropagator.Propagate(_s, _mun, r, v, 0, 1e5, None);
+        Assert.That(patches.Count, Is.EqualTo(1));
+        var p = patches[0];
+        AssertFinite(p);
+        Assert.That(p.End, Is.EqualTo(PatchEnd.Impact));
+        Assert.That(p.EndR.magnitude, Is.EqualTo(radius).Within(1.0));
+        Assert.That(Vector3d.Dot(p.EndR, p.EndV), Is.LessThan(0));
+    }
+
+    // A planet with two moons on the same orbit, close together: the vessel arrives between them
+    // and the earlier SOI entry, per dense sampling, wins.
+    [Test]
+    public void TwoChildrenNearAtOnce_EarlierEntryWins()
+    {
+        double mu = 3.5316e12, orbit = 12_000_000, soi = 2_400_000, separation = 1_000_000; // the SOIs overlap
+        double moonSpeed = Math.Sqrt(mu / orbit), half = 0.5 * separation / orbit;
+        var nodes = new List<BodyNode>
+        {
+            new BodyNode { Name = "Planet", Index = 0, Mu = mu, Radius = 600000, Soi = double.PositiveInfinity },
+        };
+        foreach (double angle in new[] { -half, half })
+            nodes.Add(new BodyNode
+            {
+                Name = angle < 0 ? "Behind" : "Ahead", Index = nodes.Count, ParentIndex = 0, Mu = 6.5e10, Radius = 200000, Soi = soi,
+                EpochPosition = RotateZ(new Vector3d(orbit, 0, 0), angle),
+                EpochVelocity = RotateZ(new Vector3d(0, moonSpeed, 0), angle),
+            });
+        var s = new BodySystem(nodes);
+
+        // Hohmann-like arc from 700 km, apoapsis just past the moons' orbit, rotated so that it
+        // crosses their orbit at the midpoint between them.
+        double rp = 700000, ra = 12_300_000;
+        double vp = Math.Sqrt(mu * (2 / rp - 2 / (rp + ra)));
+        var rRef = new Vector3d(rp, 0, 0);
+        var vRef = new Vector3d(0, vp, 0);
+        double lo = 0, hi = Math.PI * Math.Sqrt(Math.Pow(0.5 * (rp + ra), 3) / mu); // to the apoapsis
+        for (int i = 0; i < 100; i++)
+        {
+            double mid = 0.5 * (lo + hi);
+            KeplerPropagator.Propagate(rRef, vRef, mu, mid, out var rm, out _);
+            if (rm.magnitude < orbit) lo = mid; else hi = mid;
+        }
+        KeplerPropagator.Propagate(rRef, vRef, mu, lo, out var rc, out _);
+        double phi = moonSpeed / orbit * lo - Math.Atan2(rc.y, rc.x);
+        var r0 = RotateZ(rRef, phi);
+        var v0 = RotateZ(vRef, phi);
+
+        double Dense(int moon)
+        {
+            for (double t = 1; t <= 4e4; t += 1)
+            {
+                KeplerPropagator.Propagate(r0, v0, mu, t, out var r, out _);
+                s.StateRelativeToParent(moon, t, out var mr, out _);
+                if ((r - mr).magnitude < soi)
+                    return t;
+            }
+            return double.NaN;
+        }
+        double behind = Dense(1), ahead = Dense(2);
+        TestContext.WriteLine($"dense entries: behind {behind} s, ahead {ahead} s");
+        Assert.That(double.IsNaN(behind) || double.IsNaN(ahead), Is.False, "the arc enters both SOIs");
+        Assert.That(Math.Abs(behind - ahead), Is.LessThan(3600), "both entries close together");
+
+        var patches = PatchedPropagator.Propagate(s, 0, r0, v0, 0, 4e4, None);
+        Assert.That(patches[0].End, Is.EqualTo(PatchEnd.Encounter));
+        Assert.That(patches[0].NextBody, Is.EqualTo(behind < ahead ? 1 : 2));
+        Assert.That(patches[0].EndUT, Is.EqualTo(Math.Min(behind, ahead)).Within(1.0));
+    }
+
+    // A miss: the patch reports the closest approach, checked against plain dense sampling.
+    [Test]
+    public void Miss_ReportsClosestApproach()
+    {
+        double mu = _s[_kerbin].Mu;
+        double rp = 700000;
+        double vp = Math.Sqrt(1000 * 1000 + 2 * mu / rp);
+        AimAtMun(rp, vp, 16, out var r, out var v); // the closest approach is outside the SOI
+
+        var patches = PatchedPropagator.Propagate(_s, _kerbin, r, v, 0, 1e6, None);
+        var k = patches[0];
+        Assert.That(k.End, Is.EqualTo(PatchEnd.Escape));
+
+        double best = double.PositiveInfinity, bestT = double.NaN;
+        for (double t = 0; t <= k.EndUT; t += 1)
+        {
+            KeplerPropagator.Propagate(r, v, mu, t, out var rt, out _);
+            _s.StateRelativeToParent(_mun, t, out var mr, out _);
+            double d = (rt - mr).magnitude;
+            if (d < best)
+            {
+                best = d;
+                bestT = t;
+            }
+        }
+        TestContext.WriteLine($"closest: body {k.ClosestBody}, {k.ClosestDistance:F0} m at {k.ClosestUT:F1}; dense {best:F0} m at {bestT}");
+        Assert.That(best, Is.GreaterThan(_s[_mun].Soi));
+        Assert.That(k.ClosestBody, Is.EqualTo(_mun));
+        Assert.That(k.ClosestDistance, Is.EqualTo(best).Within(10.0));
+        Assert.That(k.ClosestDistance, Is.LessThanOrEqualTo(best + 1e-3));
+        Assert.That(k.ClosestUT, Is.EqualTo(bestT).Within(1.0));
+    }
+
+    [Test]
+    public void NoChildReachable_NoClosestApproach()
+    {
+        Circular(700000, 0, out var r, out var v);
+        var p = PatchedPropagator.Propagate(_s, _kerbin, r, v, 0, 1e4, None)[0];
+        Assert.That(p.ClosestBody, Is.EqualTo(-1));
+        Assert.That(double.IsPositiveInfinity(p.ClosestDistance), Is.True);
+    }
+
+    // Timings: a low orbit over a long horizon reaches no moon, so it samples nothing; a fast
+    // hyperbola samples only where it crosses the moons' orbit bands.
+    [Test]
+    public void Timing_LowOrbitAndFastHyperbola()
+    {
+        Circular(700000, 0, out var r, out var v);
+        PatchedPropagator.Propagate(_s, _kerbin, r, v, 0, 1e3, None); // warm-up
+        var watch = Stopwatch.StartNew();
+        var low = PatchedPropagator.Propagate(_s, _kerbin, r, v, 0, 1e7, None);
+        double lowMs = watch.Elapsed.TotalMilliseconds;
+        Assert.That(low[0].End, Is.EqualTo(PatchEnd.HorizonReached));
+
+        double mu = _s[_kerbin].Mu;
+        double vp = Math.Sqrt(2500 * 2500 + 2 * mu / 700000);
+        var vFast = new Vector3d(0, vp * Math.Cos(60 * Deg), vp * Math.Sin(60 * Deg)); // through the Mun's and Minmus's bands
+        watch.Restart();
+        var fast = PatchedPropagator.Propagate(_s, _kerbin, r, vFast, 0, 1e6, None);
+        double fastMs = watch.Elapsed.TotalMilliseconds;
+        TestContext.WriteLine($"low orbit, 1e7 s: {lowMs:F2} ms; 2.5 km/s hyperbola: {fastMs:F2} ms, first patch ends {fast[0].End} at {fast[0].EndUT:F0} s");
+        Assert.That(lowMs, Is.LessThan(20));
+        Assert.That(fastMs, Is.LessThan(50));
     }
 }

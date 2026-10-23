@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using K2D2.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
@@ -37,6 +38,15 @@ namespace K2D2.Transfer
         // a hyperbola its only passage, which is before StartUT when the vessel is already outgoing.
         // It can fall after EndUT (the patch ends first) or below the surface (an impact).
         public double PeriapsisRadius, PeriapsisUT;
+
+        // The closest approach to a child of Body within the patch: the deepest local minimum of the
+        // distance, relative to the child's SOI, or the patch end when the distance is still falling
+        // there. Children the conic cannot reach and the patch start are not counted. ClosestBody is
+        // -1 (distance +inf, UT NaN) when there is none. On an encounter, the entered child is not
+        // reported unless it had an earlier minimum in this patch.
+        public int ClosestBody = -1;
+        public double ClosestDistance = double.PositiveInfinity;
+        public double ClosestUT = double.NaN;
     }
 
     // Patched-conic propagation through the body hierarchy: two-body motion inside each SOI, switching
@@ -49,11 +59,20 @@ namespace K2D2.Transfer
 
         // Impulses before 'ut' are ignored, those at 'ut' are applied to the start state, those at or
         // after 'untilUT' are ignored. A trajectory already inside a child's SOI at the start (given in
-        // the parent's frame) only enters it after leaving it first.
+        // the parent's frame) only enters it after leaving it first. When untilUT <= ut, a single
+        // patch is returned, ending at ut in HorizonReached. When the run is cut by maxPatches, the
+        // last patch has NextBody != -1: the trajectory goes on beyond it.
         public static List<Patch> Propagate(BodySystem s, int body, Vector3d r, Vector3d v, double ut, double untilUT,
             IReadOnlyList<Impulse> impulses, int maxPatches = 8)
         {
             var patches = new List<Patch>();
+            if (!(untilUT > ut))
+            {
+                var only = new Patch { Body = body, StartUT = ut, StartR = r, StartV = v, EndUT = ut, EndR = r, EndV = v, End = PatchEnd.HorizonReached };
+                Periapsis(r, v, s[body].Mu, ut, out only.PeriapsisRadius, out only.PeriapsisUT);
+                patches.Add(only);
+                return patches;
+            }
             var pending = new List<Impulse>();
             if (impulses != null)
                 foreach (var imp in impulses)
@@ -64,7 +83,7 @@ namespace K2D2.Transfer
             for (; next < pending.Count && pending[next].UT <= ut; next++)
                 v += pending[next].DeltaV;
 
-            var children = Children(s);
+            var hierarchy = Hierarchies.GetValue(s, BuildHierarchy);
             while (patches.Count < maxPatches)
             {
                 var node = s[body];
@@ -91,7 +110,7 @@ namespace K2D2.Transfer
                     endUT = escape;
                     end = PatchEnd.Escape;
                 }
-                int child = FirstEncounter(s, children[body], r, v, mu, ut, endUT, out double entry);
+                int child = FirstEncounter(s, hierarchy, body, r, v, mu, ut, endUT, out double entry, patch);
                 if (child >= 0)
                 {
                     endUT = entry;
@@ -140,15 +159,35 @@ namespace K2D2.Transfer
             return patches;
         }
 
-        static List<int>[] Children(BodySystem s)
+        // Per BodySystem, built once: each body's children, and the band of radii (around the parent)
+        // where each child's SOI can be, from its orbit's periapsis and apoapsis.
+        sealed class Hierarchy
         {
-            var children = new List<int>[s.Count];
+            public int[][] Children;
+            public double[] BandLow, BandHigh;
+        }
+
+        static readonly ConditionalWeakTable<BodySystem, Hierarchy> Hierarchies = new ConditionalWeakTable<BodySystem, Hierarchy>();
+
+        static Hierarchy BuildHierarchy(BodySystem s)
+        {
+            var lists = new List<int>[s.Count];
+            var h = new Hierarchy { Children = new int[s.Count][], BandLow = new double[s.Count], BandHigh = new double[s.Count] };
             for (int i = 0; i < s.Count; i++)
-                children[i] = new List<int>();
+                lists[i] = new List<int>();
             for (int i = 0; i < s.Count; i++)
-                if (s[i].ParentIndex >= 0)
-                    children[s[i].ParentIndex].Add(i);
-            return children;
+            {
+                var n = s[i];
+                if (n.ParentIndex < 0)
+                    continue;
+                lists[n.ParentIndex].Add(i);
+                var el = OrbitMath.Elements(n.EpochPosition, n.EpochVelocity, s[n.ParentIndex].Mu);
+                h.BandLow[i] = Math.Max(0, el.PeriapsisRadius - n.Soi);
+                h.BandHigh[i] = el.IsClosed ? el.ApoapsisRadius + n.Soi : double.PositiveInfinity;
+            }
+            for (int i = 0; i < s.Count; i++)
+                h.Children[i] = lists[i].ToArray();
+            return h;
         }
 
         static void StateAt(Vector3d r0, Vector3d v0, double mu, double ut0, double ut, out Vector3d r, out Vector3d v)
@@ -212,6 +251,8 @@ namespace K2D2.Transfer
                     return ut0;
                 if (!el.IsClosed)
                     return double.PositiveInfinity; // climbing out on a hyperbola
+                if (el.ApoapsisRadius <= limit)
+                    return ut0; // never climbs out
             }
             else if (!el.IsClosed && !falling)
                 return double.PositiveInfinity; // outgoing on a hyperbola
@@ -269,35 +310,67 @@ namespace K2D2.Transfer
 
         // The first child SOI entered in (ut0, untilUT], sampled at most every 1/200 of the vessel's
         // period (or of the hyperbola's time scale) and of each child's period, then refined by bisection.
-        // Between samples, a dip into an SOI is caught where the distance stops falling.
-        static int FirstEncounter(BodySystem s, List<int> children, Vector3d r0, Vector3d v0, double mu,
-            double ut0, double untilUT, out double entryUT)
+        // Between samples, a dip into an SOI is caught where the distance stops falling. Only children
+        // whose radius band the conic reaches are sampled, and only while the vessel can be inside a
+        // band: outside all of them, the next sample goes where the vessel could first reach one at its
+        // highest possible speed. Also fills the patch's closest approach.
+        static int FirstEncounter(BodySystem s, Hierarchy h, int parent, Vector3d r0, Vector3d v0, double mu,
+            double ut0, double untilUT, out double entryUT, Patch patch)
         {
             entryUT = double.NaN;
-            if (children.Count == 0 || !(untilUT > ut0))
+            var all = h.Children[parent];
+            if (all.Length == 0 || !(untilUT > ut0))
                 return -1;
 
             var el = OrbitMath.Elements(r0, v0, mu);
+            double rp = el.PeriapsisRadius;
+            double ra = el.IsClosed ? el.ApoapsisRadius : double.PositiveInfinity;
+            int n = 0;
+            var children = new int[all.Length];
+            foreach (int c in all)
+                if (rp <= h.BandHigh[c] && ra >= h.BandLow[c])
+                    children[n++] = c;
+            if (n == 0)
+                return -1;
+
             double a = Math.Abs(el.SemiMajorAxis);
             double step = 2 * Math.PI * Math.Sqrt(a * a * a / mu) / SamplesPerPeriod;
-            foreach (int c in children)
-                step = Math.Min(step, s.OrbitalPeriod(c) / SamplesPerPeriod);
+            for (int i = 0; i < n; i++)
+                step = Math.Min(step, s.OrbitalPeriod(children[i]) / SamplesPerPeriod);
             if (!(step > 0))
                 step = untilUT - ut0;
+            double energy = 0.5 * v0.sqrMagnitude - mu / r0.magnitude;
 
-            int n = children.Count;
             var prevRate = new double[n];
+            var lastDistance = new double[n];
             var armed = new bool[n]; // outside the child's SOI since the start, so an entry counts
             for (int i = 0; i < n; i++)
             {
-                ChildDistance(s, children[i], r0, v0, ut0, out double d, out prevRate[i]);
-                armed[i] = d >= s[children[i]].Soi;
+                ChildDistance(s, children[i], r0, v0, ut0, out lastDistance[i], out prevRate[i]);
+                armed[i] = lastDistance[i] >= s[children[i]].Soi;
             }
 
-            double prevT = ut0;
+            double bestRatio = double.PositiveInfinity;
+            void Record(int c, double distance, double ut)
+            {
+                double ratio = distance / s[c].Soi;
+                if (ratio < bestRatio)
+                {
+                    bestRatio = ratio;
+                    patch.ClosestBody = c;
+                    patch.ClosestDistance = distance;
+                    patch.ClosestUT = ut;
+                }
+            }
+
+            double prevT = ut0, prevRadius = r0.magnitude;
             while (prevT < untilUT)
             {
-                double t = Math.Min(untilUT, prevT + step);
+                double skip = double.PositiveInfinity;
+                for (int i = 0; i < n; i++)
+                    skip = Math.Min(skip, TimeToBand(prevRadius, energy, rp, mu, h.BandLow[children[i]], h.BandHigh[children[i]]));
+                bool skipped = skip > step;
+                double t = Math.Min(untilUT, prevT + (skipped ? skip : step));
                 StateAt(r0, v0, mu, ut0, t, out var r, out var v);
                 int best = -1;
                 double bestUT = double.PositiveInfinity;
@@ -311,12 +384,15 @@ namespace K2D2.Transfer
                     {
                         if (d < soi)
                             entry = Bisect(prevT, t, x => DistanceAt(s, c, r0, v0, mu, ut0, x) < soi);
-                        else if (prevRate[i] < 0 && rate > 0)
+                        else if (!skipped && prevRate[i] < 0 && rate > 0)
                         {
                             // Closest approach between the samples: the distance rate changes sign.
                             double closest = Bisect(prevT, t, x => DistanceRateAt(s, c, r0, v0, mu, ut0, x) > 0);
-                            if (DistanceAt(s, c, r0, v0, mu, ut0, closest) < soi)
+                            double dc = DistanceAt(s, c, r0, v0, mu, ut0, closest);
+                            if (dc < soi)
                                 entry = Bisect(prevT, closest, x => DistanceAt(s, c, r0, v0, mu, ut0, x) < soi);
+                            else
+                                Record(c, dc, closest);
                         }
                     }
                     else if (d >= soi)
@@ -327,6 +403,7 @@ namespace K2D2.Transfer
                         best = c;
                     }
                     prevRate[i] = rate;
+                    lastDistance[i] = d;
                 }
                 if (best >= 0)
                 {
@@ -334,8 +411,25 @@ namespace K2D2.Transfer
                     return best;
                 }
                 prevT = t;
+                prevRadius = r.magnitude;
             }
+            // Still closing in at the end of the patch: the end is the closest point so far.
+            for (int i = 0; i < n; i++)
+                if (armed[i] && prevRate[i] < 0)
+                    Record(children[i], lastDistance[i], untilUT);
             return -1;
+        }
+
+        // A lower bound on the time for the vessel, now at 'radius', to reach the radius band [low, high]:
+        // the radius changes no faster than the speed, which is highest at the lowest radius the vessel
+        // can pass on the way (the band's top from above, the periapsis from below). 0 inside the band.
+        static double TimeToBand(double radius, double energy, double rp, double mu, double low, double high)
+        {
+            if (radius > high)
+                return (radius - high) / Math.Sqrt(2 * (energy + mu / high));
+            if (radius < low)
+                return (low - radius) / Math.Sqrt(2 * (energy + mu / Math.Max(rp, 1.0)));
+            return 0;
         }
 
         // Distance from the vessel (r, v at ut, in the parent's frame) to a child, and its rate of change.
