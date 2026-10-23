@@ -1,0 +1,22 @@
+{
+    "name": "SkySpaceAgency.Tests.Transfer",
+    "references": [
+        "SkySpaceAgency",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "Assembly-CSharp.dll",
+        "Ksp2Redux.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ]
+}
