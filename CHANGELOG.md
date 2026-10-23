@@ -111,6 +111,7 @@
   - **"Cannot stop before the ground!" alert**: shown when stopping is no longer possible: in Brake, according to the simulation; in Touch Down, when even full thrust is not enough. Touch Down then brakes at full throttle.
   - **Brake (non-precision)**: now ends on total surface speed instead of vertical speed. Before, a shallow approach could leave Brake before it burned at all.
   - **Failed phases**: a Circularize or deorbit phase that cannot do its job now stops the landing and shows why, instead of moving on to the next phase.
+- **Orbit prediction on very eccentric orbits**: the two-body propagator used by the landing, Orbit and Node predictions could, in rare cases near periapsis, fail to converge and return a position far off (1.6e9 m in the case found). It now falls back to a bracketed solve; every case that converged before gives the same result.
 
 ## 1.3.0
 

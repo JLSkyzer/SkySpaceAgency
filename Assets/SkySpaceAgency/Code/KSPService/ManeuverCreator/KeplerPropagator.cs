@@ -29,19 +29,10 @@ namespace KSP2FlightAssistant.MathLibrary
             double chi = sqrtMu * Math.Abs(alpha) * dt;
 
             double z;
+            bool converged = false;
             for (int i = 0; i < 100; i++)
             {
-                z = alpha * chi * chi;
-                double C = StumpffC(z);
-                double S = StumpffS(z);
-
-                double F = (r0mag * vr0 / sqrtMu) * chi * chi * C
-                    + (1 - alpha * r0mag) * chi * chi * chi * S
-                    + r0mag * chi - sqrtMu * dt;
-
-                double dF = (r0mag * vr0 / sqrtMu) * chi * (1 - alpha * chi * chi * S)
-                    + (1 - alpha * r0mag) * chi * chi * C
-                    + r0mag;
+                KeplerFunction(chi, r0mag, vr0, alpha, sqrtMu, dt, out double F, out double dF);
 
                 if (Math.Abs(dF) < 1e-12)
                     break;
@@ -50,8 +41,17 @@ namespace KSP2FlightAssistant.MathLibrary
                 chi -= ratio;
 
                 if (Math.Abs(ratio) < 1e-8)
+                {
+                    converged = true;
                     break;
+                }
             }
+            // On very eccentric orbits, Newton from the mean-motion guess can land near periapsis
+            // (small dF = r) and jump around without settling (found by the transfer Lambert tests).
+            // F rises strictly with chi (dF = r > 0), so a bracketed solve always converges. Only
+            // this non-converged case takes it, so every result that converged before is unchanged.
+            if (!converged)
+                chi = SolveBracketed(r0mag, vr0, alpha, sqrtMu, dt, sqrtMu * Math.Abs(alpha) * dt);
 
             z = alpha * chi * chi;
             double Cf = StumpffC(z);
@@ -67,6 +67,59 @@ namespace KSP2FlightAssistant.MathLibrary
             double gdot = 1 - (chi * chi / r1mag) * Cf;
 
             v1 = fdot * r0 + gdot * v0;
+        }
+
+        // Universal Kepler equation F(chi) = 0 and its derivative dF/dchi (= r at chi).
+        static void KeplerFunction(double chi, double r0mag, double vr0, double alpha, double sqrtMu, double dt,
+            out double F, out double dF)
+        {
+            double z = alpha * chi * chi;
+            double C = StumpffC(z);
+            double S = StumpffS(z);
+
+            F = (r0mag * vr0 / sqrtMu) * chi * chi * C
+                + (1 - alpha * r0mag) * chi * chi * chi * S
+                + r0mag * chi - sqrtMu * dt;
+
+            dF = (r0mag * vr0 / sqrtMu) * chi * (1 - alpha * chi * chi * S)
+                + (1 - alpha * r0mag) * chi * chi * C
+                + r0mag;
+        }
+
+        // Newton kept inside a bracket [lo, hi] of the root, with bisection when a step leaves it.
+        // F(0) = -sqrtMu*dt, so the root has the sign of dt; the far bound is found by doubling.
+        static double SolveBracketed(double r0mag, double vr0, double alpha, double sqrtMu, double dt, double guess)
+        {
+            if (dt == 0)
+                return 0;
+            double sign = Math.Sign(dt);
+            double far = Math.Max(Math.Abs(guess), 1.0) * sign;
+            for (int i = 0; i < 200; i++)
+            {
+                KeplerFunction(far, r0mag, vr0, alpha, sqrtMu, dt, out double Ffar, out _);
+                if (Ffar * sign > 0)
+                    break;
+                far *= 2;
+            }
+            double lo = Math.Min(0, far), hi = Math.Max(0, far);
+
+            double chi = 0.5 * (lo + hi);
+            for (int i = 0; i < 200; i++)
+            {
+                KeplerFunction(chi, r0mag, vr0, alpha, sqrtMu, dt, out double F, out double dF);
+                if (F < 0)
+                    lo = chi;
+                else
+                    hi = chi;
+
+                double next = dF > 0 ? chi - F / dF : double.NaN;
+                if (!(next > lo && next < hi))
+                    next = 0.5 * (lo + hi);
+                if (Math.Abs(next - chi) < 1e-8 || hi - lo < 1e-12 * Math.Max(1, Math.Abs(chi)))
+                    return next;
+                chi = next;
+            }
+            return chi;
         }
 
         static double StumpffC(double z)
