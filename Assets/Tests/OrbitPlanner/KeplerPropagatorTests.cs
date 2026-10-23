@@ -69,3 +69,73 @@ public class KeplerPropagatorTests
         }
     }
 }
+
+// Long steps on hyperbolas (found by the transfer Task 3 tests): from the elliptic mean-motion
+// guess, Newton did not converge on a 1e6 s step, and from 1e7 s cosh overflowed into Inf/NaN.
+public class KeplerPropagatorHyperbolicTests
+{
+    // EXTERNAL DATA (KSP wiki, stock values).
+    const double MuKerbin = 3.5316e12;
+    const double MuJool = 2.82528e14;
+    const double SoiJool = 2455985200;
+
+    // Periapsis state of a prograde hyperbola with excess speed vInf.
+    static void Periapsis(double mu, double rp, double vInf, out Vector3d r, out Vector3d v)
+    {
+        r = new Vector3d(rp, 0, 0);
+        v = new Vector3d(0, Math.Sqrt(vInf * vInf + 2 * mu / rp), 0);
+    }
+
+    static void Chained(Vector3d r0, Vector3d v0, double mu, double dt, int steps, out Vector3d r, out Vector3d v)
+    {
+        r = r0;
+        v = v0;
+        for (int i = 0; i < steps; i++)
+            KeplerPropagator.Propagate(r, v, mu, dt / steps, out r, out v);
+    }
+
+    static void AssertClose(Vector3d rOne, Vector3d vOne, Vector3d r, Vector3d v, string what)
+    {
+        Assert.That(double.IsNaN(rOne.magnitude) || double.IsInfinity(rOne.magnitude), Is.False, $"{what}: position {rOne}");
+        Assert.That(double.IsNaN(vOne.magnitude) || double.IsInfinity(vOne.magnitude), Is.False, $"{what}: velocity {vOne}");
+        Assert.That((rOne - r).magnitude, Is.LessThan(1e-7 * r.magnitude + 1),
+            $"{what}: one step and chained steps differ by {(rOne - r).magnitude} m at r {r.magnitude} m");
+        Assert.That((vOne - v).magnitude, Is.LessThan(1e-6 * v.magnitude),
+            $"{what}: velocity differs by {(vOne - v).magnitude} m/s");
+    }
+
+    [Test]
+    public void LongStep_FromLowKerbinOrbit_MatchesChainedSteps([Values(1e5, 1e6, 1e7)] double dt)
+    {
+        Periapsis(MuKerbin, 700000, 1000, out var r0, out var v0);
+        KeplerPropagator.Propagate(r0, v0, MuKerbin, dt, out var rOne, out var vOne);
+        Chained(r0, v0, MuKerbin, dt, (int)(dt / 1e3), out var r, out var v);
+        AssertClose(rOne, vOne, r, v, $"dt {dt}");
+
+        // And back again in one step.
+        KeplerPropagator.Propagate(rOne, vOne, MuKerbin, -dt, out var rBack, out _);
+        Assert.That((rBack - r0).magnitude, Is.LessThan(1), $"dt {dt}: back to periapsis within {(rBack - r0).magnitude} m");
+    }
+
+    // From the incoming branch, through periapsis, out again: one step across the whole flyby.
+    [Test]
+    public void LongStep_AcrossPeriapsis_MatchesChainedSteps([Values(1e6, 1e7)] double half)
+    {
+        Periapsis(MuKerbin, 700000, 1000, out var rp, out var vp);
+        Chained(rp, vp, MuKerbin, -half, (int)(half / 1e3), out var rIn, out var vIn);
+        KeplerPropagator.Propagate(rIn, vIn, MuKerbin, 2 * half, out var rOne, out var vOne);
+        Chained(rIn, vIn, MuKerbin, 2 * half, (int)(2 * half / 1e3), out var r, out var v);
+        AssertClose(rOne, vOne, r, v, $"half {half}");
+    }
+
+    [Test]
+    public void Escape_InsideJoolSoi_OneStepReachesSoi()
+    {
+        Periapsis(MuJool, 6300000, 2000, out var r0, out var v0);
+        double dt = SoiJool / 2000; // a little beyond the SOI crossing (≈ 1.2e6 s)
+        KeplerPropagator.Propagate(r0, v0, MuJool, dt, out var rOne, out var vOne);
+        Chained(r0, v0, MuJool, dt, (int)(dt / 1e3), out var r, out var v);
+        AssertClose(rOne, vOne, r, v, "Jool escape");
+        Assert.That(rOne.magnitude, Is.GreaterThan(SoiJool * 0.9));
+    }
+}

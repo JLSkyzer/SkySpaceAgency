@@ -26,7 +26,9 @@ namespace KSP2FlightAssistant.MathLibrary
             double alpha = 2.0 / r0mag - v0mag * v0mag / mu;
 
             double sqrtMu = Math.Sqrt(mu);
-            double chi = sqrtMu * Math.Abs(alpha) * dt;
+            double chi = alpha < 0
+                ? HyperbolicGuess(r0, v0, r0mag, alpha, mu, dt)
+                : sqrtMu * Math.Abs(alpha) * dt;
 
             double z;
             bool converged = false;
@@ -34,7 +36,8 @@ namespace KSP2FlightAssistant.MathLibrary
             {
                 KeplerFunction(chi, r0mag, vr0, alpha, sqrtMu, dt, out double F, out double dF);
 
-                if (Math.Abs(dF) < 1e-12)
+                // Overflow (cosh far out on a hyperbola) never converges: hand over to the bracket.
+                if (!IsFinite(F) || !IsFinite(dF) || Math.Abs(dF) < 1e-12)
                     break;
 
                 double ratio = F / dF;
@@ -69,6 +72,25 @@ namespace KSP2FlightAssistant.MathLibrary
             v1 = fdot * r0 + gdot * v0;
         }
 
+        // Starting guess on a hyperbola (Vallado, "Fundamentals of Astrodynamics", algorithm 8):
+        // chi grows with the log of the time there, while the elliptic mean-motion guess grows
+        // linearly and overflows cosh on long steps. Falls back to the elliptic guess when the log's
+        // argument is not usable (the bracketed solve still catches any Newton failure).
+        static double HyperbolicGuess(Vector3d r0, Vector3d v0, double r0mag, double alpha, double mu, double dt)
+        {
+            double elliptic = Math.Sqrt(mu) * Math.Abs(alpha) * dt;
+            if (dt == 0)
+                return 0;
+            double a = 1 / alpha;
+            double sign = Math.Sign(dt);
+            double denominator = a * (Vector3d.Dot(r0, v0) + sign * Math.Sqrt(-mu * a) * (1 - r0mag / a));
+            double argument = -2 * mu * dt / denominator;
+            double guess = sign * Math.Sqrt(-a) * Math.Log(argument);
+            return IsFinite(guess) && guess * sign > 0 ? guess : elliptic;
+        }
+
+        static bool IsFinite(double x) => !double.IsNaN(x) && !double.IsInfinity(x);
+
         // Universal Kepler equation F(chi) = 0 and its derivative dF/dchi (= r at chi).
         static void KeplerFunction(double chi, double r0mag, double vr0, double alpha, double sqrtMu, double dt,
             out double F, out double dF)
@@ -97,24 +119,31 @@ namespace KSP2FlightAssistant.MathLibrary
             for (int i = 0; i < 200; i++)
             {
                 KeplerFunction(far, r0mag, vr0, alpha, sqrtMu, dt, out double Ffar, out _);
-                if (Ffar * sign > 0)
-                    break;
+                if (!IsFinite(Ffar) || Ffar * sign > 0)
+                    break; // an overflow is far past the root: F rises strictly and has the sign of chi out there
                 far *= 2;
             }
             double lo = Math.Min(0, far), hi = Math.Max(0, far);
 
             double chi = 0.5 * (lo + hi);
+            double lastStep = hi - lo;
             for (int i = 0; i < 200; i++)
             {
                 KeplerFunction(chi, r0mag, vr0, alpha, sqrtMu, dt, out double F, out double dF);
+                if (!IsFinite(F))
+                    F = chi > 0 ? double.PositiveInfinity : double.NegativeInfinity; // overflow, see above
                 if (F < 0)
                     lo = chi;
                 else
                     hi = chi;
 
-                double next = dF > 0 ? chi - F / dF : double.NaN;
-                if (!(next > lo && next < hi))
+                // Newton only while it stays inside and at least halves its step; otherwise bisect.
+                // Far out on a hyperbola F grows like e^chi, and plain Newton crawls there by a
+                // constant step that would never reach the root in 200 iterations.
+                double next = dF > 0 && IsFinite(F) && IsFinite(dF) ? chi - F / dF : double.NaN;
+                if (!(next > lo && next < hi) || Math.Abs(next - chi) > 0.5 * lastStep)
                     next = 0.5 * (lo + hi);
+                lastStep = Math.Abs(next - chi);
                 if (Math.Abs(next - chi) < 1e-8 || hi - lo < 1e-12 * Math.Max(1, Math.Abs(chi)))
                     return next;
                 chi = next;

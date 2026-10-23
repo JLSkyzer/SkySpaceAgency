@@ -112,6 +112,7 @@
   - **Brake (non-precision)**: now ends on total surface speed instead of vertical speed. Before, a shallow approach could leave Brake before it burned at all.
   - **Failed phases**: a Circularize or deorbit phase that cannot do its job now stops the landing and shows why, instead of moving on to the next phase.
 - **Orbit prediction on very eccentric orbits**: the two-body propagator used by the landing, Orbit and Node predictions could, in rare cases near periapsis, fail to converge and return a position far off (1.6e9 m in the case found). It now falls back to a bracketed solve; every case that converged before gives the same result.
+- **Orbit prediction on long hyperbolic steps**: the same propagator could return a wrong or NaN position on an escape or arrival hyperbola predicted far ahead (for example 1e7 s after leaving low Kerbin orbit). It now starts from a hyperbolic guess and its fallback survives the overflow far out. Closed orbits that converged before give the same result.
 
 ## 1.3.0
 
