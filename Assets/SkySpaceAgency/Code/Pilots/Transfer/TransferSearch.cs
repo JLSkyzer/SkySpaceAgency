@@ -152,6 +152,8 @@ namespace K2D2.Transfer
             const double ShiftTolerance = 1.03; // a shifted departure may cost 3 % more
             const double PlaneTurnExplainedDeg = 10;
             const double ExcessTolerance = 0.05;
+            const int MaxExitIterations = 5;
+            const double ExitTolerance = 1; // m/s, velocity at the SOI exit against Lambert
             const string Solved = "solved in flight, skipped under 1 m/s";
 
             readonly BodySystem S;

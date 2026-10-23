@@ -378,19 +378,69 @@ namespace K2D2.Transfer
                     return Failed($"No transfer found to {S[To].Name}.");
                 Vector3d wd = v1 - vF, wa = v2 - vT;
 
-                var leg = Leave(k, wd, t);
-                if (!leg.Ok)
-                    return Failed(leg.Refusal);
-                var flight = FlyClimb(leg);
-                var built = new Built { Unplanned = flight.Unplanned, UnplannedUT = flight.UnplannedUT };
-                // From the vessel's own body, an unplanned SOI is warned about (or avoided by a shift);
-                // higher up, the climb could not be re-planned past it.
-                bool crossingOnly = !flight.Ok && flight.Unplanned >= 0 && k == 0;
+                // Aim at the real SOI exit: the asymptote is not the velocity at a finite SOI (from LKO,
+                // about 40 m/s slower than the exit speed). Fly the climb, solve Lambert again from the
+                // flown exit position and UT to the same arrival, and move the aimed excess by the
+                // velocity mismatch, until it is under 1 m/s.
+                Vector3d aim = wd;
+                Leg leg = null;
+                Flight flight = null;
+                bool crossingOnly = false;
+                double mismatch = double.NaN;
+                for (int iter = 0; iter < MaxExitIterations; iter++)
+                {
+                    leg = Leave(k, aim, t);
+                    if (!leg.Ok)
+                        return Failed(leg.Refusal);
+                    flight = FlyClimb(leg);
+                    // From the vessel's own body, an unplanned SOI is warned about (or avoided by a
+                    // shift); higher up, the climb could not be re-planned past it.
+                    crossingOnly = !flight.Ok && flight.Unplanned >= 0 && k == 0;
+                    if (!flight.Ok)
+                        break;
+                    double rest = t + tof - flight.AfterUT;
+                    if (!(rest > 0) || !Lambert.Solve(flight.AfterR, rT, rest, S[Ancestor].Mu, prograde, 0, false, out var v1x, out var v2x))
+                        break;
+                    Vector3d miss = v1x - flight.AfterV;
+                    mismatch = miss.magnitude;
+                    wa = v2x - vT;
+                    if (mismatch < ExitTolerance)
+                        break;
+                    aim += miss;
+                }
                 if (!flight.Ok && !crossingOnly)
                     return FlightFailure(FlightRefusal(flight));
-                double exit = crossingOnly ? leg.ExitUT : flight.TopExitUT;
-
                 var arr = BuildArrival(0, wa.magnitude, t + tof, k);
+
+                // Lambert aims at the arrival body's centre: aim the departure at the leg's arrival
+                // periapsis instead, by the correction that would be needed right after the SOI exit.
+                // Otherwise the corrections, each under the 1 m/s skip threshold, are all skipped and
+                // the vessel arrives on a centre-aimed path.
+                double aimPe = arr.FirstTarget.Pe, predicted = double.NaN;
+                if (flight.Ok && !double.IsNaN(aimPe))
+                {
+                    double arrive = t + tof;
+                    double horizon = arrive + 0.25 * (arrive - flight.AfterUT);
+                    for (int iter = 0; iter < 2; iter++)
+                    {
+                        if (!ArrivalTargeting.Solve(S, Ancestor, flight.AfterR, flight.AfterV, flight.AfterUT, cT, aimPe,
+                                arr.FirstTarget.Inc, horizon, arrive, out var dvAim, out predicted, out _)
+                            || dvAim.magnitude < 1e-3)
+                            break;
+                        var aimed = Leave(k, aim + dvAim, t);
+                        if (!aimed.Ok)
+                            break;
+                        var aimedFlight = FlyClimb(aimed);
+                        if (!aimedFlight.Ok)
+                            break;
+                        aim += dvAim;
+                        leg = aimed;
+                        flight = aimedFlight;
+                    }
+                }
+                var built = new Built { Unplanned = flight.Unplanned, UnplannedUT = flight.UnplannedUT };
+                Trace?.Invoke(Inv($"[Transfer] SOI exit velocity mismatch {mismatch:F2} m/s, aimed excess {aim.magnitude:F1} m/s (Lambert {wd.magnitude:F1}), arrival periapsis predicted {predicted:F0} m for {aimPe:F0} m"));
+                double exit = crossingOnly ? leg.ExitUT : flight.TopExitUT;
                 var plan = NewPlan();
                 plan.Steps.AddRange(leg.Steps);
                 plan.Steps.AddRange(flight.Steps);
@@ -402,7 +452,7 @@ namespace K2D2.Transfer
                 var targets = ClimbTargets(leg);
                 targets[k] = arr.FirstTarget;
                 plan.ExcessBody = cF;
-                plan.RequiredExcess = wd;
+                plan.RequiredExcess = aim;
                 return Finish(built, plan, leg.FirstBurnUT, arr.ArrivalUT, targets);
             }
         }

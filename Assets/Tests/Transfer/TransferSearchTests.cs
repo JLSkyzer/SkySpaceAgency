@@ -427,6 +427,29 @@ public class TransferSearchTests
         Assert.AreEqual(_s["Kerbin"].LowOrbitRadius, el.PeriapsisRadius, 1000);
     }
 
+    // The plan's burns flown to the exit of the climb: the velocity relative to Kerbol there must be
+    // the Lambert velocity from that position and UT to the target's ephemeris at the arrival.
+    void ExitMatchesLambert(string from, double radius, string label)
+    {
+        var plan = Find(Request(from, "Duna", radius), label);
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        double exitUT = plan.Steps.First(st => st.Kind == StepKind.Escape && st.Body == plan.ExcessBody).UT;
+        var patches = FlyDeparture(plan, exitUT + 600);
+        var kerbol = patches.First(pa => pa.Body == B("Kerbol"));
+        double arrival = plan.Steps.Single(st => st.Kind == StepKind.Capture).UT;
+        _s.StateRelativeToParent(B("Duna"), arrival, out var rDuna, out _);
+        Assert.IsTrue(Lambert.Solve(kerbol.StartR, rDuna, arrival - kerbol.StartUT, _s["Kerbol"].Mu, true, 0, false, out var v1, out _));
+        double miss = (v1 - kerbol.StartV).magnitude;
+        TestContext.Out.WriteLine($"{label}: exit velocity {kerbol.StartV.magnitude:F1} m/s, Lambert {v1.magnitude:F1} m/s, mismatch {miss:F3} m/s");
+        Assert.Less(miss, 1);
+    }
+
+    [Test]
+    public void KerbinToDuna_SoiExitVelocityMatchesLambert() => ExitMatchesLambert("Kerbin", 700_000, "Kerbin -> Duna exit");
+
+    [Test]
+    public void MunToDuna_SoiExitVelocityMatchesLambert() => ExitMatchesLambert("Mun", _s["Mun"].LowOrbitRadius, "Mun -> Duna exit");
+
     double Escape(TransferPlan p) => p.Steps.First(st => st.Kind == StepKind.Escape && st.Body == p.Request.FromBody).UT + 1;
 
     static Vector3d RotateZ(Vector3d p, double angle) =>
