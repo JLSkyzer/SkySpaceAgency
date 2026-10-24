@@ -1,6 +1,6 @@
 # In-game checklist: transfers, Lift transfer goal (later: rendezvous, docking)
 
-This list covers sub-projects 4.1 (Transfer tab) and 4.2 (Lift "Prepare transfer"). Items for 4.3 to 4.6 will be added as those sub-projects are delivered.
+This list covers sub-projects 4.1 (Transfer tab) and 4.2 (Lift "Prepare transfer"). Items for 4.3 (Rendezvous tab) are in sections 8–11; 4.4 to 4.6 will be added as they are delivered.
 
 **For every test:** quicksave first, and send `Ksp2-2.log` afterwards. The lines to read start with `[Transfer]` or `[Lift]`.
 
@@ -55,3 +55,26 @@ From a low Mun orbit, transfer to Duna.
 
 ## 7. Lift "Prepare transfer to Mun" (4.2)
 Same as 6. The plane should be the Mun's orbit plane, or the closest one reachable from the KSC.
+
+## 8. Transfer again after the 1x fix (4.1)
+Resume or re-plan the Duna transfer. The injection should last about 70 s at 1x, with the remaining Δv going down to the end (`[TargetOrbitBurn]` lines), and no "Burn diverging".
+
+## 9. Rendezvous with a station in low Kerbin orbit (4.3)
+1. Put a station in a ~120 km orbit. Launch a vessel to about 80 km, 30° behind it.
+2. In the Rendezvous tab, select the station and press "Rendezvous only". Check:
+   - the plan: plane match, intercept, Δv;
+   - after the intercept: miss distance and relative speed (`[Rendezvous]` lines);
+   - the brake ends about 200 m away at about 0 m/s.
+
+## 10. Docking with RCS (4.3)
+From within 2 km, press "Dock only" (or use "Rendezvous + dock" from further away).
+- `[Docking] rcs mapping …`: the three axes are found, with no dead axis on a symmetric RCS.
+- Ports chosen (the tab shows the pair). Change the pair by hand once.
+- Holds at 50 m and 10 m, then the final approach at 0.2–0.5 m/s. `[Docking] trace:` lines show the lateral error and closing speed.
+- "Docked". After docking, RCS is left as it was on the merged vessel and SAS is in Stability Assist.
+- Also try a port on the far side of the station: the vessel must go around it, never through it.
+
+## 11. Docking without RCS, and safety (4.3)
+- On a vessel without RCS: `[Docking] main-engine deadband …`, and the docking either succeeds with wider holds or is refused with its reason.
+- During the approach, switch to the station and back. The pilot must stop, without firing anything on the station, and with our own throttle and RCS cut.
+- Approach too fast, by giving a push by hand: the pilot must abort, back off to 20 m and retry once.

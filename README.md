@@ -17,7 +17,7 @@ K2-D2 gives you one panel (`Alt-O` or the AppBar icon) with a set of autopilots:
 - **Lift** - automated ascent guidance with a configurable altitude/heading profile, an optional roll program, and automatic circularization at the end of the climb; or "Prepare transfer": wait for the right launch time and reach the parking orbit plane a transfer needs
 - **Transfer** - plan and fly the cheapest transfer from any body to any other body (flyby or capture), with the reason for every non-obvious burn, Δv checked per stage, "Prepare only" nodes, and a plan that survives a save and reload
 - **Landing** - automated descent, braking, and touchdown (propulsive with automatic legs, or parachute on bodies with an atmosphere), with an optional Precision Landing mode that targets a site picked on the map, the KSC or a waypoint: powered precision landing on bodies with no atmosphere, parachute precision return (with automatic service module jettison) on bodies with an atmosphere
-- **Docking** - automated final approach and docking
+- **Rendezvous** (replaces the Docking tab) - meet a target vessel orbiting the same body (plane match, phasing, intercept to 200 m, braking) and dock: compatible ports picked automatically, RCS axes measured, hold points at 50 m and 10 m, slow final approach, aborts and backs off on doubt; without RCS it uses the main engine
 - **Attitude** - point-and-hold attitude control (a simple plane autopilot)
 - **VAB tools** - in the VAB: export the rocket to JSON for an AI (summary with Δv per stage), import a corrected rocket (only unlocked parts, with an automatic backup), and dump the parts of the campaign
 
@@ -30,12 +30,11 @@ This is a from-scratch port of the original code onto Redux's APIs, not a compat
 - Node autopilot
 - Lift/ascent autopilot - flies the configured profile to orbit, including an optional roll program, then creates and flies its own circularization node
 - Landing autopilot - descent, braking, and touchdown, including collision detection, precision landing on bodies with no atmosphere and parachute precision returns on bodies with an atmosphere
-- Docking autopilot - final approach and main-thrust kill-speed/brake
 - Attitude hold
 - Auto-staging, with a player-facing on/off toggle in the window's title bar
 
 **Known limitations:**
-- Transfer and the Lift transfer goal are not flown in game yet. Gravity assists, rendezvous with a vessel and aerocapture are not available yet. Captures are propulsive.
+- Transfer, the Lift transfer goal and Rendezvous are not flown in game yet. Burns stay at 1x time warp while thrusting. Gravity assists, rendezvous with a vessel and aerocapture are not available yet. Captures are propulsive.
 - Parachute precision return (atmospheric bodies) uses a reentry model whose drag is uncertain: expect about 20 km until the suggested drag scale is applied after a first return. No steering under canopy; heating is not modelled (the entry periapsis is about 35 % of the atmosphere depth).
 - Landing's braking plan ignores atmospheric drag (which only helps) and assumes the active engines stay as they are: auto-staging during the landing burn is not planned for.
 - VAB tools: the import replaces the main rocket through the game's workspace restore (or, as a fallback, its assembly loader); it is not an undo step - the `before_import_…` backup in `vab/exports/` is the way back. Engine Isp in the parts dump comes from the part definitions and may differ from the VAB's figures.
