@@ -318,6 +318,7 @@ The start is refused if the margin is negative.
 - **Test references [call]:**
   - The "ideal patched-conic total" is computed in the tests by an independent brute-force optimizer: a fine grid over every free time, with no refinement shared with the production search.
   - The Kerbin → Duna and Kerbin → Mun windows must fall within ±10 % of the community Δv-map figures, which are external estimates.
+  - Exception for Ike → Laythe: 12 % over the brute-force ideal is allowed (decided 2026-10-24). That reference leaves out the arrival moon's phasing, which the flown plan budgets and cannot avoid. [call]
 - **Plane after the ascent [call]:**
   - In 4.2 and 4.4, Lift recomputes the heading during the ascent to steer toward the plane, using the same azimuth formula with the current state.
   - After circularisation, a small closed-loop plane trim burn inside Lift brings the plane error under 0.1°.
