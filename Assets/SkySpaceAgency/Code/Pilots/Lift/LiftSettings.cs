@@ -91,6 +91,16 @@ namespace K2D2.Lift
         // centered on 3 deg/s.
         public ClampSetting<float> roll_program_rate_deg_s = new("lift.roll_program_rate_deg_s", 3f, 0.5f, 15f);
 
+        // TRANSFER GOAL (sub-project 4.2, see LiftGoal.cs). Orbit is today's ascent, unchanged.
+        public EnumSetting<LiftGoal> goal = new("lift.goal", LiftGoal.Orbit);
+        // The target body, by name (resolved against the snapshot the plan is made from).
+        public Setting<string> transfer_target = new("lift.transfer_target", "");
+        // The ascent lead measured by the last transfer ascent, and the body it was measured on;
+        // -1 until then (LiftGoalRules.AscentLead then uses its estimate).
+        public Setting<float> measured_lead_s = new("lift.measured_lead_s", -1f);
+        public Setting<float> measured_downrange_deg = new("lift.measured_downrange_deg", -1f);
+        public Setting<string> measured_lead_body = new("lift.measured_lead_body", "");
+
         Label end_ascent_alt;
         Label end_adjust_alt;
 

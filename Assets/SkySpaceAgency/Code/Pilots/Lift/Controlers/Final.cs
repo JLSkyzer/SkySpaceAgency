@@ -81,6 +81,10 @@ namespace K2D2.Lift
             status_line = "Circularize burn complete";
             finished = true;
             logger.LogInfo("[FinalCircularize] circularize burn complete");
+            // Transfer goal: the plane trim comes next (LiftPilot.Update moves on to PlaneTrim on
+            // finished), and it ends the run.
+            if (lift.transfer != null)
+                return;
             lift.EndLiftPilot(true, "Circularized - ascent complete");
         }
 

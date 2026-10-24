@@ -40,6 +40,12 @@ namespace K2D2.Lift
         float heading_correction = 0;
         float h_speed_heading = 0;
 
+        // TRANSFER GOAL (LiftGoal.PrepareTransfer): set by LiftPilot for that run, null for Orbit.
+        internal LiftTransferPlan transfer_plan = null;
+        double transfer_correction = 0;
+        internal double plane_error_deg = double.NaN;
+        float next_plane_log = 0;
+
         // ROLL PROGRAM (see LiftSettings.roll_program* for the player-facing settings). Corrects the
         // vessel's roll relative to its OWN launch orientation - not an absolute compass/navball
         // heading - since an asymmetric build can spawn on the pad rolled away from the orientation
@@ -95,6 +101,7 @@ namespace K2D2.Lift
             ap_km = 0;
             delta_ap_per_second = 0;
             wanted_elevation = -90;
+            next_plane_log = 0;
 
             accumulated_roll_deg = 0;
             prev_roll_rotation_valid = false;
@@ -203,15 +210,29 @@ namespace K2D2.Lift
             var telemetry = SASTool.getTelemetry();
             var up = telemetry.HorizonUp;
 
-            if (settings.heading_correction.V)
+            // TRANSFER GOAL: the solver's azimuth plus the plane-steering correction, and no pad
+            // drift correction on top (the steering already takes the lateral velocity out). The
+            // Orbit goal keeps today's heading below, unchanged.
+            float heading;
+            if (transfer_plan != null && transfer_plan.Ready)
             {
-                computeSpeedHeading();
+                heading_correction = 0;
+                heading = TransferHeading();
             }
             else
-                heading_correction = 0;
+            {
+                if (settings.heading_correction.V)
+                {
+                    computeSpeedHeading();
+                }
+                else
+                    heading_correction = 0;
+
+                heading = settings.heading.V + heading_correction;
+            }
 
 
-            Vector3d direction = QuaternionD.Euler(-wanted_elevation, settings.heading.V + heading_correction, 0) * Vector3d.forward;
+            Vector3d direction = QuaternionD.Euler(-wanted_elevation, heading, 0) * Vector3d.forward;
             Vector direction_vector = new Vector(up.coordinateSystem, direction);
 
             autopilot.SAS.lockedMode = false;
@@ -336,7 +357,65 @@ namespace K2D2.Lift
             return new QuaternionD(new Vector3d(qx, qy, qz), qw);
         }
 
+        // TRANSFER GOAL: heading = LaunchWindow azimuth + PlaneSteering correction, toward the plane
+        // the launch can reach (ReachedPlaneNormal; the trim burn takes out what is left). Logs the
+        // plane error every 10 s, with the velocity's surface heading in the game's frame and in our
+        // Zup one: if the two disagree, the east = z × up convention does not match the game's.
+        float TransferHeading()
+        {
+            var p = transfer_plan;
+            IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
+            double now = GeneralTools.Current_UT;
+            Vector3d r = orbit.GetRelativePositionAtUTZup(now);
+            Vector3d v = orbit.GetOrbitalVelocityAtUTZup(now);
+            transfer_correction = PlaneSteering.HeadingCorrectionDeg(r, v, p.Window.ReachedPlaneNormal,
+                p.Window.AzimuthDeg, p.OrbitalSpeed);
+            double h = (p.Window.AzimuthDeg + transfer_correction) % 360;
+            if (h < 0)
+                h += 360;
+            plane_error_deg = PlaneSteering.PlaneErrorDeg(r, v, p.Parking.PlaneNormal);
+
+            if (Time.realtimeSinceStartup >= next_plane_log)
+            {
+                next_plane_log = Time.realtimeSinceStartup + 10;
+                double zup_heading = ZupSurfaceHeading(r, v, p.Omega);
+                logger.LogInfo(System.FormattableString.Invariant(
+                    $"[Lift] plane error {plane_error_deg:F3}° (to the reached plane {PlaneSteering.PlaneErrorDeg(r, v, p.Window.ReachedPlaneNormal):F3}°), ") +
+                    System.FormattableString.Invariant(
+                    $"heading {h:F2}° = azimuth {p.Window.AzimuthDeg:F2}° {transfer_correction:+0.00;-0.00}°, alt {current_altitude_km:F1} km, ") +
+                    System.FormattableString.Invariant(
+                    $"surface velocity heading: game {SurfaceSpeedHeading():F1}°, Zup {zup_heading:F1}°"));
+            }
+            return (float)h;
+        }
+
+        // The compass heading of the surface velocity v − ω × r in the Zup frame, east = z × up.
+        static double ZupSurfaceHeading(Vector3d r, Vector3d v, Vector3d omega)
+        {
+            Vector3d vs = v - Vector3d.Cross(omega, r);
+            Vector3d up = r.normalized;
+            Vector3d east = new Vector3d(-up.y, up.x, 0);
+            if (east.magnitude < 1e-9)
+                return double.NaN;
+            east = east.normalized;
+            Vector3d north = Vector3d.Cross(up, east);
+            double h = System.Math.Atan2(Vector3d.Dot(vs, east), Vector3d.Dot(vs, north)) * 180 / System.Math.PI;
+            return h < 0 ? h + 360 : h;
+        }
+
         void computeSpeedHeading()
+        {
+            h_speed_heading = SurfaceSpeedHeading();
+
+            heading_correction = GeneralTools.diffAngle(settings.heading.V, h_speed_heading);
+
+            if (heading_correction > 45)
+                heading_correction = 45;
+            else if (heading_correction < -45)
+                heading_correction = -45;
+        }
+
+        float SurfaceSpeedHeading()
         {
             // use Up local coordinate as reference frame
             var Upcoords = current_vessel.VesselVehicle.Up.coordinateSystem;
@@ -348,15 +427,7 @@ namespace K2D2.Lift
             var LocalHSpeed = SurfaceVelocity - UpSpeed;
 
        
-            h_speed_heading = (float)-Vector3d.SignedAngle(LocalHSpeed.normalized, North, Up);
-
-
-            heading_correction = GeneralTools.diffAngle(settings.heading.V, h_speed_heading);
-
-            if (heading_correction > 45)
-                heading_correction = 45;
-            else if (heading_correction < -45)
-                heading_correction = -45;
+            return (float)-Vector3d.SignedAngle(LocalHSpeed.normalized, North, Up);
         }
 
         // Tracks whether the roll program has reached its trigger altitude, and advances the ramped
@@ -436,7 +507,13 @@ namespace K2D2.Lift
             addRow("Pitch Target", $"{wanted_elevation:n2} °");
             addRow("Throttle", $"{wanted_throttle:n2}");
 
-            if (settings.heading_correction.V)
+            if (transfer_plan != null && transfer_plan.Ready)
+            {
+                addRow("Azimuth", $"{transfer_plan.Window.AzimuthDeg:n2} °");
+                addRow("Plane Correction", $"{transfer_correction:n2} °");
+                addRow("Plane Error", $"{plane_error_deg:n3} °");
+            }
+            else if (settings.heading_correction.V)
             {
                 addRow("Surface Heading", $"{h_speed_heading:n2} °");
                 addRow("Heading Correction", $"{heading_correction:n2} °");

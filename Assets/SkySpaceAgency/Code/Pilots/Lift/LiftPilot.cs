@@ -12,10 +12,12 @@ namespace K2D2.Lift
         public enum LiftStatus
         {
             Off,
+            WaitLaunch,     // transfer goal only: planning, then waiting on the pad
             Ascent,
             Coasting,
             Adjust,
-            Circularize
+            Circularize,
+            PlaneTrim       // transfer goal only: ends the run itself (EndLiftPilot)
         }
 
         public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Lift");
@@ -35,6 +37,12 @@ namespace K2D2.Lift
         Adjust adjust = null;
         Coasting coasting = null;   
         FinalCircularize final_circularize;
+        WaitLaunch wait_launch;
+        PlaneTrim plane_trim;
+
+        // The transfer goal's plan for this run (set by WaitLaunch); null for the Orbit goal, whose
+        // run is today's, unchanged.
+        internal LiftTransferPlan transfer = null;
 
         public ExecuteController current_subpilot = null;
 
@@ -50,6 +58,8 @@ namespace K2D2.Lift
             adjust = new Adjust(settings, ascent);
             coasting = new Coasting(this, settings);
             final_circularize = new FinalCircularize(this, settings);
+            wait_launch = new WaitLaunch(this, settings);
+            plane_trim = new PlaneTrim(this);
         
             Instance = this;
 
@@ -71,6 +81,7 @@ namespace K2D2.Lift
             {
                 if (_status == value)
                     return;
+                LiftStatus previous = _status;
                 _status = value;
                 switch (value)
                 {
@@ -88,7 +99,19 @@ namespace K2D2.Lift
                         }
 
                         current_subpilot = null;
+
+                        // Transfer goal: no plan search left running, and no warp left on by the
+                        // pad wait or the trim.
+                        wait_launch.Cancel();
+                        if (previous == LiftStatus.WaitLaunch || previous == LiftStatus.PlaneTrim)
+                            TimeWarpTools.SetRateIndex(0, false);
                     }
+                        break;
+                    case LiftStatus.WaitLaunch:
+                        current_subpilot = wait_launch;
+                        break;
+                    case LiftStatus.PlaneTrim:
+                        current_subpilot = plane_trim;
                         break;
                     case LiftStatus.Ascent:
                         current_subpilot = ascent;
@@ -135,7 +158,62 @@ namespace K2D2.Lift
 
         void OnStartController()
         {
-            status = LiftStatus.Ascent;
+            transfer = null;
+            ascent.transfer_plan = null;
+            if (settings.goal.V == LiftGoal.PrepareTransfer)
+                status = LiftStatus.WaitLaunch;
+            else
+                status = LiftStatus.Ascent;
+        }
+
+        // Transfer goal, during the ascent: the liftoff time and place, or no liftoff 5 s after the
+        // launch time (throttle cut, back to the pad wait for the next pass). True when the status
+        // changed.
+        bool CheckLiftoff()
+        {
+            var p = transfer;
+            var vessel = current_vessel.VesselComponent;
+            if (p == null || !p.Ready || status != LiftStatus.Ascent || !double.IsNaN(p.LiftoffUT) || vessel == null)
+                return false;
+            double now = GeneralTools.Current_UT;
+            if (!vessel.LandedOrSplashed)
+            {
+                p.LiftoffUT = now;
+                p.LiftoffPosition = vessel.Orbit.GetRelativePositionAtUTZup(now);
+                logger.LogInfo(System.FormattableString.Invariant(
+                    $"[Lift] liftoff at UT {now:F1}, planned UT {p.Window.LaunchUT:F1} (T{now - p.Window.LaunchUT:+0.0;-0.0;+0.0} s), first plan UT {p.PlannedLaunchUT:F1}"));
+                return false;
+            }
+            if (LiftGoalRules.Decide(now, p.Window.LaunchUT, true) != PadAction.Resolve)
+                return false;
+            logger.LogInfo("[Lift] still on the pad 5 s after the launch time: throttle cut");
+            current_vessel.SetThrottle(0);
+            status = LiftStatus.WaitLaunch;
+            return true;
+        }
+
+        // Transfer goal, at the end of the ascent burn: the ascent lead and downrange the launch
+        // window will use next time (LiftGoalRules.AscentLead).
+        void MeasureAscent()
+        {
+            var p = transfer;
+            var vessel = current_vessel.VesselComponent;
+            if (p == null || double.IsNaN(p.LiftoffUT) || vessel == null)
+                return;
+            double now = GeneralTools.Current_UT;
+            double dt = now - p.LiftoffUT;
+            double downrange = LiftGoalRules.DownrangeRad(p.LiftoffPosition, vessel.Orbit.GetRelativePositionAtUTZup(now), p.Omega, dt);
+            double downrangeDeg = downrange * 180 / System.Math.PI;
+            logger.LogInfo(System.FormattableString.Invariant(
+                $"[Lift] ascent lead measured: {dt:F1} s, downrange {downrangeDeg:F2}° on {p.BodyName} ") +
+                System.FormattableString.Invariant(
+                $"(the window used {p.LeadSeconds:F0} s, {p.DownrangeRad * 180 / System.Math.PI:F2}°, {(p.LeadMeasured ? "measured" : "estimate")})"));
+            if (dt > 0)
+            {
+                settings.measured_lead_s.V = (float)dt;
+                settings.measured_downrange_deg.V = (float)downrangeDeg;
+                settings.measured_lead_body.V = p.BodyName;
+            }
         }
 
         internal bool result_ok = false;
@@ -176,9 +254,13 @@ namespace K2D2.Lift
             if (!isRunning)
                 return;
 
+            if (transfer != null && CheckLiftoff())
+                return;
+
             var subpilot = current_subpilot;
             if (subpilot != null)
             {
+                LiftStatus before = status;
                 subpilot.Update();
 
                 // A subpilot's Update() can end the whole run right here - Coasting's Ap-under-
@@ -191,7 +273,11 @@ namespace K2D2.Lift
                 // don't NullReferenceException on a null current_subpilot, and don't call
                 // NextMode() a second time on top of a run that already ended itself.
                 if (current_subpilot == subpilot && subpilot.finished)
+                {
                     NextMode();
+                    if (transfer != null && before == LiftStatus.Ascent)
+                        MeasureAscent();
+                }
             }
         }
     }
