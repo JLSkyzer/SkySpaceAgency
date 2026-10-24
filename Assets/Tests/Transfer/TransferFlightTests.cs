@@ -150,6 +150,50 @@ public class TransferFlightTests
         Assert.AreEqual(FlightAction.Done, d.Action);
     }
 
+    // No SOI change predicted where the plan needs one: warp to the planned time plus the late margin,
+    // then the change is missed (never a warp or a 1x wait without end).
+    [Test]
+    public void Next_SoiChangeThatNeverComes_IsMissed()
+    {
+        var plan = HandPlan();
+        double late = TransferFlight.SoiLateSeconds(plan, plan.Steps[5].UT);
+        Assert.AreEqual(Math.Max(3600, 0.02 * (1_000_000 - 1000)), late, 1e-6);
+
+        // The capture in Duna, the vessel still in Kerbol, no encounter predicted (a missed encounter).
+        var d = TransferFlight.Next(plan, 5, _kerbol, _duna, 950_000, 100, double.NaN);
+        Assert.AreEqual(FlightAction.Warp, d.Action);
+        Assert.AreEqual(1_000_000 + late, d.WarpUntilUT, 1e-6);
+        d = TransferFlight.Next(plan, 5, _kerbol, _duna, 1_000_000 + late, 100, double.NaN);
+        Assert.AreEqual(FlightAction.SoiMissed, d.Action);
+        Assert.AreEqual(_duna, d.MissedBody);
+        Assert.IsFalse(d.MissedExit);
+
+        // An escape that does not come.
+        d = TransferFlight.Next(plan, 1, _kerbin, _duna, 20_000, 100, double.NaN);
+        Assert.AreEqual(FlightAction.Warp, d.Action);
+        d = TransferFlight.Next(plan, 1, _kerbin, _duna, 20_000 + TransferFlight.SoiLateSeconds(plan, 20_000), 100, double.NaN);
+        Assert.AreEqual(FlightAction.SoiMissed, d.Action);
+        Assert.AreEqual(_kerbin, d.MissedBody);
+        Assert.IsTrue(d.MissedExit);
+
+        // An encounter plan past its last step, the target never entered.
+        plan.Steps.RemoveAt(5);
+        d = TransferFlight.Next(plan, 5, _kerbol, _duna, plan.ArrivalUT + late, 100, double.NaN);
+        Assert.AreEqual(FlightAction.SoiMissed, d.Action);
+        Assert.AreEqual(_duna, d.MissedBody);
+    }
+
+    [Test]
+    public void InOrbit_ClosedInsideTheSoi()
+    {
+        double mu = _s[_duna].Mu, soi = _s[_duna].Soi, rp = _s[_duna].LowOrbitRadius;
+        var r = new Vector3d(rp, 0, 0);
+        double vc = Math.Sqrt(mu / rp);
+        Assert.IsTrue(TransferFlight.InOrbit(r, new Vector3d(0, vc, 0), mu, soi));
+        Assert.IsFalse(TransferFlight.InOrbit(r, new Vector3d(0, 1.5 * vc, 0), mu, soi), "an escape");
+        Assert.IsFalse(TransferFlight.InOrbit(r, new Vector3d(0, 1.41 * vc, 0), mu, soi), "closed, but its apoapsis is beyond the SOI");
+    }
+
     [Test]
     public void BurnPhase_EveryKind()
     {
@@ -316,6 +360,18 @@ public class TransferFlightTests
         Assert.GreaterOrEqual(c[2].UT, 500_000 + TransferFlight.CorrectionSpacing - 1e-6);
     }
 
+    // Corrections re-timed to an arrival so early that no room is left are dropped, never put after it.
+    [Test]
+    public void ApplySolve_NoRoomBeforeTheArrival_CorrectionDropped()
+    {
+        var plan = HandPlan();
+        TransferFlight.ApplySolve(plan, 3, 500_100, double.NaN, 500_000);
+        var c = plan.Steps.Where(st => st.Kind == StepKind.Correction).ToList();
+        Assert.AreEqual(2, c.Count, "the approach correction had no room left");
+        foreach (var st in plan.Steps.Where(st => st.Kind != StepKind.Capture))
+            Assert.Less(st.UT, 500_100);
+    }
+
     [Test]
     public void PreferPass_ConvergedWinsWhenClose()
     {
@@ -390,10 +446,14 @@ public class TransferFlightTests
     public void NodeFlown_GoneAndOrbitChanged()
     {
         var v = new Vector3d(0, 2000, 0);
-        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, false, v, v + new Vector3d(0, 50, 0)));
-        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(false, false, v, v + new Vector3d(0, 50, 0)));
-        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(false, true, v, v));
-        Assert.AreEqual(NodeState.RemovedUnflown, TransferFlight.NodeFlown(false, false, v, v + new Vector3d(0.1, 0, 0)));
+        var moved = v + new Vector3d(0, 50, 0);
+        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, false, false, v, moved), "still before its time");
+        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(false, false, false, v, moved));
+        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(false, false, true, v, v));
+        Assert.AreEqual(NodeState.RemovedUnflown, TransferFlight.NodeFlown(false, false, false, v, v + new Vector3d(0.1, 0, 0)));
+        // Flown by hand, the node left on the plan: its time passed and the velocity moved.
+        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(true, true, false, v, moved));
+        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, true, false, v, v + new Vector3d(0.1, 0, 0)), "time passed, not flown yet");
     }
 
     // ---------------------------------------------------------------- resume and saving
@@ -416,6 +476,25 @@ public class TransferFlightTests
         Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 3), resume));
         Assert.AreEqual(ResumeAction.Replan, TransferFlight.DecideResume(Saved(plan, TransferPhase.Coast, 3), ResumeCheck.Replan("burned by hand")));
         Assert.AreEqual(ResumeAction.Refuse, TransferFlight.DecideResume(Saved(plan, TransferPhase.Coast, 3), ResumeCheck.Mismatch("another body")));
+
+        // A failure in the middle of the injection: the phase is Failed, BurnStarted remembers the cut.
+        var failed = TransferFlight.ToSaved(plan, _s, "id", TransferPhase.Failed, 0, 500, false, burnStarted: true);
+        Assert.IsTrue(PlanStore.TryFromJson(PlanStore.ToJson(failed), out var back, out string error), error);
+        Assert.IsTrue(back.BurnStarted);
+        Assert.AreEqual(ResumeAction.Replan, TransferFlight.DecideResume(back, resume));
+        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 0), resume), "failed before ignition");
+        var capture = TransferFlight.ToSaved(plan, _s, "id", TransferPhase.Failed, 5, 500, false, burnStarted: true);
+        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(capture, resume), "a capture aims at its orbit from the actual state");
+    }
+
+    [Test]
+    public void BurnStarted_OptionalInTheFile()
+    {
+        var sp = Saved(HandPlan(), TransferPhase.Coast, 2);
+        var o = Newtonsoft.Json.Linq.JObject.Parse(PlanStore.ToJson(sp));
+        o.Remove("burnStarted");
+        Assert.IsTrue(PlanStore.TryFromJson(o.ToString(), out var back, out string error), error);
+        Assert.IsFalse(back.BurnStarted);
     }
 
     [Test]
@@ -484,6 +563,42 @@ public class TransferFlightTests
         Assert.AreEqual("In orbit of Duna: 112 × 108 km, 0.4°", TransferFlight.FinalOrbit("Duna", 108_000, 112_000, 0.4));
         Assert.AreEqual("Capture failed: you will fly past Duna", TransferFlight.CaptureFailed("Duna"));
         StringAssert.Contains("search 12 ms", TransferFlight.Describe(plan, _s, 12));
+    }
+
+    // A multi-level plan: at the start of its second leg the vessel is in a low orbit of Duna, and that
+    // leg is searched again from there (Duna -> Ike) and merged in place.
+    [Test]
+    public void MergeLeg_SecondLegSearchedAgainFromTheOrbitReached()
+    {
+        double radius = 700_000;
+        var q = new TransferRequest { FromBody = _kerbin, ToBody = _s["Ike"].Index, R0 = new Vector3d(radius, 0, 0),
+            V0 = new Vector3d(0, Math.Sqrt(_s[_kerbin].Mu / radius), 0) };
+        var plan = TransferSearch.Find(_s, q, CancellationToken.None);
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        int i = plan.Steps.FindIndex(st => st.ReplanAtLegStart);
+        Assert.GreaterOrEqual(i, 1, "a later leg to re-plan");
+        var before = plan.Steps.Take(i).ToList();
+        int leg = plan.Steps[i].LegIndex;
+
+        // From a low circular orbit of Duna, as after a staged capture.
+        double rd = _s[_duna].LowOrbitRadius;
+        double ut = plan.Steps[i].UT;
+        Assert.AreEqual(LegReplan.Search, TransferFlight.LegStart(plan, i, plan.Steps[i].Body, true));
+        var q2 = new TransferRequest { FromBody = _duna, ToBody = q.ToBody, R0 = new Vector3d(rd, 0, 0),
+            V0 = new Vector3d(0, Math.Sqrt(_s[_duna].Mu / rd), 0), UT0 = ut };
+        var replanned = TransferSearch.Find(_s, q2, CancellationToken.None);
+        Assert.IsTrue(replanned.Ok, replanned.Refusal);
+
+        TransferFlight.MergeLeg(plan, i, replanned);
+        TransferFlight.MarkLegStarted(plan, i);
+        CollectionAssert.AreEqual(before, plan.Steps.Take(i).ToList(), "the steps flown are kept");
+        Assert.AreEqual(i + replanned.Steps.Count, plan.Steps.Count);
+        Assert.IsTrue(plan.Steps.Skip(i).All(st => st.LegIndex >= leg));
+        Assert.AreEqual(replanned.ArrivalUT, plan.ArrivalUT);
+        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, i, plan.Steps[i].Body, true), "the merged leg is not searched again");
+        Assert.AreEqual(StepKind.Capture, plan.Steps.Last().Kind);
+        Assert.AreEqual(q.ToBody, plan.Steps.Last().Body);
+        Assert.IsTrue(TransferFlight.RemainingBudget(plan, i, new List<StageDv> { new StageDv { Stage = 1, DeltaVVac = 5000 } }).Ok);
     }
 
     // ---------------------------------------------------------------- one whole flight

@@ -107,16 +107,10 @@ namespace K2D2.Transfer
         {
             if (starting)
                 return;
-            // A staging during a burn may send a vessel change: the same vessel goes on.
-            if (Landing.LandingPilot.reset_by_vessel_change && isRunning)
-            {
-                string now = ActiveVesselId();
-                bool same = now != null && now == vessel_id;
-                logger.LogInfo($"[Transfer] vessel change during the transfer: active {now ?? "none"}, ours {vessel_id} -> " +
-                    (same ? "the transfer goes on" : "the transfer stops"));
-                if (same)
-                    return;
-            }
+            // A staging during a burn may send a vessel change: the same vessel goes on, and so does the
+            // piece of a split that holds our control part (it takes the plan over).
+            if (Landing.LandingPilot.reset_by_vessel_change && isRunning && KeepVessel("vessel change message"))
+                return;
             if (isRunning)
             {
                 Save();
@@ -226,13 +220,26 @@ namespace K2D2.Transfer
                     break;
                 }
             Adopt(snap);
+            string id = ActiveVesselId();
+            // The orbit must still be the one the plan was searched from (not burned by hand since).
+            if (plan.Request != null)
+            {
+                var asSaved = TransferFlight.ToSaved(plan, snap.System, id, TransferPhase.Planned, 0, plan.Request.UT0, prepareOnly);
+                var check = PlanStore.Check(asSaved, snap.System, snap.Body, snap.R, snap.V, snap.UT);
+                logger.LogInfo($"[Transfer] start check: {check.Verdict} ({check.Detail})");
+                if (check.Verdict != ResumeVerdict.Resume)
+                {
+                    Status = $"The vessel no longer matches the plan ({check.Detail}): plan again.";
+                    return false;
+                }
+            }
             Budget = TransferFlight.RemainingBudget(plan, 0, stages);
             if (!Budget.Ok)
             {
                 Status = Budget.Refusal;
                 return false;
             }
-            vessel_id = ActiveVesselId();
+            vessel_id = id;
             if (vessel_id == null)
             {
                 Status = "Cannot start: the vessel has no id.";
@@ -346,6 +353,7 @@ namespace K2D2.Transfer
             StepIndex = stepIndex;
             PrepareOnly = prepareOnly;
             ResetFlight(snap.Body);
+            control_part = ControlPartOf(ActiveVessel());
             saved = null;
             saved_check = null;
             saved_error = null;
@@ -590,7 +598,7 @@ namespace K2D2.Transfer
                 return;
             try
             {
-                var sp = TransferFlight.ToSaved(Current, System, vessel_id, Phase, StepIndex, GeneralTools.Current_UT, PrepareOnly);
+                var sp = TransferFlight.ToSaved(Current, System, vessel_id, Phase, StepIndex, GeneralTools.Current_UT, PrepareOnly, burn_ignited);
                 string json = PlanStore.ToJson(sp);
                 Directory.CreateDirectory(PlansFolder);
                 string path = SavedPath(vessel_id);
@@ -688,11 +696,24 @@ namespace K2D2.Transfer
 
         // ---------------------------------------------------------------- helpers
 
-        internal static string ActiveVesselId()
+        // The game's active vessel now. KSPVessel.VesselComponent is refreshed only in K2D2_Plugin.Update:
+        // inside a vessel-change message it may still be the previous vessel.
+        static VesselComponent ActiveVessel()
         {
             try
             {
-                VesselComponent vessel = K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
+                return K2D2_Plugin.Instance?.current_vessel?.GetActiveSimVessel();
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        static string IdOf(VesselComponent vessel)
+        {
+            try
+            {
                 var so = vessel?.SimulationObject;
                 return so == null ? null : so.GlobalId.Guid.ToString("D");
             }
@@ -700,6 +721,50 @@ namespace K2D2.Transfer
             {
                 return null;
             }
+        }
+
+        static string ControlPartOf(VesselComponent vessel)
+        {
+            try
+            {
+                PartComponent part = vessel?.GetControlOwner();
+                return part == null ? null : $"{part.Guid}";
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        internal static string ActiveVesselId() => IdOf(ActiveVessel());
+
+        // The control part of our vessel, kept up to date while it is active.
+        string control_part;
+
+        // True when the active vessel is ours, or a new vessel (a split) that holds our control part:
+        // that one takes the plan over, saved under its id (the old file is deleted).
+        bool KeepVessel(string why)
+        {
+            var vessel = ActiveVessel();
+            string now = IdOf(vessel);
+            string part = ControlPartOf(vessel);
+            if (now != null && now == vessel_id)
+            {
+                if (part != null)
+                    control_part = part;
+                return true;
+            }
+            bool takeover = now != null && part != null && part == control_part;
+            logger.LogInfo($"[Transfer] active vessel changed ({why}): {vessel_id} -> {now ?? "none"}, control part {control_part ?? "unknown"} " +
+                $"vs {part ?? "none"} -> {(takeover ? "the new vessel takes the plan over" : "the transfer stops")}");
+            if (!takeover)
+                return false;
+            string old = vessel_id;
+            vessel_id = now;
+            Save();
+            DeleteSaved(old);
+            logger.LogInfo($"[Transfer] plan moved from vessel {old} to vessel {now}");
+            return true;
         }
 
         static int IndexOfName(BodySystem s, string name)

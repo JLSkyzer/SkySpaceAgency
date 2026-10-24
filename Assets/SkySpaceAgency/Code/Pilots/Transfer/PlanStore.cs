@@ -24,6 +24,9 @@ namespace K2D2.Transfer
         public int StepIndex;            // the next step to fly; the steps before it are done
         public double SavedUT;
         public bool PrepareOnly;
+        // The burn of step StepIndex has ignited: it was cut if the plan is resumed before that step
+        // is done. Kept through a failure (Phase is then Failed). Optional in the file (false).
+        public bool BurnStarted;
 
         // Bodies are kept by name: a body index may change between sessions (a planet pack added).
         public string FromBodyName, ToBodyName;
@@ -69,6 +72,7 @@ namespace K2D2.Transfer
                 ["stepIndex"] = p.StepIndex,
                 ["savedUT"] = D(p.SavedUT),
                 ["prepareOnly"] = p.PrepareOnly,
+                ["burnStarted"] = p.BurnStarted,
                 ["fromBody"] = p.FromBodyName,
                 ["toBody"] = p.ToBodyName,
                 ["bodyNames"] = new JArray((p.BodyNames ?? new List<string>()).Cast<object>().ToArray()),
@@ -176,6 +180,7 @@ namespace K2D2.Transfer
                     StepIndex = Int(o, "stepIndex"),
                     SavedUT = Dbl(o, "savedUT"),
                     PrepareOnly = Bool(o, "prepareOnly"),
+                    BurnStarted = o.ContainsKey("burnStarted") && Bool(o, "burnStarted"),
                     FromBodyName = Str(o, "fromBody", allowNull: false),
                     ToBodyName = Str(o, "toBody", allowNull: false),
                     BodyNames = Arr(o, "bodyNames").Select((t, i) => StrValue(t, $"bodyNames[{i}]")).ToList(),

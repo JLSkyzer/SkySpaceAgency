@@ -36,6 +36,9 @@ namespace K2D2.Transfer
         int burn_body;
         Vector3d burn_r0, burn_v0;
         double burn_ut0;
+        // The burn of StepIndex has ignited (saved: a cut planned-vector burn is planned again on resume).
+        bool burn_ignited;
+        int solve_retries;
 
         // The SOI change ahead: ours (PatchedPropagator) and the game's patch, cross-checked.
         double soi_ours = double.NaN, soi_game = double.NaN;
@@ -69,10 +72,21 @@ namespace K2D2.Transfer
             soi_checked_ut = double.NaN;
             free_arrival_step = -1;
             node_pending = node_waiting = false;
+            node_id = Guid.Empty;
+            burn_ignited = false;
+            solve_retries = 0;
         }
 
         void Fly()
         {
+            if (!KeepVessel("check"))
+            {
+                Save();
+                isRunning = false;
+                checked_vessel = null;
+                Status = "The active vessel changed: transfer stopped. Switch back to it to resume.";
+                return;
+            }
             if (job != null)
                 return; // a solve or a leg re-plan is running
             if (!ReadLight(out int body, out var r, out var v, out double now, out VesselComponent vessel))
@@ -146,6 +160,9 @@ namespace K2D2.Transfer
                 case FlightAction.Warp:
                     Coast(d.WarpUntilUT, now);
                     return;
+                case FlightAction.SoiMissed:
+                    SoiMissed(d, now);
+                    return;
                 case FlightAction.WaitSoi:
                     if (!soi_wait_logged)
                     {
@@ -183,6 +200,8 @@ namespace K2D2.Transfer
 
         void StepDone()
         {
+            burn_ignited = false;
+            solve_retries = 0;
             StepIndex++;
             node_waiting = node_pending = false;
             Save();
@@ -374,6 +393,7 @@ namespace K2D2.Transfer
             }
             burn.stage_when_dry = true;
             burn.allow_warp = true;
+            burn_ignited = false;
             burn.Start(guidance, start);
             if (burn.failure_reason != null)
             {
@@ -395,6 +415,11 @@ namespace K2D2.Transfer
         {
             burn.Update();
             Status = $"{burn_name}: {burn.status_line}";
+            if (!burn_ignited && burn.mode == TargetOrbitBurn.Mode.Burn)
+            {
+                burn_ignited = true;
+                Save();
+            }
             if (burn.failure_reason != null)
             {
                 Fail($"{burn_name}: {burn.failure_reason}");
@@ -481,6 +506,21 @@ namespace K2D2.Transfer
                 return;
             }
             double dv = res.DeltaV.magnitude;
+            double seconds = EstimateBurnSeconds(dv);
+            double startUT = double.IsNaN(seconds) ? burnUT : burnUT - seconds / 2;
+            double nowUT = GeneralTools.Current_UT;
+            if (startUT < nowUT + BurnWarp.MinLead)
+            {
+                // The solve took too long: its burn time has (nearly) passed. Solve again from now.
+                if (solve_retries++ < 2)
+                {
+                    logger.LogInfo($"[Transfer] correction {n}: solved in {last_job_ms:F0} ms, but the burn would start {startUT - nowUT:F0} s from now: solving again");
+                    StartStep(i, FlightAction.Solve);
+                    return;
+                }
+                Fail($"correction {n}: the solve is too slow for its burn time");
+                return;
+            }
             logger.LogInfo($"[Transfer] correction {n}: {dv:F2} m/s in {last_job_ms:F0} ms, arrival periapsis predicted {(res.Pe - R) / 1000:F2} km " +
                 $"(wanted {(step.TargetPeriapsisRadius - R) / 1000:F2}, without the correction {(res.Without - R) / 1000:F2}), " +
                 $"inclination {res.Inc:F2}° (wanted {step.TargetInclinationDeg:F1}), arrival UT {res.ArrivalUT:F0} " +
@@ -613,7 +653,7 @@ namespace K2D2.Transfer
             node_v = snap.V;
             node_state_ut = snap.UT;
             maneuver_creator.Update();
-            maneuver_creator.RemoveAllNodes();
+            RemoveOurNode(); // the player's own nodes stay
             logger.LogInfo($"[Transfer] prepare only: node for the {name} at UT {nodeUT:F0} (impulse {impulseUT:F0}), {dv.magnitude:F1} m/s " +
                 $"(prograde {prograde:F1}, normal {normal:F1}, radial {radial:F1})");
             K2D2_Plugin.Instance.StartCoroutine(CreateNodeNextFrame(nodeUT, prograde, normal, radial));
@@ -646,19 +686,47 @@ namespace K2D2.Transfer
             Status = $"Fly the node for the {node_name} ({node_dv:F1} m/s), then remove it: the next step is planned from the orbit reached.";
         }
 
-        void UpdateNode(int body, Vector3d v, double now)
+        ManeuverNodeData OurNode()
         {
-            bool onPlan = false;
+            if (node_id == Guid.Empty)
+                return null;
             var nodes = K2D2_Plugin.Instance.current_vessel.GetManeuverNodes();
             if (nodes != null)
                 foreach (var n in nodes)
                     if (n != null && n.NodeID.Equals(node_id))
-                        onPlan = true;
+                        return n;
+            return null;
+        }
+
+        void RemoveOurNode()
+        {
+            var node = OurNode();
+            if (node != null)
+            {
+                maneuver_creator.RemoveNode(node);
+                logger.LogInfo($"[Transfer] prepare only: our previous node {node_id} removed");
+            }
+            node_id = Guid.Empty;
+        }
+
+        void UpdateNode(int body, Vector3d v, double now)
+        {
+            bool onPlan = OurNode() != null;
             var expected = node_v;
             bool changed = body != node_body;
             if (!changed)
                 KeplerPropagator.Propagate(node_r, node_v, MuOf(node_body), now - node_state_ut, out _, out expected);
-            var state = TransferFlight.NodeFlown(onPlan, changed, expected, v);
+            // A node left on the plan counts as flown once its time has passed and the engines are off.
+            bool thrusting = false;
+            try
+            {
+                thrusting = ActiveVessel()?.IsUnderEngineThrust() ?? false;
+            }
+            catch (Exception)
+            {
+                // Unknown: assume not thrusting.
+            }
+            var state = TransferFlight.NodeFlown(onPlan, now > node_ut && !thrusting, changed, expected, v);
             switch (state)
             {
                 case NodeState.Waiting:
@@ -776,6 +844,12 @@ namespace K2D2.Transfer
             bool capture = plan.Steps.Any(st => st.Kind == StepKind.Capture);
             if (capture)
             {
+                int final = plan.Request?.ToBody ?? body;
+                if (body != final || !TransferFlight.InOrbit(r, v, MuOf(body), System[body].Soi))
+                {
+                    Fail($"after the capture the vessel is not in a closed orbit of {System[final].Name} ({OrbitText(body, r, v)})", captureFailed: true);
+                    return;
+                }
                 var el = OrbitMath.Elements(r, v, MuOf(body));
                 double R = System[body].Radius;
                 text = TransferFlight.FinalOrbit(System[body].Name, el.PeriapsisRadius - R, el.ApoapsisRadius - R, el.InclinationRad * 180 / Math.PI);
@@ -790,14 +864,33 @@ namespace K2D2.Transfer
             checked_vessel = null;
         }
 
-        void Fail(string reason)
+        // An SOI change the plan needs did not come: predict once more, then fail.
+        void SoiMissed(FlightDecision d, double now)
+        {
+            if (!(soi_checked_ut >= now - 1))
+            {
+                UpdateSoiPrediction("the planned SOI change is late");
+                return;
+            }
+            var plan = Current;
+            int final = plan.Request?.ToBody ?? -1;
+            string name = d.MissedBody >= 0 && d.MissedBody < System.Count ? System[d.MissedBody].Name : "the next body";
+            if (!d.MissedExit && d.MissedBody == final)
+                Fail($"the {name} SOI was not reached by UT {d.WarpUntilUT:F0}", captureFailed: true);
+            else
+                Fail(d.MissedExit
+                    ? $"the planned SOI exit from {name} did not happen by UT {d.WarpUntilUT:F0}"
+                    : $"the planned SOI change into {name} did not happen by UT {d.WarpUntilUT:F0}");
+        }
+
+        void Fail(string reason, bool captureFailed = false)
         {
             bool wasRunning = isRunning;
             StopBurn();
             StopWarp();
             CancelJob();
             var plan = Current;
-            bool capture = Phase == TransferPhase.Capture
+            bool capture = captureFailed || Phase == TransferPhase.Capture
                 || (plan != null && StepIndex < plan.Steps.Count && plan.Steps[StepIndex].Kind == StepKind.Capture
                     && ReadLight(out int b, out _, out _, out _, out _) && b == plan.Steps[StepIndex].Body);
             string target = plan?.Request != null && System != null && plan.Request.ToBody >= 0 && plan.Request.ToBody < System.Count
@@ -825,7 +918,7 @@ namespace K2D2.Transfer
             body = -1;
             r = v = Vector3d.zero;
             ut = 0;
-            vessel = K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
+            vessel = ActiveVessel();
             IKeplerPatch orbit = vessel?.Orbit;
             if (orbit == null || System == null)
                 return false;

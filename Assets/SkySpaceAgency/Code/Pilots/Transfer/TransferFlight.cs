@@ -19,6 +19,7 @@ namespace K2D2.Transfer
         Burn,        // a burn with a planned vector (plane change, orbit change, injection, re-aim)
         Solve,       // a correction: solve it now from the actual state
         Capture,     // the capture burn at the arrival periapsis
+        SoiMissed,   // an SOI change the plan needs did not come in time (MissedBody, MissedExit)
     }
 
     public struct FlightDecision
@@ -26,6 +27,8 @@ namespace K2D2.Transfer
         public FlightAction Action;
         public TransferPhase Phase;
         public double WarpUntilUT; // Warp only
+        public int MissedBody;     // SoiMissed: the body the vessel should have entered or left
+        public bool MissedExit;    // SoiMissed: an exit of MissedBody (else an entry)
     }
 
     // How a leg after the first is re-planned when the vessel reaches it (PlanStep.ReplanAtLegStart).
@@ -69,6 +72,16 @@ namespace K2D2.Transfer
         public const double NodeFlownSpeed = 0.5;
         // The alignment the warp stop counts on before a burn: a half turn at BurnWarp's default rate.
         public const double AssumedTurnDeg = 180;
+        // An SOI change the plan needs may come this late after its planned time, when none is
+        // predicted: the larger of an hour and 2 % of the time since the departure. Past it the
+        // pilot predicts again, then gives up.
+        public const double SoiLateFloor = 3600, SoiLateShare = 0.02;
+
+        public static double SoiLateSeconds(TransferPlan plan, double plannedUT)
+        {
+            double flown = double.IsNaN(plan.DepartureUT) || double.IsNaN(plannedUT) ? 0 : Math.Max(0, plannedUT - plan.DepartureUT);
+            return Math.Max(SoiLateFloor, SoiLateShare * flown);
+        }
 
         // The phase that flies a step.
         public static TransferPhase BurnPhase(StepKind kind)
@@ -114,7 +127,9 @@ namespace K2D2.Transfer
                 // An encounter ends in the target's SOI; a capture ends with its burn.
                 if (currentBody == finalBody || plan.Steps.Any(st => st.Kind == StepKind.Capture))
                     return new FlightDecision { Action = FlightAction.Done, Phase = TransferPhase.Done };
-                return Coast(TransferPhase.Coast, now, soiAhead ? nextSoiUT - SoiWarpMargin : double.PositiveInfinity, soiAhead, nextSoiUT);
+                if (soiAhead)
+                    return Coast(TransferPhase.Coast, now, nextSoiUT - SoiWarpMargin, true, nextSoiUT);
+                return Overdue(plan, TransferPhase.Coast, now, plan.ArrivalUT, finalBody, exit: false);
             }
 
             var step = plan.Steps[stepIndex];
@@ -122,16 +137,18 @@ namespace K2D2.Transfer
             {
                 if (currentBody != step.Body)
                     return new FlightDecision { Action = FlightAction.StepPassed, Phase = TransferPhase.Escape };
-                double until = soiAhead ? nextSoiUT - SoiWarpMargin : step.UT - SoiWarpMargin;
-                return Coast(TransferPhase.Escape, now, until, true, soiAhead ? nextSoiUT : step.UT);
+                if (soiAhead)
+                    return Coast(TransferPhase.Escape, now, nextSoiUT - SoiWarpMargin, true, nextSoiUT);
+                return Overdue(plan, TransferPhase.Escape, now, step.UT, step.Body, exit: true);
             }
 
             var waitPhase = WaitPhase(plan, stepIndex);
             if (currentBody != step.Body)
             {
                 // The step is flown in another SOI: coast to the change.
-                double until = soiAhead ? nextSoiUT - SoiWarpMargin : double.PositiveInfinity;
-                return Coast(waitPhase, now, until, soiAhead, nextSoiUT);
+                if (soiAhead)
+                    return Coast(waitPhase, now, nextSoiUT - SoiWarpMargin, true, nextSoiUT);
+                return Overdue(plan, waitPhase, now, step.UT, step.Body, exit: false);
             }
 
             double warpEnd = step.UT - lead;
@@ -149,6 +166,16 @@ namespace K2D2.Transfer
                 : step.Kind == StepKind.Correction && !(step.DeltaV.sqrMagnitude > 0) ? FlightAction.Solve
                 : FlightAction.Burn;
             return new FlightDecision { Action = action, Phase = BurnPhase(step.Kind) };
+        }
+
+        // No SOI change predicted, but the plan needs one by plannedUT: warp to plannedUT plus the late
+        // margin (the pilot predicts again there), then the change is missed.
+        static FlightDecision Overdue(TransferPlan plan, TransferPhase phase, double now, double plannedUT, int body, bool exit)
+        {
+            double limit = (double.IsNaN(plannedUT) ? now : plannedUT) + SoiLateSeconds(plan, plannedUT);
+            if (now < limit)
+                return new FlightDecision { Action = FlightAction.Warp, Phase = phase, WarpUntilUT = limit };
+            return new FlightDecision { Action = FlightAction.SoiMissed, Phase = phase, MissedBody = body, MissedExit = exit, WarpUntilUT = limit };
         }
 
         // Warp until 'until'; past it, wait at 1x for the SOI change when one is ahead.
@@ -337,11 +364,17 @@ namespace K2D2.Transfer
                 departure = exit;
             var times = corrections.Count == 3 ? TransferSearch.CorrectionTimes(exit, departure, arrivalUT, arrivalUT) : null;
             double earliest = Math.Max(now, step.UT) + CorrectionSpacing;
+            double latest = arrivalUT - CorrectionSpacing;
             for (int k = here + 1; k < corrections.Count; k++)
             {
                 double t = times != null ? times[k] : corrections[k].UT;
-                t = Math.Max(t, earliest);
-                // Never at or after the arrival: then it is left where the spacing puts it.
+                t = Math.Min(Math.Max(t, earliest), latest);
+                if (t < earliest)
+                {
+                    // No room left before the arrival: the correction is dropped.
+                    plan.Steps.Remove(corrections[k]);
+                    continue;
+                }
                 corrections[k].UT = t;
                 earliest = t + CorrectionSpacing;
             }
@@ -417,16 +450,29 @@ namespace K2D2.Transfer
 
         // Prepare only: has the player flown the node? Flown once the node is gone and the vessel's
         // velocity left the coast it was on when the node was made (or it changed SOI).
-        public static NodeState NodeFlown(bool nodeOnPlan, bool bodyChanged, Vector3d expectedVelocity, Vector3d velocity)
+        // Also flown when the node is still there but its time has passed and the velocity moved (the
+        // player flew it by hand and left the node).
+        public static NodeState NodeFlown(bool nodeOnPlan, bool nodeTimePassed, bool bodyChanged, Vector3d expectedVelocity, Vector3d velocity)
         {
+            bool moved = bodyChanged || (velocity - expectedVelocity).magnitude > NodeFlownSpeed;
             if (nodeOnPlan)
-                return NodeState.Waiting;
-            if (bodyChanged || (velocity - expectedVelocity).magnitude > NodeFlownSpeed)
-                return NodeState.Flown;
-            return NodeState.RemovedUnflown;
+                return nodeTimePassed && moved ? NodeState.Flown : NodeState.Waiting;
+            return moved ? NodeState.Flown : NodeState.RemovedUnflown;
+        }
+
+        // The capture holds: a closed orbit inside the body's SOI.
+        public static bool InOrbit(Vector3d r, Vector3d v, double mu, double soi)
+        {
+            var el = OrbitMath.Elements(r, v, mu);
+            return el.IsClosed && el.ApoapsisRadius < soi;
         }
 
         // ---------------------------------------------------------------- resume
+
+        // A burn flown from its planned vector: re-flying it after a cut would add the whole vector again.
+        public static bool HasPlannedVector(PlanStep step) =>
+            step.Kind == StepKind.PlaneChange || step.Kind == StepKind.OrbitChange || step.Kind == StepKind.Injection
+            || (step.Kind == StepKind.Correction && step.DeltaV.sqrMagnitude > 0);
 
         // check: PlanStore.Check on the saved plan. A plan saved in the middle of a burn whose vector
         // was planned (plane change, orbit change, injection) is searched again: re-flying the whole
@@ -440,9 +486,9 @@ namespace K2D2.Transfer
             if (saved.StepIndex < saved.Plan.Steps.Count)
             {
                 var step = saved.Plan.Steps[saved.StepIndex];
-                bool fixedVector = step.Kind == StepKind.PlaneChange || step.Kind == StepKind.OrbitChange || step.Kind == StepKind.Injection
-                    || (step.Kind == StepKind.Correction && step.DeltaV.sqrMagnitude > 0);
-                if (fixedVector && saved.Phase == BurnPhase(step.Kind))
+                // BurnStarted survives a failure (the phase is then Failed); the phase test also covers
+                // a stop saved while the burn was under way.
+                if (HasPlannedVector(step) && (saved.BurnStarted || saved.Phase == BurnPhase(step.Kind)))
                     return ResumeAction.Replan;
             }
             return ResumeAction.Continue;
@@ -492,7 +538,7 @@ namespace K2D2.Transfer
 
         // The plan as saved for the vessel (a GUID in "D" format). Null strings are stored empty.
         public static SavedPlan ToSaved(TransferPlan plan, BodySystem s, string vesselId, TransferPhase phase, int stepIndex,
-            double ut, bool prepareOnly)
+            double ut, bool prepareOnly, bool burnStarted = false)
         {
             if (plan == null) throw new ArgumentNullException(nameof(plan));
             if (s == null) throw new ArgumentNullException(nameof(s));
@@ -508,6 +554,7 @@ namespace K2D2.Transfer
                 StepIndex = stepIndex,
                 SavedUT = ut,
                 PrepareOnly = prepareOnly,
+                BurnStarted = burnStarted,
                 FromBodyName = q != null && q.FromBody >= 0 && q.FromBody < s.Count ? s[q.FromBody].Name : "",
                 ToBodyName = q != null && q.ToBody >= 0 && q.ToBody < s.Count ? s[q.ToBody].Name : "",
                 BodyNames = Enumerable.Range(0, s.Count).Select(i => s[i].Name ?? "").ToList(),
