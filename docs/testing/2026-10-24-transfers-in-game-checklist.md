@@ -78,3 +78,6 @@ From within 2 km, press "Dock only" (or use "Rendezvous + dock" from further awa
 - On a vessel without RCS: `[Docking] main-engine deadband …`, and the docking either succeeds with wider holds or is refused with its reason.
 - During the approach, switch to the station and back. The pilot must stop, without firing anything on the station, and with our own throttle and RCS cut.
 - Approach too fast, by giving a push by hand: the pilot must abort, back off to 20 m and retry once.
+
+## 12. Physics warp during burns
+During a long burn (the Duna injection, for example), the mod should go to x2 and then x4. Look for `[TargetOrbitBurn] physics warp: …` lines: the vessel stays RigidBody and steers normally. The warp level the game reports should be x4. If you press rails warp by hand during the burn, the mod must bring it back to physics or to 1x. After the burn, your usual warp mode is back.
