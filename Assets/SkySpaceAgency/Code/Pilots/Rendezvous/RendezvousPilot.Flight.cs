@@ -198,18 +198,10 @@ namespace K2D2.Rendezvous
 
         void StopBurn()
         {
-            // The throttle and the warp are the active vessel's: leave another vessel's alone.
-            if ((burning || active) && OursIsActive())
-            {
-                try
-                {
-                    K2D2_Plugin.Instance?.current_vessel?.SetThrottle(0);
-                }
-                catch (Exception)
-                {
-                    // No vessel (scene change): nothing burns.
-                }
-            }
+            // Our throttle is cut on our vessel by id, active or not: the game keeps the throttle
+            // of a vessel switched away from. The warp is the active vessel's: leave another's alone.
+            if (burning || active)
+                OwnVesselStop.Apply(vessel_id, false);
             bool wasBurning = burning;
             burning = false;
             if (active && !PrepareOnly && (wasBurning || OursIsActive()))

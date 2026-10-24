@@ -242,6 +242,9 @@ namespace K2D2.Transfer
         {
             if (burning || active)
             {
+                // Our throttle, on our vessel by id even after a vessel switch: the game keeps the
+                // throttle of a vessel switched away from (OwnVesselStop). Then the active one, as before.
+                OwnVesselStop.Apply(vessel_id, false);
                 try
                 {
                     K2D2_Plugin.Instance?.current_vessel?.SetThrottle(0);

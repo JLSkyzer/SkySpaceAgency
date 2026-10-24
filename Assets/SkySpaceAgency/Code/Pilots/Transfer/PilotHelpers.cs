@@ -7,9 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using K2D2.KSPService;
 using K2D2.OrbitPlanning;
+using KTools;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP.Sim.Maneuver;
+using KSP.Sim.State;
 using UnityEngine;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
@@ -136,6 +138,61 @@ namespace K2D2.Transfer
             catch (Exception e)
             {
                 logger.LogWarning($"{prefix} could not delete the saved plan: {e.GetType().Name}: {e.Message}");
+            }
+        }
+    }
+
+    // Cuts OUR vessel's inputs, found by its id, whether it is the active vessel or not. The game
+    // (Redux 26w42c IL: ViewController.PerformSetActiveVessel, VesselBehavior.OnUpdate) zeroes
+    // the stick and X/Y/Z of a vessel switched away from, but keeps its mainThrottle: without this
+    // an engine left at a throttle keeps firing after a vessel switch. Main thread only.
+    public static class OwnVesselStop
+    {
+        // The control change: throttle 0, plus X/Y/Z 0 for a translation. Everything else is
+        // left as it is (null). Pure.
+        public static FlightCtrlStateIncremental Inputs(bool translation)
+        {
+            var inputs = new FlightCtrlStateIncremental { mainThrottle = 0f };
+            if (translation)
+            {
+                inputs.X = 0f;
+                inputs.Y = 0f;
+                inputs.Z = 0f;
+            }
+            return inputs;
+        }
+
+        // The vessel with that GUID ("D" format), or null.
+        public static VesselComponent Find(string vesselId)
+        {
+            if (string.IsNullOrEmpty(vesselId)) return null;
+            try
+            {
+                List<VesselComponent> all = GeneralTools.Game?.UniverseModel?.GetAllVessels();
+                if (all == null) return null;
+                foreach (VesselComponent v in all)
+                    if (v?.SimulationObject != null && v.GlobalId.Guid.ToString("D") == vesselId) return v;
+            }
+            catch (Exception)
+            {
+                // Scene change: no vessel.
+            }
+            return null;
+        }
+
+        // False when the vessel is gone (nothing to cut) or the game refused the change.
+        public static bool Apply(string vesselId, bool translation)
+        {
+            VesselComponent vessel = Find(vesselId);
+            if (vessel == null) return false;
+            try
+            {
+                vessel.ApplyFlightCtrlState(Inputs(translation));
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
             }
         }
     }

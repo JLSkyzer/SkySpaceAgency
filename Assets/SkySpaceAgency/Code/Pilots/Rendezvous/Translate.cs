@@ -5,7 +5,7 @@ using K2D2.UI;
 using KSP.Api;
 using KSP.Sim;
 using KSP.Sim.impl;
-using KSP.Sim.State;
+using K2D2.Transfer;
 using UnityEngine.UIElements;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
@@ -126,23 +126,19 @@ namespace K2D2.Rendezvous
         }
 
         // Stops on our own vessel, found by its id, even when another vessel is active: the
-        // throttle, X/Y/Z and the SAS lock go through that vessel's own control state. The IL
-        // (Redux 26w42c) shows why: ViewController.PerformSetActiveVessel and, every frame,
-        // VesselBehavior.OnUpdate zero an inactive vessel's stick and X/Y/Z, but its mainThrottle
-        // is kept, so an engine left at a throttle would keep firing. Nothing when it is gone.
+        // throttle and X/Y/Z through that vessel's own control state (OwnVesselStop, which says
+        // why), and its SAS lock. Nothing when it is gone.
         public void Stop(string vesselId)
         {
             stage = Stage.Idle;
             lastRcs = default;
             lastThrottle = 0;
-            VesselComponent ours = RendezvousSnapshot.FindVessel(vesselId);
-            if (ours == null)
+            if (!OwnVesselStop.Apply(vesselId, true))
             {
                 logger.LogInfo($"[Docking] translate stop: vessel {vesselId} not found, its inputs are left as they are");
                 return;
             }
-            ours.ApplyFlightCtrlState(new FlightCtrlStateIncremental { mainThrottle = 0f, X = 0f, Y = 0f, Z = 0f });
-            var autopilot = ours.Autopilot;
+            var autopilot = OwnVesselStop.Find(vesselId)?.Autopilot;
             if (autopilot != null) autopilot.SAS.lockedMode = false;
         }
 
