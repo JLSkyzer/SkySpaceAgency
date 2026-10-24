@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using K2D2.Node;
 using KSP.Game;
 using KSP.Sim;
@@ -13,12 +12,13 @@ namespace K2D2.KSPService
     /// Drives the game's physics time warp for a burn, as decided by PhysicsWarpPolicy, and gives
     /// the warp back as the player had it.
     ///
-    /// Game members used (Ksp2Redux.dll, Redux 26w42c, all public except GetMaxRateIndexInternal):
-    /// TimeWarp.ToggleTimeWarpMode(bool) writes _isPhysicsWarp; TimeWarp.IsPhysicsTimeWarp reads
-    /// it; TimeWarp.SetRateIndex (through TimeWarpTools) keeps it while warping and clears it back
-    /// at index 0 (instant, or once the ramp ends); VesselComponent.Physics (PhysicsMode.RigidBody =
-    /// 3); TimeWarp.GetMaxRateIndexInternal(bool, out bool), private, read by reflection to know
-    /// whether the game forces physics warp here (atmosphere, below the surface envelope).
+    /// Game members used (Ksp2Redux.dll, Redux 26w42c, all public): TimeWarp.ToggleTimeWarpMode(bool)
+    /// writes _isPhysicsWarp; TimeWarp.IsPhysicsTimeWarp reads it; TimeWarp.SetRateIndex (through
+    /// TimeWarpTools) keeps it while warping and clears it back at index 0 (instant, or once the
+    /// ramp ends); VesselComponent.Physics (PhysicsMode.RigidBody = 3) of the burn's own vessel.
+    /// The physics the game forces (atmosphere, near the surface) is re-derived by every
+    /// SetRateIndex and never stored at index 0, so at 1x _isPhysicsWarp is only ever a toggle:
+    /// the player's, or ours.
     ///
     /// One burn owns the warp at a time. Update must run every frame of the burn: a frame without
     /// it (the pilot stopped, the scene changed, the controllers paused for staging) makes
@@ -31,11 +31,9 @@ namespace K2D2.KSPService
         static PhysicsWarp owner;
         static int owner_frame = -1;
 
-        static MethodInfo max_rate_internal;
-        static bool max_rate_internal_failed;
-
         readonly ILogger logger;
         readonly Func<string> log_tag;
+        readonly Func<VesselComponent> vessel;
 
         // The burn has taken the warp over (from its first Update to Leave).
         public bool Active { get; private set; }
@@ -47,8 +45,10 @@ namespace K2D2.KSPService
         bool refusal_logged;
         bool entered_logged;
 
-        public PhysicsWarp(ILogger logger, Func<string> logTag)
+        // vessel: the burn's own vessel (its RigidBody state is checked every frame).
+        public PhysicsWarp(ILogger logger, Func<string> logTag, Func<VesselComponent> vessel)
         {
+            this.vessel = vessel;
             this.logger = logger;
             log_tag = logTag ?? (() => "[PhysicsWarp]");
         }
@@ -70,7 +70,7 @@ namespace K2D2.KSPService
             {
                 try
                 {
-                    VesselComponent v = K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
+                    VesselComponent v = vessel?.Invoke();
                     return v != null && v.Physics == PhysicsMode.RigidBody;
                 }
                 catch (Exception) { return false; }
@@ -80,35 +80,6 @@ namespace K2D2.KSPService
         public int CurrentIndex => TimeWarpTools.CurrentRateIndex;
 
         public void SetIndex(int index, bool instant) => TimeWarpTools.SetRateIndex(index, instant);
-
-        /// <summary>Whether the game itself would force physics warp here (false when unknown).</summary>
-        public bool GameForcesPhysics
-        {
-            get
-            {
-                TimeWarp tw = Tw;
-                if (tw == null || max_rate_internal_failed)
-                    return false;
-                try
-                {
-                    if (max_rate_internal == null)
-                        max_rate_internal = typeof(TimeWarp).GetMethod("GetMaxRateIndexInternal",
-                            BindingFlags.Instance | BindingFlags.NonPublic, null,
-                            new[] { typeof(bool), typeof(bool).MakeByRefType() }, null);
-                    if (max_rate_internal == null)
-                        throw new MissingMethodException("TimeWarp.GetMaxRateIndexInternal(bool, out bool)");
-                    object[] args = { false, false };
-                    max_rate_internal.Invoke(tw, args);
-                    return (bool)args[1];
-                }
-                catch (Exception e)
-                {
-                    max_rate_internal_failed = true;
-                    logger?.LogWarning($"{Prefix} cannot tell whether the game forces physics warp ({e.GetType().Name}: {e.Message}); assumed not");
-                    return false;
-                }
-            }
-        }
 
         /// <summary>
         /// Switches physics-warp mode on, at index 0 only (the game's own toggle works only while
@@ -152,7 +123,9 @@ namespace K2D2.KSPService
             if (!Active)
             {
                 Active = true;
-                PlayerModeWasPhysics = IsPhysicsMode;
+                // Only the player's own toggle, read at 1x before we touch it (above 1x the mode
+                // may be physics the game forced).
+                PlayerModeWasPhysics = PhysicsWarpPolicy.PlayerToggledPhysics(CurrentIndex, IsPhysicsMode);
                 HighestIndex = 0;
                 toggled_last_frame = false;
                 refusal_logged = false;
@@ -222,7 +195,7 @@ namespace K2D2.KSPService
 
         /// <summary>
         /// Gives the warp back: index 0 first (instant), then the mode the player had before the
-        /// burn (only switched off when the game does not force physics here). With
+        /// burn (its own toggle at 1x, otherwise off). With
         /// restorePlayerMode false the mode is only switched off. Does nothing when the warp was
         /// not taken over.
         /// </summary>
@@ -248,8 +221,6 @@ namespace K2D2.KSPService
                         PhysicsModeOn = IsPhysicsMode,
                         PlayerModeWasPhysics = restorePlayerMode && PlayerModeWasPhysics,
                     };
-                    if (inputs.CurrentIndex == 0 && inputs.PhysicsModeOn && !inputs.PlayerModeWasPhysics)
-                        inputs.GameForcesPhysics = GameForcesPhysics;
                     WarpStep step = PhysicsWarpPolicy.DecideLeave(inputs);
                     if (step.WantedIndex != inputs.CurrentIndex)
                     {

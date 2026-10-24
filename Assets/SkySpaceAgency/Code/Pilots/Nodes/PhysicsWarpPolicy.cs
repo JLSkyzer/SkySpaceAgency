@@ -19,11 +19,9 @@ namespace K2D2.Node
         public double BurnLeftGameSeconds;
         // allow_warp: the mod may raise the warp. False: it only lowers the player's.
         public bool AllowRaise;
-        // TimeWarp.IsPhysicsTimeWarp when the burn took the warp over.
+        // The player's own physics-mode toggle when the burn took the warp over
+        // (PlayerToggledPhysics).
         public bool PlayerModeWasPhysics;
-        // The game would force physics warp by itself here (atmosphere, near the surface, see
-        // TimeWarp.GetMaxRateIndexInternal). Only used on leaving.
-        public bool GameForcesPhysics;
     }
 
     /// <summary>The warp to apply this frame.</summary>
@@ -100,9 +98,19 @@ namespace K2D2.Node
         }
 
         /// <summary>
+        /// The player's own physics-mode toggle, from the game's state when the burn takes the
+        /// warp over: only at index 0, where the game never stores the physics it forces
+        /// (SetRateIndex re-derives it each time); above 1x the mode may be the game's.
+        /// </summary>
+        public static bool PlayerToggledPhysics(int currentIndex, bool physicsModeOn) =>
+            currentIndex == 0 && physicsModeOn;
+
+        /// <summary>
         /// Warp to leave the burn with: index 0 first (mode untouched); at index 0, the mode the
-        /// player had before the burn (off, unless the game forces physics here; on if the player
-        /// had it on). Call again until it asks nothing.
+        /// player had before the burn: on if the player had toggled it, otherwise off. At 1x the
+        /// mode is only a toggle (the game re-derives its forced physics on every SetRateIndex),
+        /// so switching it off never takes physics away from the game. Call again until it asks
+        /// nothing.
         /// </summary>
         public static WarpStep DecideLeave(WarpInputs i)
         {
@@ -111,9 +119,9 @@ namespace K2D2.Node
             if (i.PlayerModeWasPhysics)
                 return new WarpStep { WantedIndex = 0, SetPhysicsMode = i.PhysicsModeOn ? (bool?)null : true,
                     Reason = "leaving: the player's physics mode" };
-            if (i.PhysicsModeOn && !i.GameForcesPhysics)
+            if (i.PhysicsModeOn)
                 return new WarpStep { WantedIndex = 0, SetPhysicsMode = false, Reason = "leaving: physics mode off" };
-            return new WarpStep { WantedIndex = 0, Reason = i.PhysicsModeOn ? "leaving: physics owned by the game" : "leaving: done" };
+            return new WarpStep { WantedIndex = 0, Reason = "leaving: done" };
         }
 
         // Highest physics index allowed by the cap, the alignment and the burn time left.

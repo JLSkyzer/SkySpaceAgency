@@ -151,13 +151,29 @@ public class PhysicsWarpPolicyTests
     }
 
     [Test]
-    public void GameOwnedPhysics_NotToggledOff()
+    public void LeaveAtOne_OurToggleAlwaysOff()
     {
-        WarpInputs i = Burning(0);
-        i.GameForcesPhysics = true;
+        // The burn ended between "mode on" and the raise, engines still pushing: our toggle is
+        // switched off at 1x (the game re-derives any physics it forces on its next SetRateIndex).
+        WarpInputs i = Burning(0, physics: true);
         WarpStep step = PhysicsWarpPolicy.DecideLeave(i);
         Assert.That(step.WantedIndex, Is.EqualTo(0));
-        Assert.That(step.SetPhysicsMode, Is.Null);
+        Assert.That(step.SetPhysicsMode, Is.EqualTo((bool?)false));
+
+        // Unless the player had toggled it on before the burn.
+        i.PlayerModeWasPhysics = true;
+        Assert.That(PhysicsWarpPolicy.DecideLeave(i).SetPhysicsMode, Is.Null);
+    }
+
+    [Test]
+    public void PlayerMode_OnlyTheToggleAtOne()
+    {
+        // At 1x the mode is the player's own toggle.
+        Assert.That(PhysicsWarpPolicy.PlayerToggledPhysics(0, true), Is.True);
+        Assert.That(PhysicsWarpPolicy.PlayerToggledPhysics(0, false), Is.False);
+        // Above 1x it may be physics the game forced (atmosphere): never recorded as the player's.
+        Assert.That(PhysicsWarpPolicy.PlayerToggledPhysics(1, true), Is.False);
+        Assert.That(PhysicsWarpPolicy.PlayerToggledPhysics(2, true), Is.False);
     }
 
     [Test]

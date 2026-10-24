@@ -134,7 +134,7 @@ namespace K2D2.Node
         protected TargetOrbitBurn(string loggerName)
         {
             logger = SpaceWarp2.API.Logging.LogManager.GetLogger(loggerName);
-            physics_warp = new PhysicsWarp(logger, () => BurnLogTag);
+            physics_warp = new PhysicsWarp(logger, () => BurnLogTag, () => current_vessel?.VesselComponent);
         }
 
         public TargetOrbit Target => target;
