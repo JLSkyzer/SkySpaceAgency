@@ -278,18 +278,18 @@ namespace K2D2.Rendezvous
             }
         }
 
-        // Translation off, SAS back to Stability Assist, RCS and the control part as they were, all on
-        // our own vessel (found by its id): after a switch the active vessel is another one, maybe
-        // the target, which is never acted on. Its SAS and inputs are left alone then.
+        // Translation off (throttle, X/Y/Z, SAS lock), SAS back to Stability Assist, RCS and the
+        // control part as they were, all on our own vessel (found by its id): after a switch the
+        // active vessel is another one, maybe the target, which is never acted on. Its SAS and
+        // inputs are left alone then; Stability Assist is only set while ours is active.
         void StopDocking()
         {
             if (dock_stage == DockStage.None && !dock_touched)
                 return;
             bool oursActive = OursIsActive();
-            if (oursActive)
-                translate.Stop();
-            else
-                logger.LogInfo("[Docking] stopped while another vessel is active: its inputs and SAS are left alone");
+            translate.Stop(vessel_id);   // on our vessel by id, active or not
+            if (!oursActive)
+                logger.LogInfo("[Docking] stopped while another vessel is active: our inputs zeroed, the active vessel's inputs and SAS left alone");
             if (dock_touched)
             {
                 var ours = OurVessel();

@@ -5,6 +5,7 @@ using K2D2.UI;
 using KSP.Api;
 using KSP.Sim;
 using KSP.Sim.impl;
+using KSP.Sim.State;
 using UnityEngine.UIElements;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
@@ -18,8 +19,8 @@ namespace K2D2.Rendezvous
     // 1. after "control from here" on our port and the RCS group on: StartProbe(rcsUsable);
     // 2. every frame, before Update: SetInput(state, command). The probes only need the state;
     // 3. once Ready: Mode, ModeNote, and Widen(limits) for the guidance's limits in main-engine mode;
-    // 4. Stop() at the end. It never stages. It sets the throttle and X/Y/Z to 0 on Stop, on an
-    //    invalid command, on a frame without input (or an unreadable port frame), and on a failure.
+    // 4. Stop(our vessel id) at the end; Stop() acts on the active vessel. It never stages. It sets
+    //    the throttle and X/Y/Z to 0 on Stop, on an invalid command, on a frame without input (or an unreadable port frame), and on a failure.
     public class Translate : ExecuteController
     {
         enum Stage { Idle, ProbeRcs, ProbeEngine, Run }
@@ -121,6 +122,27 @@ namespace K2D2.Rendezvous
             Zero();
             stage = Stage.Idle;
             var autopilot = current_vessel?.Autopilot;
+            if (autopilot != null) autopilot.SAS.lockedMode = false;
+        }
+
+        // Stops on our own vessel, found by its id, even when another vessel is active: the
+        // throttle, X/Y/Z and the SAS lock go through that vessel's own control state. The IL
+        // (Redux 26w42c) shows why: ViewController.PerformSetActiveVessel and, every frame,
+        // VesselBehavior.OnUpdate zero an inactive vessel's stick and X/Y/Z, but its mainThrottle
+        // is kept, so an engine left at a throttle would keep firing. Nothing when it is gone.
+        public void Stop(string vesselId)
+        {
+            stage = Stage.Idle;
+            lastRcs = default;
+            lastThrottle = 0;
+            VesselComponent ours = RendezvousSnapshot.FindVessel(vesselId);
+            if (ours == null)
+            {
+                logger.LogInfo($"[Docking] translate stop: vessel {vesselId} not found, its inputs are left as they are");
+                return;
+            }
+            ours.ApplyFlightCtrlState(new FlightCtrlStateIncremental { mainThrottle = 0f, X = 0f, Y = 0f, Z = 0f });
+            var autopilot = ours.Autopilot;
             if (autopilot != null) autopilot.SAS.lockedMode = false;
         }
 
