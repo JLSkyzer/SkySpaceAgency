@@ -22,11 +22,18 @@ namespace K2D2.Transfer
     public static class VesselSnapshot
     {
         static string lastStages;
+        static string lastNaNWarning;
 
         // The state comes from the same calls as OrbitUI.TryReadState; body is the index of the
         // vessel's reference body in GameBodySystem.GameBodies() (and so in a built BodySystem).
         public static bool TryRead(out int body, out Vector3d r, out Vector3d v, out double ut,
-            out List<StageDv> stages, out string error)
+            out List<StageDv> stages, out string error) =>
+            TryRead(GameBodySystem.GameBodies(), out body, out r, out v, out ut, out stages, out error);
+
+        // The same, with body an index into 'bodies': the list a BodySystem was built from
+        // (GameBodySystem.Build(bodies, …)), so the index refers to that system.
+        public static bool TryRead(IReadOnlyList<CelestialBodyComponent> bodies, out int body, out Vector3d r, out Vector3d v,
+            out double ut, out List<StageDv> stages, out string error)
         {
             body = -1;
             r = default;
@@ -45,7 +52,7 @@ namespace K2D2.Transfer
                 ut = GeneralTools.Current_UT;
                 r = orbit.GetRelativePositionAtUTZup(ut);
                 v = orbit.GetOrbitalVelocityAtUTZup(ut);
-                body = GameBodySystem.IndexOf(GameBodySystem.GameBodies(), orbit.referenceBody);
+                body = GameBodySystem.IndexOf(bodies, orbit.referenceBody);
                 if (body < 0)
                 {
                     error = "The vessel's reference body is not in the game's body list.";
@@ -84,7 +91,19 @@ namespace K2D2.Transfer
             {
                 if (s == null)
                     continue;
-                stageValues.Add((s.Stage, s.DeltaVinVac));
+                double dvVac = s.DeltaVinVac;
+                if (double.IsNaN(dvVac) || double.IsInfinity(dvVac))
+                {
+                    // Counted as 0, so one stage cannot poison the budget's sums.
+                    string warning = $"[Transfer] stage {s.Stage}: the game gives a vacuum Δv of {dvVac}, counted as 0 m/s";
+                    if (warning != lastNaNWarning)
+                    {
+                        lastNaNWarning = warning;
+                        K2D2_Plugin.logger.LogWarning(warning);
+                    }
+                    dvVac = 0;
+                }
+                stageValues.Add((s.Stage, dvVac));
                 if (s.Parts == null)
                     continue;
                 foreach (DeltaVPartInfo p in s.Parts)
@@ -124,7 +143,7 @@ namespace K2D2.Transfer
         //     relative Zup vectors, against the game's world positions reframed into the root's
         //     celestial frame, and against the BodySystem (built at the same UT, or null);
         // (b) which trajectory model moves the vessel right now.
-        public static void LogStartChecks(BodySystem system)
+        public static void LogStartChecks(BodySystem system, IReadOnlyList<CelestialBodyComponent> bodyList = null)
         {
             try
             {
@@ -155,7 +174,7 @@ namespace K2D2.Transfer
 
                 if (system != null)
                 {
-                    var bodies = GameBodySystem.GameBodies();
+                    IReadOnlyList<CelestialBodyComponent> bodies = bodyList ?? GameBodySystem.GameBodies();
                     int b = GameBodySystem.IndexOf(bodies, orbit.referenceBody);
                     int rootIndex = GameBodySystem.IndexOf(bodies, root);
                     if (b >= 0 && rootIndex >= 0 && b < system.Count && rootIndex < system.Count)

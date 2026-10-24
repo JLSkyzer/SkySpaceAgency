@@ -14,16 +14,27 @@ namespace K2D2.Transfer
     // Facts from the IL of Ksp2Redux.dll (Redux 26w42c), see the Task 9 report:
     // - every GetRelativePositionAtUTZup / GetOrbitalVelocityAtUTZup of a PatchedConicsOrbit goes
     //   through PatchedConicsOrbit.CurrentZup, read from the UniverseRotationState singleton: all
-    //   bodies and vessels share one Zup orientation at a given moment, so the vectors can be
-    //   summed up the hierarchy. That frame follows the universe's inverse rotation, so vectors
-    //   read at different moments are not compared: build the system and read the vessel together.
+    //   bodies and vessels share one Zup orientation, so the vectors can be summed up the
+    //   hierarchy. The Task 9 review found that orientation constant for one universe load (it does
+    //   not turn with time). It may still differ after a reload, so the system and the vessel are
+    //   read together, from the same body list (Build, then VesselSnapshot.TryRead with that list),
+    //   and both are read again at each re-plan.
     // - CelestialBodyComponent.MaxTerrainHeight is the height above the radius that the game itself
     //   uses for collisions (PatchedConics.WillCollideWithParent: Periapsis < radius + MaxTerrainHeight).
     public static class GameBodySystem
     {
         public const int TerrainSamples = 400;
+        // Airless body whose terrain height is unknown (the game gives none and the samples found
+        // nothing above the radius): assume this share of the radius, high enough for the stock
+        // moons (Minmus and Ike are near 10 %, external KSP wiki figures), and warn.
+        public const double UnknownTerrainShare = 0.10;
 
         static readonly HashSet<string> Logged = new HashSet<string>();
+
+        // The sampled fallback, per body name, for the session: 400 terrain queries are not repeated
+        // at every build.
+        static readonly Dictionary<string, (double height, string source)> TerrainFallback =
+            new Dictionary<string, (double, string)>();
 
         static void LogOnce(string line)
         {
@@ -46,12 +57,15 @@ namespace K2D2.Transfer
         }
 
         // Null, with the reason in error, when a body cannot be read. Refuses duplicate names.
-        public static BodySystem Build(double ut, out string error)
+        public static BodySystem Build(double ut, out string error) => Build(GameBodies(), ut, out error);
+
+        // The same, from a body list read by the caller: pass that list to VesselSnapshot.TryRead
+        // too, so the vessel's body index refers to this system.
+        public static BodySystem Build(IReadOnlyList<CelestialBodyComponent> bodies, double ut, out string error)
         {
             error = null;
             try
             {
-                var bodies = GameBodies();
                 if (bodies == null || bodies.Count == 0)
                 {
                     error = "The game lists no celestial body.";
@@ -104,6 +118,11 @@ namespace K2D2.Transfer
                         roots++;
                     else
                     {
+                        if (double.IsInfinity(node.Soi))
+                        {
+                            error = $"The game gives {name} an infinite SOI, but {name} orbits {bodies[parentIndex].bodyName}: only a root body may have one.";
+                            return null;
+                        }
                         IKeplerPatch orbit = b.Orbit;
                         if (orbit == null)
                         {
@@ -164,6 +183,28 @@ namespace K2D2.Transfer
                 source = $"MaxTerrainHeight is {F(h)}, the atmosphere is the floor";
                 return 0;
             }
+            string key = b.bodyName ?? "";
+            if (TerrainFallback.TryGetValue(key, out var cached))
+            {
+                source = cached.source + " (cached)";
+                return cached.height;
+            }
+            double sampled = SampleTerrain(b, h, out source);
+            if (!(sampled > 0))
+            {
+                double assumed = UnknownTerrainShare * b.radius;
+                source += $"; nothing above the radius, so the terrain height is unknown: {F(assumed)} m assumed ({UnknownTerrainShare * 100:F0} % of the radius)";
+                K2D2_Plugin.logger.LogWarning($"[Transfer] {key}: the terrain height is unknown (MaxTerrainHeight {F(h)}, samples found nothing above the radius); " +
+                    $"the low orbit assumes {F(assumed)} m. Check the capture orbit by hand.");
+                sampled = assumed;
+            }
+            TerrainFallback[key] = (sampled, source);
+            return sampled;
+        }
+
+        // The highest point of a coarse grid, with GetAltitudeFromTerrain; 0 when sampling fails.
+        static double SampleTerrain(CelestialBodyComponent b, double h, out string source)
+        {
             try
             {
                 double radius = b.radius;
