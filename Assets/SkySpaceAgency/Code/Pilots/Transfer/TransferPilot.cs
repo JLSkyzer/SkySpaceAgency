@@ -327,6 +327,7 @@ namespace K2D2.Transfer
                         return;
                     }
                     Begin(plan, resumed.StepIndex, resumed.PrepareOnly, snap, "resume");
+                    free_arrival_step = resumed.FreeArrivalStep;
                     return;
                 }
             }
@@ -606,7 +607,7 @@ namespace K2D2.Transfer
                 return;
             try
             {
-                var sp = TransferFlight.ToSaved(Current, System, vessel_id, Phase, StepIndex, GeneralTools.Current_UT, PrepareOnly, burn_ignited);
+                var sp = TransferFlight.ToSaved(Current, System, vessel_id, Phase, StepIndex, GeneralTools.Current_UT, PrepareOnly, burn_ignited, free_arrival_step);
                 string json = PlanStore.ToJson(sp);
                 Directory.CreateDirectory(PlansFolder);
                 string path = SavedPath(vessel_id);

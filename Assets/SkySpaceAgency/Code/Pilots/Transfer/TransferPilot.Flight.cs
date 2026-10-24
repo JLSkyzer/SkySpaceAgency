@@ -124,9 +124,7 @@ namespace K2D2.Transfer
             var plan = Current;
             if (StepIndex < plan.Steps.Count)
             {
-                var el = OrbitMath.Elements(r, v, System[body].Mu);
-                bool closed = el.IsClosed && el.ApoapsisRadius < System[body].Soi;
-                var leg = TransferFlight.LegStart(plan, StepIndex, body, closed);
+                var leg = TransferFlight.LegStart(plan, StepIndex, body);
                 if (leg != LegReplan.None)
                 {
                     StartLeg(leg, body);
@@ -426,6 +424,16 @@ namespace K2D2.Transfer
 
         void UpdateBurn(double now, int body)
         {
+            if (body != burn_body)
+            {
+                // The burn crossed an SOI: its guidance (v0, the asymptote, the target orbit) was in the
+                // old body's frame. Stop it here; the next correction absorbs the rest.
+                StopBurn();
+                logger.LogWarning($"[Transfer] {burn_name}: the burn crossed into {System[body].Name}: stopped, the next correction absorbs the rest");
+                StepDone();
+                UpdateSoiPrediction($"after the {burn_name} crossed an SOI");
+                return;
+            }
             burn.Update();
             Status = $"{burn_name}: {burn.status_line}";
             if (!burn_ignited && burn.mode == TargetOrbitBurn.Mode.Burn)

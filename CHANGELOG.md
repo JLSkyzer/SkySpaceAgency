@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Transfer pilot** (transfer to a body, sub-project 4.1, part 1 of 2; 2026-10-24, not yet flown in game). The pilot that the Transfer tab (next) drives. It has no tab of its own yet.
+- **Transfer pilot** (transfer to a body, sub-project 4.1; 2026-10-24, not yet flown in game). The pilot behind the Transfer tab: the tab's Plan, Start, Stop, Resume and Cancel buttons drive it.
   - **Plan**: the transfer search runs on a worker thread from the vessel's actual orbit; the result is checked against the Δv of each stage.
   - **Flight**: warp to the window, then each step of the plan: orbit or plane change, injection toward the departure asymptote, SOI exit, three corrections solved in flight toward the arrival periapsis, and the capture at the periapsis. The warp stops before every burn and every SOI change. A correction under 1 m/s is skipped only when the path already meets the wanted periapsis within 1 km. When a correction picks another arrival pass, the capture and the later steps move with it.
   - **Staging during the transfer's burns**: an engine running dry for 0.5 s stages, unless the next stage would drop a docking port, a parachute or the command part. Then the burn stops and asks the player to stage. Other tabs never stage by themselves.

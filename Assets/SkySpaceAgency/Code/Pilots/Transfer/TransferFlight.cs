@@ -35,7 +35,7 @@ namespace K2D2.Transfer
     public enum LegReplan
     {
         None,
-        Search,           // a closed orbit in the leg's body: the transfer search from the actual state
+        Search,           // the leg after a capture (staged arrival): the transfer search from the orbit reached
         SolveCorrection,  // a direct descent: its correction is solved without the stale planned arrival
         AimExcess,        // the top climb level, straight through: aim at the plan's required excess
         PlannedImpulse,   // a lower climb level, straight through: the planned re-aim vector, with a warning
@@ -237,22 +237,43 @@ namespace K2D2.Transfer
 
         // ---------------------------------------------------------------- legs
 
-        // Whether step i starts a leg that must be re-planned now, and how. orbitClosed: the vessel's
-        // orbit is closed inside its body's SOI.
-        public static LegReplan LegStart(TransferPlan plan, int stepIndex, int currentBody, bool orbitClosed)
+        // Whether step i starts a leg that must be re-planned now, and how, decided from the plan's
+        // steps (never from the orbit: after a moon escape the orbit of the planet is closed too):
+        //  - the leg after a capture (a staged arrival) is searched again from the orbit reached;
+        //  - a direct descent (its first step a correction with no vector) solves that correction
+        //    without the stale planned arrival;
+        //  - a climb level (after a moon escape) flies as budgeted: straight through (one burn, the
+        //    re-aim) it aims at the plan's required excess when it is the top level; otherwise, and
+        //    through a low periapsis (periapsis fix, then the departure burn), its planned burns.
+        public static LegReplan LegStart(TransferPlan plan, int stepIndex, int currentBody)
         {
             if (stepIndex < 0 || stepIndex >= plan.Steps.Count)
                 return LegReplan.None;
             var step = plan.Steps[stepIndex];
             if (!step.ReplanAtLegStart || currentBody != step.Body)
                 return LegReplan.None;
-            if (orbitClosed)
+            return LegKind(plan, stepIndex);
+        }
+
+        // How the leg starting at step i is re-planned (whatever the vessel's position).
+        public static LegReplan LegKind(TransferPlan plan, int stepIndex)
+        {
+            var step = plan.Steps[stepIndex];
+            if (AfterCapture(plan, step.LegIndex))
                 return LegReplan.Search;
             if (step.Kind == StepKind.Correction && !(step.DeltaV.sqrMagnitude > 0))
                 return LegReplan.SolveCorrection;
-            if (plan.ExcessBody == step.Body && plan.RequiredExcess.sqrMagnitude > 0)
+            int burns = plan.Steps.Count(st => st.LegIndex == step.LegIndex && HasPlannedVector(st));
+            if (burns == 1 && plan.ExcessBody == step.Body && plan.RequiredExcess.sqrMagnitude > 0)
                 return LegReplan.AimExcess;
             return LegReplan.PlannedImpulse;
+        }
+
+        // The leg before 'leg' ends with a capture: a staged arrival.
+        static bool AfterCapture(TransferPlan plan, int leg)
+        {
+            var previous = plan.Steps.LastOrDefault(st => st.LegIndex == leg - 1);
+            return previous != null && previous.Kind == StepKind.Capture;
         }
 
         // The leg of step i is being flown: its steps no longer wait for a re-plan.
@@ -265,7 +286,11 @@ namespace K2D2.Transfer
         }
 
         // Replaces the steps from stepIndex on with a plan searched from the actual state at the start
-        // of that leg. The new plan's legs follow the current leg's number.
+        // of that leg. The new plan's legs follow the current leg's number. The arrival, the excess
+        // and the warnings come from the new plan; Request, DepartureUT, TotalDeltaV, ReserveDeltaV and
+        // CaseName stay those of the original plan (what the player asked for and the budget shown at
+        // the start); the stage check is made again on the steps left (RemainingBudget, with the new
+        // steps' Δv).
         public static void MergeLeg(TransferPlan plan, int stepIndex, TransferPlan replanned)
         {
             int leg = plan.Steps[stepIndex].LegIndex;
@@ -286,6 +311,10 @@ namespace K2D2.Transfer
         // The planned arrival of step i's leg: the first step of the next leg, else the plan's arrival.
         public static double LegArrivalUT(TransferPlan plan, int stepIndex)
         {
+            // A staged arrival: the leg ends at its own capture.
+            int capture = LegCapture(plan, stepIndex);
+            if (capture >= 0)
+                return plan.Steps[capture].UT;
             int leg = plan.Steps[stepIndex].LegIndex;
             for (int i = stepIndex + 1; i < plan.Steps.Count; i++)
                 if (plan.Steps[i].LegIndex > leg)
@@ -539,15 +568,29 @@ namespace K2D2.Transfer
                 return ResumeAction.Refuse;
             if (check.Verdict == ResumeVerdict.Replan)
                 return ResumeAction.Replan;
-            if (saved.StepIndex < saved.Plan.Steps.Count)
-            {
-                var step = saved.Plan.Steps[saved.StepIndex];
-                // BurnStarted survives a failure (the phase is then Failed); the phase test also covers
-                // a stop saved while the burn was under way.
-                if (HasPlannedVector(step) && (saved.BurnStarted || saved.Phase == BurnPhase(step.Kind)))
-                    return ResumeAction.Replan;
-            }
+            // The saved vectors are in the Zup frame of the session that saved them, which may not be
+            // this one: a resume never flies one. Any step ahead that would fly a saved vector (or the
+            // required excess) sends the plan back to the search, from the actual state.
+            if (SavedVectorsAhead(saved.Plan, saved.StepIndex))
+                return ResumeAction.Replan;
             return ResumeAction.Continue;
+        }
+
+        // Whether flying the plan from step 'from' would use a saved vector: a step with a planned
+        // vector (an aim at the required excess is one of those), except in a leg that is searched
+        // again at its start anyway (after a capture), which is not flown from its saved steps.
+        public static bool SavedVectorsAhead(TransferPlan plan, int from)
+        {
+            for (int k = Math.Max(0, from); k < plan.Steps.Count; k++)
+            {
+                var st = plan.Steps[k];
+                if (!HasPlannedVector(st))
+                    continue;
+                if (st.ReplanAtLegStart && AfterCapture(plan, st.LegIndex))
+                    continue;
+                return true;
+            }
+            return false;
         }
 
         // The saved plan's body indices, mapped by name onto s. False (nothing changed) when a name
@@ -594,7 +637,7 @@ namespace K2D2.Transfer
 
         // The plan as saved for the vessel (a GUID in "D" format). Null strings are stored empty.
         public static SavedPlan ToSaved(TransferPlan plan, BodySystem s, string vesselId, TransferPhase phase, int stepIndex,
-            double ut, bool prepareOnly, bool burnStarted = false)
+            double ut, bool prepareOnly, bool burnStarted = false, int freeArrivalStep = -1)
         {
             if (plan == null) throw new ArgumentNullException(nameof(plan));
             if (s == null) throw new ArgumentNullException(nameof(s));
@@ -611,6 +654,7 @@ namespace K2D2.Transfer
                 SavedUT = ut,
                 PrepareOnly = prepareOnly,
                 BurnStarted = burnStarted,
+                FreeArrivalStep = freeArrivalStep,
                 FromBodyName = q != null && q.FromBody >= 0 && q.FromBody < s.Count ? s[q.FromBody].Name : "",
                 ToBodyName = q != null && q.ToBody >= 0 && q.ToBody < s.Count ? s[q.ToBody].Name : "",
                 BodyNames = Enumerable.Range(0, s.Count).Select(i => s[i].Name ?? "").ToList(),
@@ -658,12 +702,13 @@ namespace K2D2.Transfer
             return n == 1 ? "correction after the escape" : n == 2 ? "mid-course correction" : "approach correction";
         }
 
-        // Which correction of its leg step i is (1, 2, 3).
+        // Which correction of its leg step i is (1, 2, 3), the re-aim burns left out.
         public static int CorrectionNumber(TransferPlan plan, int i)
         {
             int n = 0;
             for (int k = 0; k <= i; k++)
-                if (plan.Steps[k].LegIndex == plan.Steps[i].LegIndex && plan.Steps[k].Kind == StepKind.Correction)
+                if (plan.Steps[k].LegIndex == plan.Steps[i].LegIndex && plan.Steps[k].Kind == StepKind.Correction
+                    && !(plan.Steps[k].DeltaV.sqrMagnitude > 0)) // a re-aim burn is not one of the three
                     n++;
             return n;
         }

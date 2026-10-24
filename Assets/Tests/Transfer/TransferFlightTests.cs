@@ -211,28 +211,36 @@ public class TransferFlightTests
     // ---------------------------------------------------------------- legs
 
     [Test]
-    public void LegStart_HowEachLegIsPlannedAgain()
+    public void LegStart_DecidedFromTheSteps_NeverFromTheOrbit()
     {
         var plan = HandPlan();
-        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, 2, _kerbol, false), "leg 0 is flown as planned");
+        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, 2, _kerbol), "leg 0 is flown as planned");
 
-        plan.Steps[5].LegIndex = 1;
-        plan.Steps[5].ReplanAtLegStart = true;
-        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, 5, _kerbol, false), "not in the leg's body yet");
-        Assert.AreEqual(LegReplan.Search, TransferFlight.LegStart(plan, 5, _duna, true), "a closed orbit: search again");
+        // A staged arrival: leg 0 ends with the Duna capture, leg 1 leaves from the orbit reached.
+        plan.Steps.Add(new PlanStep { Kind = StepKind.Injection, Body = _duna, UT = 1_100_000, DeltaV = new Vector3d(1, 0, 0), LegIndex = 1, ReplanAtLegStart = true });
+        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, 6, _kerbol), "not in the leg's body yet");
+        Assert.AreEqual(LegReplan.Search, TransferFlight.LegStart(plan, 6, _duna), "after a capture: search again");
 
-        plan.Steps[5].Kind = StepKind.Correction; // a direct descent's entry correction
-        Assert.AreEqual(LegReplan.SolveCorrection, TransferFlight.LegStart(plan, 5, _duna, false));
+        // A direct descent: leg 0 ends with corrections, leg 1 starts with the entry correction.
+        plan = HandPlan();
+        plan.Steps[5] = new PlanStep { Kind = StepKind.Correction, Body = _duna, UT = 990_000, LegIndex = 1, ReplanAtLegStart = true, TargetBody = _duna };
+        Assert.AreEqual(LegReplan.SolveCorrection, TransferFlight.LegStart(plan, 5, _duna));
 
-        plan.Steps[5].DeltaV = new Vector3d(5, 0, 0); // a straight-through re-aim burn
-        Assert.AreEqual(LegReplan.PlannedImpulse, TransferFlight.LegStart(plan, 5, _duna, false));
+        // A climb level straight through (one re-aim burn): the required excess when it is the top
+        // level, else the planned vector. Whether the orbit there is closed does not matter.
+        plan.Steps[5].DeltaV = new Vector3d(5, 0, 0);
+        Assert.AreEqual(LegReplan.PlannedImpulse, TransferFlight.LegStart(plan, 5, _duna));
         plan.ExcessBody = _duna;
         plan.RequiredExcess = new Vector3d(900, 0, 0);
-        Assert.AreEqual(LegReplan.AimExcess, TransferFlight.LegStart(plan, 5, _duna, false));
+        Assert.AreEqual(LegReplan.AimExcess, TransferFlight.LegStart(plan, 5, _duna));
+
+        // A climb level through a low periapsis (periapsis fix, then the departure burn): as budgeted.
+        plan.Steps.Add(new PlanStep { Kind = StepKind.Injection, Body = _duna, UT = 995_000, DeltaV = new Vector3d(300, 0, 0), LegIndex = 1 });
+        Assert.AreEqual(LegReplan.PlannedImpulse, TransferFlight.LegStart(plan, 5, _duna));
 
         TransferFlight.MarkLegStarted(plan, 5);
         Assert.IsFalse(plan.Steps[5].ReplanAtLegStart);
-        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, 5, _duna, false), "started once only");
+        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, 5, _duna), "started once only");
     }
 
     [Test]
@@ -525,7 +533,8 @@ public class TransferFlightTests
     {
         var plan = HandPlan();
         var resume = ResumeCheck.Resume();
-        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.WaitWindow, 0), resume));
+        Assert.AreEqual(ResumeAction.Replan, TransferFlight.DecideResume(Saved(plan, TransferPhase.WaitWindow, 0), resume),
+            "the injection's saved vector is never flown on a resume");
         Assert.AreEqual(ResumeAction.Replan, TransferFlight.DecideResume(Saved(plan, TransferPhase.Injection, 0), resume),
             "the injection's planned vector from a state already part burned would replay it");
         Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.Correction, 3), resume),
@@ -541,9 +550,70 @@ public class TransferFlightTests
         Assert.IsTrue(PlanStore.TryFromJson(PlanStore.ToJson(failed), out var back, out string error), error);
         Assert.IsTrue(back.BurnStarted);
         Assert.AreEqual(ResumeAction.Replan, TransferFlight.DecideResume(back, resume));
-        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 0), resume), "failed before ignition");
+        Assert.AreEqual(ResumeAction.Replan, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 0), resume), "failed before ignition: still a saved vector");
         var capture = TransferFlight.ToSaved(plan, _s, "id", TransferPhase.Failed, 5, 500, false, burnStarted: true);
         Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(capture, resume), "a capture aims at its orbit from the actual state");
+    }
+
+    // After a reload the Zup frame may be another one: the saved vectors (R0, V0, the steps' Δv, the
+    // required excess) are turned here by 40° about x. Whatever step the plan is resumed at, either it
+    // is searched again, or no step left flies a saved vector.
+    [Test]
+    public void Resume_RotatedFrame_NeverFliesASavedVector()
+    {
+        double c = Math.Cos(40 * Math.PI / 180), sn = Math.Sin(40 * Math.PI / 180);
+        Vector3d Turn(Vector3d x) => new Vector3d(x.x, c * x.y - sn * x.z, sn * x.y + c * x.z);
+        for (int at = 0; at <= 6; at++)
+        {
+            var plan = HandPlan();
+            plan.ExcessBody = _kerbin;
+            plan.RequiredExcess = new Vector3d(0, 900, 0);
+            plan.Request.R0 = Turn(plan.Request.R0);
+            plan.Request.V0 = Turn(plan.Request.V0);
+            plan.RequiredExcess = Turn(plan.RequiredExcess);
+            foreach (var st in plan.Steps)
+                st.DeltaV = Turn(st.DeltaV);
+            var action = TransferFlight.DecideResume(Saved(plan, TransferPhase.Coast, at), ResumeCheck.Resume());
+            bool vectorLeft = plan.Steps.Skip(at).Any(TransferFlight.HasPlannedVector);
+            if (action == ResumeAction.Continue)
+                Assert.IsFalse(vectorLeft, $"resumed at step {at} with a saved vector to fly");
+            else
+                Assert.AreEqual(ResumeAction.Replan, action);
+            Assert.AreEqual(at == 0 ? ResumeAction.Replan : ResumeAction.Continue, action, $"step {at}");
+        }
+    }
+
+    // A later leg searched again at its start (after a capture) does not count: its saved steps are
+    // never flown.
+    [Test]
+    public void SavedVectorsAhead_SkipsALegSearchedAgain()
+    {
+        var plan = HandPlan();
+        plan.Steps.Add(new PlanStep { Kind = StepKind.Injection, Body = _duna, UT = 1_100_000, DeltaV = new Vector3d(1, 0, 0), LegIndex = 1, ReplanAtLegStart = true });
+        Assert.IsFalse(TransferFlight.SavedVectorsAhead(plan, 2));
+        plan.Steps[6].ReplanAtLegStart = false; // that leg already started: its vector would be flown
+        Assert.IsTrue(TransferFlight.SavedVectorsAhead(plan, 2));
+    }
+
+    [Test]
+    public void FreeArrivalStep_SavedAndOptional()
+    {
+        var sp = TransferFlight.ToSaved(HandPlan(), _s, "id", TransferPhase.Correction, 5, 500, false, freeArrivalStep: 5);
+        Assert.IsTrue(PlanStore.TryFromJson(PlanStore.ToJson(sp), out var back, out string error), error);
+        Assert.AreEqual(5, back.FreeArrivalStep);
+        var o = Newtonsoft.Json.Linq.JObject.Parse(PlanStore.ToJson(sp));
+        o.Remove("freeArrivalStep");
+        Assert.IsTrue(PlanStore.TryFromJson(o.ToString(), out back, out error), error);
+        Assert.AreEqual(-1, back.FreeArrivalStep);
+    }
+
+    [Test]
+    public void LegArrival_StagedArrival_TheLegsOwnCapture()
+    {
+        var plan = HandPlan();
+        plan.Steps[5].UT = 980_000; // the capture of leg 0, before the next leg's first step
+        plan.Steps.Add(new PlanStep { Kind = StepKind.Injection, Body = _duna, UT = 1_100_000, LegIndex = 1 });
+        Assert.AreEqual(980_000, TransferFlight.LegArrivalUT(plan, 2));
     }
 
     [Test]
@@ -642,7 +712,6 @@ public class TransferFlightTests
         // From a low circular orbit of Duna, as after a staged capture.
         double rd = _s[_duna].LowOrbitRadius;
         double ut = plan.Steps[i].UT;
-        Assert.AreEqual(LegReplan.Search, TransferFlight.LegStart(plan, i, plan.Steps[i].Body, true));
         var q2 = new TransferRequest { FromBody = _duna, ToBody = q.ToBody, R0 = new Vector3d(rd, 0, 0),
             V0 = new Vector3d(0, Math.Sqrt(_s[_duna].Mu / rd), 0), UT0 = ut };
         var replanned = TransferSearch.Find(_s, q2, CancellationToken.None);
@@ -654,13 +723,144 @@ public class TransferFlightTests
         Assert.AreEqual(i + replanned.Steps.Count, plan.Steps.Count);
         Assert.IsTrue(plan.Steps.Skip(i).All(st => st.LegIndex >= leg));
         Assert.AreEqual(replanned.ArrivalUT, plan.ArrivalUT);
-        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, i, plan.Steps[i].Body, true), "the merged leg is not searched again");
+        Assert.AreEqual(LegReplan.None, TransferFlight.LegStart(plan, i, plan.Steps[i].Body), "the merged leg is not searched again");
         Assert.AreEqual(StepKind.Capture, plan.Steps.Last().Kind);
         Assert.AreEqual(q.ToBody, plan.Steps.Last().Body);
         Assert.IsTrue(TransferFlight.RemainingBudget(plan, i, new List<StageDv> { new StageDv { Stage = 1, DeltaVVac = 5000 } }).Ok);
     }
 
     // ---------------------------------------------------------------- one whole flight
+
+    // Flies a plan by the step table and the leg rules, every burn an impulse from the guidance the
+    // pilot builds. Returns the Δv flown; legs lists how each later leg was started.
+    double FlyByTheTable(TransferPlan plan, Flight f, int target, List<TransferPhase> phases, List<LegReplan> legs, List<string> log)
+    {
+        double horizon = plan.ArrivalUT + 0.25 * plan.TripSeconds;
+        double flown = 0;
+        int i = 0, freeArrival = -1;
+        for (int guard = 0; guard < 600; guard++)
+        {
+            var leg = TransferFlight.LegStart(plan, i, f.Body);
+            if (leg != LegReplan.None)
+            {
+                legs.Add(leg);
+                log.Add($"leg {plan.Steps[i].LegIndex} in {_s[f.Body].Name}: {leg}");
+                Assert.AreNotEqual(LegReplan.Search, leg, "only a leg after a capture is searched again");
+                if (leg == LegReplan.SolveCorrection)
+                    freeArrival = i;
+                TransferFlight.MarkLegStarted(plan, i);
+                continue;
+            }
+            var d = TransferFlight.Next(plan, i, f.Body, target, f.UT, TransferFlight.BurnLead(0), NextSoi(f, horizon));
+            if (phases.Count == 0 || phases[phases.Count - 1] != d.Phase)
+                phases.Add(d.Phase);
+            double mu = _s[f.Body].Mu;
+            switch (d.Action)
+            {
+                case FlightAction.Done:
+                    return flown;
+                case FlightAction.SoiMissed:
+                    Assert.Fail($"SOI change missed: {_s[d.MissedBody].Name}; {string.Join("; ", log)}");
+                    break;
+                case FlightAction.StepPassed:
+                    i++;
+                    break;
+                case FlightAction.Warp:
+                    CoastTo(f, d.WarpUntilUT);
+                    break;
+                case FlightAction.WaitSoi:
+                    CoastTo(f, double.IsNaN(d.WarpUntilUT) ? f.UT + 600 : d.WarpUntilUT + 1);
+                    break;
+                case FlightAction.Burn:
+                {
+                    var st = plan.Steps[i];
+                    CoastTo(f, st.UT);
+                    var g = TransferFlight.GuidanceFor(plan, i, f.R, f.V, mu, _s[f.Body].Soi);
+                    (g as IFixedAtIgnition)?.FixAtIgnition(f.R, f.V, f.UT, mu);
+                    var dv = g.DeltaVToGo(f.R, f.V, f.UT, mu);
+                    f.V += dv;
+                    flown += dv.magnitude;
+                    log.Add($"{st.Kind} in {_s[f.Body].Name} {dv.magnitude:F1} m/s (planned {st.DeltaVMagnitude:F1}) by {g.GetType().Name}");
+                    i++;
+                    break;
+                }
+                case FlightAction.Solve:
+                {
+                    var st = plan.Steps[i];
+                    CoastTo(f, Math.Max(st.UT, f.UT));
+                    int n = TransferFlight.CorrectionNumber(plan, i);
+                    double without = TransferFlight.PeriapsisWithout(_s, f.Body, f.R, f.V, f.UT, st.TargetBody, horizon);
+                    double planned = freeArrival == i ? double.NaN : TransferFlight.LegArrivalUT(plan, i);
+                    Assert.IsTrue(ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, st.TargetBody, st.TargetPeriapsisRadius, st.TargetInclinationDeg,
+                        horizon, planned, TransferFlight.CaptureApoapsis(plan, i),
+                        out var dv, out double pe, out _, out double arrival, out double capture, out bool converged), $"correction {n}; {string.Join("; ", log)}");
+                    var verdict = TransferFlight.JudgeCorrection(dv.magnitude, converged, pe, st.TargetPeriapsisRadius, without,
+                        _s[st.TargetBody].LowOrbitRadius - 10_000, out string why);
+                    Assert.AreNotEqual(CorrectionVerdict.Refuse, verdict, why);
+                    TransferFlight.ApplySolve(plan, i, arrival, capture, f.UT);
+                    if (verdict == CorrectionVerdict.Fly)
+                    {
+                        f.V += dv;
+                        flown += dv.magnitude;
+                    }
+                    log.Add($"correction {n} in {_s[f.Body].Name}: {dv.magnitude:F3} m/s {verdict}");
+                    i++;
+                    break;
+                }
+                case FlightAction.Capture:
+                {
+                    var st = plan.Steps[i];
+                    var first = PatchedPropagator.Propagate(_s, f.Body, f.R, f.V, f.UT, f.UT + 30 * KerbinDay, null, 2)[0];
+                    Assert.GreaterOrEqual(first.PeriapsisUT, f.UT, "the periapsis is ahead");
+                    CoastTo(f, first.PeriapsisUT);
+                    var g = TransferFlight.GuidanceFor(plan, i, f.R, f.V, mu, _s[f.Body].Soi);
+                    (g as IFixedAtIgnition)?.FixAtIgnition(f.R, f.V, f.UT, mu);
+                    var dv = g.DeltaVToGo(f.R, f.V, f.UT, mu);
+                    f.V += dv;
+                    flown += dv.magnitude;
+                    log.Add($"capture {dv.magnitude:F1} m/s (planned {st.DeltaVMagnitude:F1})");
+                    i++;
+                    break;
+                }
+            }
+        }
+        Assert.Fail("the flight does not end: " + string.Join("; ", log));
+        return flown;
+    }
+
+    // Mun -> Duna: the Mun escape, then the climb level in Kerbin flown as budgeted (the orbit of
+    // Kerbin after the Mun escape is closed, which must not start a new search), the corrections in
+    // Kerbol, the capture at Duna.
+    [Test]
+    public void WholeFlight_MunToDuna_ThroughTheClimb()
+    {
+        double radius = _s[_mun].LowOrbitRadius + 5000, speed = Math.Sqrt(_s[_mun].Mu / radius);
+        var q = new TransferRequest { FromBody = _mun, ToBody = _duna, R0 = new Vector3d(radius, 0, 0), V0 = new Vector3d(0, speed, 0) };
+        var plan = TransferSearch.Find(_s, q, CancellationToken.None);
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        TestContext.Out.WriteLine(TransferFlight.Describe(plan, _s, 0));
+        Assert.IsTrue(plan.Steps.Any(st => st.LegIndex > 0 && st.Body == _kerbin), "a climb level in Kerbin");
+
+        var f = new Flight { Body = _mun, R = q.R0, V = q.V0, UT = 0 };
+        var phases = new List<TransferPhase>();
+        var legs = new List<LegReplan>();
+        var log = new List<string>();
+        double flown = FlyByTheTable(plan, f, _duna, phases, legs, log);
+        TestContext.Out.WriteLine(string.Join("; ", log));
+        TestContext.Out.WriteLine("phases: " + string.Join(" -> ", phases));
+
+        CollectionAssert.IsNotEmpty(legs, "the climb leg was started");
+        Assert.IsTrue(legs.All(l => l == LegReplan.AimExcess || l == LegReplan.PlannedImpulse), string.Join(", ", legs));
+        Assert.AreEqual(_duna, f.Body);
+        var el = OrbitMath.Elements(f.R, f.V, _s[_duna].Mu);
+        double wanted = _s[_duna].LowOrbitRadius;
+        TestContext.Out.WriteLine(TransferFlight.FinalOrbit("Duna", el.PeriapsisRadius - _s[_duna].Radius, el.ApoapsisRadius - _s[_duna].Radius,
+            el.InclinationRad * 180 / Math.PI) + $"; flown {flown:F1} m/s vs plan {plan.TotalDeltaV:F1}");
+        Assert.IsTrue(el.IsClosed);
+        Assert.AreEqual(wanted, el.PeriapsisRadius, 2000);
+        Assert.AreEqual(wanted, el.ApoapsisRadius, 2000);
+        Assert.AreEqual(plan.TotalDeltaV, flown, 0.10 * plan.TotalDeltaV);
+    }
 
     class Flight
     {
