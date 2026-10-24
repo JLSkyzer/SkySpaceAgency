@@ -4,13 +4,22 @@
 
 ### Added
 
-- **Transfer pilot** (transfer to a body, sub-project 4.1; 2026-10-24, not yet flown in game). The pilot behind the Transfer tab: the tab's Plan, Start, Stop, Resume and Cancel buttons drive it.
+- **Transfer tab** (transfer to a body, sub-project 4.1, 2026-10-24; not yet flown in game). From an orbit around any body, plan and fly the cheapest transfer to any other body: a moon, the parent, a sibling, another planet or a moon of another planet.
+  - **Inputs**: the target body (list grouped by parent), the arrival (Encounter, or Orbit, default low circular, with Pe, Ap and inclination changeable), Prepare only, a maximum trip duration. Use gravity assist is shown but not available yet.
+  - **Plan**: the departure date and the wait, the trip and arrival dates, each step with its Δv and the reason for any non-obvious burn (plane change first, lowering the orbit first, a departure that also turns the plane), the total with its reserve (2 %, at least 10 m/s), and the Δv per stage. A stage the mod will not drop by itself is flagged. Refused with a message when the vessel's stages cannot cover it, including the capture.
+  - **Multi-level trips** (Mun → Duna, Ike → Laythe) are planned leg by leg; a leg that starts after a capture is planned again when the vessel gets there.
+- **Transfer pilot**, behind the Transfer tab: the tab's Plan, Start, Stop, Resume and Cancel buttons drive it.
   - **Plan**: the transfer search runs on a worker thread from the vessel's actual orbit; the result is checked against the Δv of each stage.
   - **Flight**: warp to the window, then each step of the plan: orbit or plane change, injection toward the departure asymptote, SOI exit, three corrections solved in flight toward the arrival periapsis, and the capture at the periapsis. The warp stops before every burn and every SOI change. A correction under 1 m/s is skipped only when the path already meets the wanted periapsis within 1 km. When a correction picks another arrival pass, the capture and the later steps move with it.
   - **Staging during the transfer's burns**: an engine running dry for 0.5 s stages, unless the next stage would drop a docking port, a parachute or the command part. Then the burn stops and asks the player to stage. Other tabs never stage by themselves.
-  - **Prepare only**: one game node at a time for the next step, no warp; the next step is planned from the orbit reached once the player has flown the node and removed it.
-  - **Resume**: the plan is saved per vessel in `mods/SkySpaceAgency/plans/` at every phase change. When that vessel is next active in flight, the mod offers "Resume plan to {body} (next: {step} in {time})", and re-plans from the actual state when the vessel no longer matches.
+  - **Prepare only**: one game node at a time for the next step, no warp; the next step is planned from the orbit reached once the player has flown the node (node removed, or at least 80 % of its Δv flown with the engines off for 5 s). Only the mod's own node is removed.
+  - **Resume**: the plan is saved per vessel in `mods/SkySpaceAgency/plans/` at every phase change. When that vessel is next active in flight, the mod offers "Resume plan to {body} (next: {step} in {time})", and never flies a saved burn again: every burn still ahead is planned again from the actual state.
   - **Failures** stop with the throttle at 0 and the warp off and keep the plan for Resume. A failed capture says "Capture failed: you will fly past {body}".
+
+- **Lift: Prepare transfer to [body]** (sub-project 4.2, 2026-10-24; not yet flown in game). A goal selector in the Lift tab; Orbit keeps today's behaviour and settings.
+  - The mod picks the parking orbit plane the transfer needs (it contains the departure direction; from the KSC to Duna about 4°), waits on the pad in warp until the launch site passes under it, fires the first stage itself (only on a vessel with nothing staged yet), flies the Lift ascent on the computed heading while steering toward the plane, circularizes at the low parking orbit and trims the plane to under 0.1°.
+  - It ends with "Ready for the {body} transfer: open the Transfer tab"; it never starts the transfer. A missed launch time is solved again for the next pass. The tab shows the launch countdown, the heading, the plane, any plane change left, and the transfer window.
+  - The ascent time used for the launch timing is measured on each transfer ascent and kept per body.
 
 - **Landing target picker** (Land tab, precision landing part 1).
   - **Pick on map**: the button opens the map view and waits for a click on the body; the latitude and longitude of the clicked point become the target. Esc or a second click cancels. A click on another body than the one orbited is refused. The click does not add a waypoint of its own; if Redux's Waypoints window also saves it, the tab says so.

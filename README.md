@@ -14,7 +14,8 @@ K2-D2 gives you one panel (`Alt-O` or the AppBar icon) with a set of autopilots:
 
 - **Node** - executes the next maneuver node, with auto-circularize at Ap/Pe and one-click buttons to create a node at the next apoapsis or periapsis
 - **Orbit** - set a target apoapsis, periapsis and/or inclination and create every maneuver node needed to get there in one click; execute them with Node
-- **Lift** - automated ascent guidance with a configurable altitude/heading profile, an optional roll program, and automatic circularization at the end of the climb
+- **Lift** - automated ascent guidance with a configurable altitude/heading profile, an optional roll program, and automatic circularization at the end of the climb; or "Prepare transfer": wait for the right launch time and reach the parking orbit plane a transfer needs
+- **Transfer** - plan and fly the cheapest transfer from any body to any other body (flyby or capture), with the reason for every non-obvious burn, Δv checked per stage, "Prepare only" nodes, and a plan that survives a save and reload
 - **Landing** - automated descent, braking, and touchdown (propulsive with automatic legs, or parachute on bodies with an atmosphere), with an optional Precision Landing mode that targets a site picked on the map, the KSC or a waypoint: powered precision landing on bodies with no atmosphere, parachute precision return (with automatic service module jettison) on bodies with an atmosphere
 - **Docking** - automated final approach and docking
 - **Attitude** - point-and-hold attitude control (a simple plane autopilot)
@@ -34,6 +35,7 @@ This is a from-scratch port of the original code onto Redux's APIs, not a compat
 - Auto-staging, with a player-facing on/off toggle in the window's title bar
 
 **Known limitations:**
+- Transfer and the Lift transfer goal are not flown in game yet. Gravity assists, rendezvous with a vessel and aerocapture are not available yet. Captures are propulsive.
 - Parachute precision return (atmospheric bodies) uses a reentry model whose drag is uncertain: expect about 20 km until the suggested drag scale is applied after a first return. No steering under canopy; heating is not modelled (the entry periapsis is about 35 % of the atmosphere depth).
 - Landing's braking plan ignores atmospheric drag (which only helps) and assumes the active engines stay as they are: auto-staging during the landing burn is not planned for.
 - VAB tools: the import replaces the main rocket through the game's workspace restore (or, as a fallback, its assembly loader); it is not an undo step - the `before_import_…` backup in `vab/exports/` is the way back. Engine Isp in the parts dump comes from the part definitions and may differ from the VAB's figures.
