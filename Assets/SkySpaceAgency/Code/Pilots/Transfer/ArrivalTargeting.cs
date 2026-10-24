@@ -44,6 +44,7 @@ namespace K2D2.Transfer
             public double[] Plane;
             public double BWanted;
             public double PeriapsisRadius, InclinationDeg, ArrivalUT;
+            public double C3; // v∞² at the target (negative when the arrival is already bound)
             public bool Valid => Residual != null;
             // Which residual Norm measures: Miss and Encounter norms, and among encounters the B-plane
             // and the captured-orbit residuals, are not on one scale (see Better).
@@ -64,6 +65,67 @@ namespace K2D2.Transfer
             Solve(s, body, r, v, ut, targetBody, wantedPeriapsisRadius, wantedInclinationDeg, horizonUT, double.NaN,
                 out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out _, out _);
 
+        // Δv first: the pass of the target that costs the least in all, correction + capture. Both the
+        // planned pass (as the overload below aims at it) and the nearest pass (as without a planned
+        // arrival) are solved, and the one of lower total is returned: the correction's Δv plus, when
+        // captureApoapsisRadius is given, the capture at the predicted periapsis from the predicted v∞
+        // into an orbit of that apoapsis (Hyperbola.CaptureDeltaV); NaN: an encounter, no capture, so
+        // the correction alone. predictedArrivalUT is the chosen pass's arrival periapsis,
+        // predictedCaptureDeltaV its capture (0 for an encounter), converged whether its aim was met.
+        public static bool Solve(BodySystem s, int body, Vector3d r, Vector3d v, double ut, int targetBody,
+            double wantedPeriapsisRadius, double wantedInclinationDeg, double horizonUT, double plannedArrivalUT,
+            double captureApoapsisRadius,
+            out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg,
+            out double predictedArrivalUT, out double predictedCaptureDeltaV, out bool converged)
+        {
+            deltaV = Vector3d.zero;
+            predictedPeriapsisRadius = predictedInclinationDeg = predictedArrivalUT = predictedCaptureDeltaV = double.NaN;
+            converged = false;
+            if (s == null || targetBody < 0 || targetBody >= s.Count || !(wantedPeriapsisRadius > 0) || !(horizonUT > ut))
+                return false;
+
+            var problem = new Problem
+            {
+                S = s, Body = body, R = r, V = v, UT = ut, Target = targetBody, HorizonUT = horizonUT,
+                WantedPeriapsis = wantedPeriapsisRadius, WantedInclinationDeg = wantedInclinationDeg,
+                PlannedArrivalUT = plannedArrivalUT,
+            };
+            double mu = s[targetBody].Mu;
+            bool found = false;
+            double best = double.PositiveInfinity;
+            // The planned pass first (when one is given), then the nearest pass.
+            for (int pass = double.IsNaN(plannedArrivalUT) ? 1 : 0; pass < 2; pass++)
+            {
+                if (pass == 1)
+                    problem.PlannedArrivalUT = double.NaN;
+                if (!Run(problem, out var dv, out var rp, out var inc, out var arrival, out var ok, out var c3))
+                    continue;
+                double capture = double.IsNaN(captureApoapsisRadius) ? 0 : CaptureCost(c3, rp, captureApoapsisRadius, mu);
+                double total = dv.magnitude + capture;
+                if (!(total < best))
+                    continue;
+                best = total;
+                found = true;
+                deltaV = dv;
+                predictedPeriapsisRadius = rp;
+                predictedInclinationDeg = inc;
+                predictedArrivalUT = arrival;
+                predictedCaptureDeltaV = capture;
+                converged = ok;
+            }
+            return found;
+        }
+
+        // The capture burn at periapsis rp, arriving with c3 = v∞² (negative when already bound).
+        static double CaptureCost(double c3, double rp, double apoapsis, double mu)
+        {
+            if (c3 >= 0)
+                return Math.Abs(Hyperbola.CaptureDeltaV(Math.Sqrt(c3), rp, apoapsis, mu));
+            double vPeriapsis = Math.Sqrt(Math.Max(0, c3 + 2 * mu / rp));
+            double vOrbit = Math.Sqrt(2 * mu / rp - 2 * mu / (rp + apoapsis));
+            return Math.Abs(vPeriapsis - vOrbit);
+        }
+
         // The same, keeping to the planned pass (plannedArrivalUT: the leg's planned arrival periapsis,
         // NaN for none). An encounter whose periapsis is more than PassTolerance from the planned one is
         // another pass, and counts as a miss of the planned pass: the vessel is then aimed at the
@@ -72,7 +134,9 @@ namespace K2D2.Transfer
         // pass, earlier or later, so comes back to the planned one, whose excess speed (and so capture
         // cost) the plan was built on. Within the tolerance the arrival time is free.
         // When the planned pass cannot be met within MaxDeltaV (late in the flight a drift is costly to
-        // undo), the nearest pass is aimed at instead, as without a planned arrival: predictedArrivalUT
+        // undo), the nearest pass is aimed at instead, as without a planned arrival. This prefers the
+        // planned pass whatever it costs (the search uses it to aim a departure at its planned pass);
+        // the pilot uses the overload above, which keeps the cheaper pass. predictedArrivalUT
         // (the arrival periapsis) then shows it. converged: the aim was met, on the planned pass when
         // one is given (B-plane within 100 m, under 1 km on the periapsis).
         public static bool Solve(BodySystem s, int body, Vector3d r, Vector3d v, double ut, int targetBody,
@@ -100,12 +164,12 @@ namespace K2D2.Transfer
                 WantedPeriapsis = wantedPeriapsisRadius, WantedInclinationDeg = wantedInclinationDeg,
                 PlannedArrivalUT = plannedArrivalUT,
             };
-            if (Run(problem, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out predictedArrivalUT, out converged))
+            if (Run(problem, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out predictedArrivalUT, out converged, out _))
                 return true;
             if (double.IsNaN(plannedArrivalUT))
                 return false;
             problem.PlannedArrivalUT = double.NaN;
-            bool ok = Run(problem, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out predictedArrivalUT, out _);
+            bool ok = Run(problem, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out predictedArrivalUT, out _, out _);
             converged = false; // not on the planned pass
             return ok;
         }
@@ -121,8 +185,9 @@ namespace K2D2.Transfer
             Math.Min(Math.Max(0.05 * Math.Abs(plannedArrivalUT - ut), 2 * Math.Max(0, fallSeconds)), 0.25 * s.OrbitalPeriod(targetBody));
 
         static bool Run(Problem problem, out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg,
-            out double predictedArrivalUT, out bool converged)
+            out double predictedArrivalUT, out bool converged, out double c3)
         {
+            c3 = double.NaN;
             deltaV = Vector3d.zero;
             predictedPeriapsisRadius = double.NaN;
             predictedInclinationDeg = double.NaN;
@@ -174,6 +239,7 @@ namespace K2D2.Transfer
             predictedInclinationDeg = current.InclinationDeg;
             predictedArrivalUT = current.ArrivalUT;
             converged = current.Norm < BTolerance;
+            c3 = current.C3;
             return true;
         }
 
@@ -377,6 +443,7 @@ namespace K2D2.Transfer
                     PeriapsisRadius = p.PeriapsisRadius,
                     InclinationDeg = el.InclinationRad * 180 / Math.PI,
                     ArrivalUT = p.PeriapsisUT,
+                    C3 = -mu / el.SemiMajorAxis,
                     PeriapsisError = Math.Abs(p.PeriapsisRadius - WantedPeriapsis),
                 };
                 if (el.IsClosed || !(el.Eccentricity > 1))

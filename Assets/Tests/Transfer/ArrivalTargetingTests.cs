@@ -122,6 +122,58 @@ public class ArrivalTargetingTests
 
     static double Days(double seconds) => seconds / KerbinDay;
 
+    // The pilot's solve: the cheapest pass in all, correction + capture into an orbit of apoapsis 'captureAp'.
+    bool SolveCheapest(Flight f, int target, double rp, double horizonUT, double plannedUT, double captureAp,
+        out Vector3d dv, out double predCapture, string label)
+    {
+        var watch = Stopwatch.StartNew();
+        bool ok = ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, target, rp, double.NaN, horizonUT, plannedUT, captureAp,
+            out dv, out double predRp, out _, out _lastArrivalUT, out predCapture, out _lastConverged);
+        TestContext.Out.WriteLine($"{label}: ok {ok}, dv {dv.magnitude:F3} m/s + capture {predCapture:F1} = {dv.magnitude + predCapture:F1} m/s, "
+            + $"Pe {predRp / 1000:F3} km, arrival {Days(_lastArrivalUT - plannedUT):F2} d from the planned one, converged {_lastConverged}, "
+            + $"solve {watch.Elapsed.TotalMilliseconds:F0} ms");
+        return ok;
+    }
+
+    // The planned pass (planned-first overload) and the nearest pass (no planned UT), each flown
+    // through the propagator: correction + capture, and the arrival periapsis UT.
+    void BothPasses(Flight f, double horizonUT, double plannedUT, double captureAp,
+        out double plannedTotal, out double plannedArrival, out double nearestTotal, out double nearestArrival)
+    {
+        double wanted = _s[_duna].LowOrbitRadius;
+        plannedTotal = nearestTotal = double.PositiveInfinity;
+        plannedArrival = nearestArrival = double.NaN;
+        if (ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, _duna, wanted, double.NaN, horizonUT, plannedUT, out var dvP, out _, out _, out _, out bool convP)
+            && convP)
+        {
+            var a = Arrival(f, dvP, horizonUT, _duna);
+            plannedTotal = dvP.magnitude + CaptureCost(a, captureAp);
+            plannedArrival = a.PeriapsisUT;
+        }
+        if (ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, _duna, wanted, double.NaN, horizonUT, out var dvN, out _, out _))
+        {
+            var a = Arrival(f, dvN, horizonUT, _duna);
+            nearestTotal = dvN.magnitude + CaptureCost(a, captureAp);
+            nearestArrival = a.PeriapsisUT;
+        }
+        TestContext.Out.WriteLine($"  planned pass {plannedTotal:F1} m/s in all, arriving {Days(plannedArrival - plannedUT):F2} d from the planned one; "
+            + $"nearest pass {nearestTotal:F1} m/s, arriving {Days(nearestArrival - plannedUT):F2} d");
+    }
+
+    // The cheapest solve keeps the pass of lower total, and its total is the one flown.
+    void AssertCheapest(Flight f, Vector3d dv, double predCapture, double horizonUT, double captureAp,
+        double plannedTotal, double plannedArrival, double nearestTotal, double nearestArrival)
+    {
+        var a = Arrival(f, dv, horizonUT, _duna);
+        Assert.IsNotNull(a);
+        Assert.AreEqual(_s[_duna].LowOrbitRadius, a.PeriapsisRadius, 1000);
+        double flown = dv.magnitude + CaptureCost(a, captureAp);
+        Assert.AreEqual(flown, dv.magnitude + predCapture, 0.5, "predicted total against the one flown");
+        Assert.AreEqual(Math.Min(plannedTotal, nearestTotal), flown, 0.5, "the cheaper pass");
+        Assert.AreEqual(plannedTotal <= nearestTotal ? plannedArrival : nearestArrival, a.PeriapsisUT, 0.5 * KerbinDay, "the cheaper pass's arrival");
+        Assert.AreEqual(a.PeriapsisUT, _lastArrivalUT, 1e-3);
+    }
+
     // The capture at the arrival periapsis into an orbit of apoapsis 'wantedAp', as the pilot flies it.
     double CaptureCost(Patch arrival, double wantedAp)
     {
@@ -189,6 +241,13 @@ public class ArrivalTargetingTests
         Assert.AreEqual(after.PeriapsisRadius, predRp, 1e-3);
         Assert.AreEqual(after.PeriapsisUT, _lastArrivalUT, 1e-3);
         AssertPlannedPass(plan, f, after, plan.ArrivalUT);
+
+        // Δv first: the pilot's solve keeps the pass that is cheaper in all, here the nearest one.
+        double captureAp = plan.Steps.Single(st => st.Kind == StepKind.Capture).TargetApoapsisRadius;
+        BothPasses(f, Horizon(plan), plan.ArrivalUT, captureAp, out double pT, out double pA, out double nT, out double nA);
+        Assert.Less(nT, pT, "in this case the nearest pass is cheaper");
+        Assert.IsTrue(SolveCheapest(f, _duna, wanted, Horizon(plan), plan.ArrivalUT, captureAp, out var cheapest, out double predCapture, "mid-course, cheapest pass"));
+        AssertCheapest(f, cheapest, predCapture, Horizon(plan), captureAp, pT, pA, nT, nA);
     }
 
     [Test]
@@ -247,6 +306,28 @@ public class ArrivalTargetingTests
         Assert.IsNotNull(after);
         Assert.AreEqual(wanted, after.PeriapsisRadius, 1000);
         AssertPlannedPass(plan, f, after, plan.ArrivalUT);
+
+    }
+
+    // Δv first, the other way round: the vessel leaves Kerbin's SOI 43 m/s too fast (prograde), as
+    // the plans did before the SOI-exit fix. The nearest pass is then an early one with a high v∞,
+    // dear to capture, and the planned pass, met at the first correction, is the cheaper one in all:
+    // the pilot's solve keeps it.
+    [Test]
+    public void FastDeparture_KeepsThePlannedPassWhenCheaper()
+    {
+        var plan = KerbinToDuna();
+        var f = Start(plan);
+        FlyBurnsTo(plan, f, plan.Steps.First(st => st.Kind == StepKind.Correction).UT);
+        f.V += 43 * f.V.normalized;
+        double wanted = _s[_duna].LowOrbitRadius;
+        double captureAp = plan.Steps.Single(st => st.Kind == StepKind.Capture).TargetApoapsisRadius;
+        BothPasses(f, Horizon(plan), plan.ArrivalUT, captureAp, out double pT, out double pA, out double nT, out double nA);
+        Assert.Less(pT, nT, "in this case the planned pass is cheaper");
+        Assert.IsTrue(SolveCheapest(f, _duna, wanted, Horizon(plan), plan.ArrivalUT, captureAp, out var cheapest, out double predCapture, "first correction, cheapest pass"));
+        AssertCheapest(f, cheapest, predCapture, Horizon(plan), captureAp, pT, pA, nT, nA);
+        var after = Arrival(f, cheapest, Horizon(plan), _duna);
+        Assert.LessOrEqual(Math.Abs(_lastArrivalUT - plan.ArrivalUT), PassTolerance(f, _duna, plan.ArrivalUT, after), "the planned pass kept");
     }
 
     // An encounter on another pass, earlier or later than the planned one, is not kept: the solve
@@ -319,8 +400,14 @@ public class ArrivalTargetingTests
             if (st.Kind == StepKind.Correction)
             {
                 n++;
-                bool solved = Solve(f, st.TargetBody, st.TargetPeriapsisRadius, st.TargetInclinationDeg, Horizon(plan), PlannedArrival(plan, st),
-                    out var dv, out double predRp, out _, $"correction {n}");
+                // As the pilot: the cheapest pass in all, with the capture of this leg's target (none
+                // for a body only passed through).
+                var capture = plan.Steps.FirstOrDefault(x => x.Kind == StepKind.Capture && x.LegIndex == st.LegIndex && x.TargetBody == st.TargetBody);
+                double captureAp = capture != null ? capture.TargetApoapsisRadius : double.NaN;
+                double predRp = double.NaN;
+                bool solved = double.IsNaN(st.TargetInclinationDeg)
+                    ? SolveCheapest(f, st.TargetBody, st.TargetPeriapsisRadius, Horizon(plan), PlannedArrival(plan, st), captureAp, out var dv, out _, $"correction {n}")
+                    : Solve(f, st.TargetBody, st.TargetPeriapsisRadius, st.TargetInclinationDeg, Horizon(plan), PlannedArrival(plan, st), out dv, out predRp, out _, $"correction {n}");
                 if (!solved)
                     TestContext.Out.WriteLine(string.Join("; ", log));
                 Assert.IsTrue(solved, $"correction {n}");
