@@ -18,8 +18,8 @@ namespace K2D2.Transfer
     {
         public int Version = 1;
         public string VesselId;
-        public string Kind = "transfer"; // later sub-projects add their own kinds
-        public TransferPlan Plan;
+        public string Kind = KindTransfer; // later sub-projects add their own kinds
+        public TransferPlan Plan;          // null for a rendezvous (it always re-plans on resume)
         public TransferPhase Phase;
         public int StepIndex;            // the next step to fly; the steps before it are done
         public double SavedUT;
@@ -35,6 +35,23 @@ namespace K2D2.Transfer
         public string FromBodyName, ToBodyName;
         // The name of each body index the plan uses, as it was when the plan was saved.
         public List<string> BodyNames = new List<string>();
+
+        // Kind "rendezvous" (sub-project 4.3) only; null for a transfer. Optional in the file.
+        public SavedRendezvous Rendezvous;
+
+        public const string KindTransfer = "transfer", KindRendezvous = "rendezvous";
+    }
+
+    // What a rendezvous needs to start again: its target, what was asked, and how far it got. The
+    // steps are not kept: a resume always plans again from the actual states.
+    public class SavedRendezvous
+    {
+        public string TargetId;       // the target vessel's GUID
+        public string TargetName;
+        public string Mode;           // RvMode's name
+        public string Phase;          // RvPhase's name when saved
+        public string OurPortId;      // the docking pair the player picked; null = automatic
+        public string TargetPortId;
     }
 
     public enum ResumeVerdict { Resume, Replan, Mismatch }
@@ -61,6 +78,10 @@ namespace K2D2.Transfer
 
         public static string FileName(string vesselId) => $"plan_{vesselId}.json";
 
+        // One file per vessel and kind: a rendezvous never overwrites a transfer's plan.
+        public static string FileName(string vesselId, string kind) =>
+            kind == null || kind == SavedPlan.KindTransfer ? FileName(vesselId) : $"{kind}_{vesselId}.json";
+
         // ---------- JSON ----------
 
         public static string ToJson(SavedPlan p)
@@ -82,6 +103,16 @@ namespace K2D2.Transfer
                 ["bodyNames"] = new JArray((p.BodyNames ?? new List<string>()).Cast<object>().ToArray()),
                 ["plan"] = p.Plan == null ? JValue.CreateNull() : PlanJson(p.Plan),
             };
+            if (p.Rendezvous != null)
+                o["rendezvous"] = new JObject
+                {
+                    ["targetId"] = p.Rendezvous.TargetId,
+                    ["targetName"] = p.Rendezvous.TargetName,
+                    ["mode"] = p.Rendezvous.Mode,
+                    ["phase"] = p.Rendezvous.Phase,
+                    ["ourPortId"] = p.Rendezvous.OurPortId,
+                    ["targetPortId"] = p.Rendezvous.TargetPortId,
+                };
             return o.ToString(Formatting.Indented);
         }
 
@@ -190,11 +221,31 @@ namespace K2D2.Transfer
                     ToBodyName = Str(o, "toBody", allowNull: false),
                     BodyNames = Arr(o, "bodyNames").Select((t, i) => StrValue(t, $"bodyNames[{i}]")).ToList(),
                 };
+                if (o.ContainsKey("rendezvous"))
+                {
+                    var r = Obj(Field(o, "rendezvous"), "rendezvous");
+                    saved.Rendezvous = new SavedRendezvous
+                    {
+                        TargetId = Str(r, "targetId", allowNull: false),
+                        TargetName = Str(r, "targetName", allowNull: true),
+                        Mode = Str(r, "mode", allowNull: false),
+                        Phase = Str(r, "phase", allowNull: false),
+                        OurPortId = Str(r, "ourPortId", allowNull: true),
+                        TargetPortId = Str(r, "targetPortId", allowNull: true),
+                    };
+                }
+                bool rendezvous = saved.Kind == SavedPlan.KindRendezvous;
+                if (rendezvous && saved.Rendezvous == null)
+                    throw new FormatException("missing field 'rendezvous'");
                 var planToken = Field(o, "plan");
                 if (planToken.Type == JTokenType.Null)
-                    throw new FormatException("the field 'plan' is null");
-                saved.Plan = ReadPlan(Obj(planToken, "plan"));
-                if (saved.StepIndex < 0 || saved.StepIndex > saved.Plan.Steps.Count)
+                {
+                    if (!rendezvous)
+                        throw new FormatException("the field 'plan' is null");
+                }
+                else
+                    saved.Plan = ReadPlan(Obj(planToken, "plan"));
+                if (saved.Plan != null && (saved.StepIndex < 0 || saved.StepIndex > saved.Plan.Steps.Count))
                     throw new FormatException($"the field 'stepIndex' ({saved.StepIndex}) is outside the plan's {saved.Plan.Steps.Count} step(s)");
                 p = saved;
                 return true;
