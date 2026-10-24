@@ -130,6 +130,9 @@ namespace K2D2.Transfer
             public double Cost;
             public double ArrivalUT;
             public Target FirstTarget;
+            public bool DirectDescent;       // straight at the moon from the first descent level
+            public PlanStep EntryCorrection; // that leg's correction on entering the intermediate SOI
+            public PlanStep FinalCapture;    // the capture at the target, when there is one
         }
 
         sealed class Built
@@ -153,6 +156,8 @@ namespace K2D2.Transfer
             const double PlaneTurnExplainedDeg = 10;
             const double ExcessTolerance = 0.05;
             const int MaxExitIterations = 5;
+            const int PhaseShifts = 8; // arrival phases tried over one moon period, direct descents
+            const double PhaseShiftMinCorrection = 20; // m/s: below it the moon's phase is already fine
             const double ExitTolerance = 1; // m/s, velocity at the SOI exit against Lambert
             const string Solved = "solved in flight, skipped under 1 m/s";
 

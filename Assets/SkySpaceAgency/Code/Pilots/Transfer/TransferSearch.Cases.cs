@@ -27,6 +27,8 @@ namespace K2D2.Transfer
                 return targets;
             }
 
+            static bool SameRadius(double a, double b) => (double.IsNaN(a) && double.IsNaN(b)) || Math.Abs(a - b) < 1;
+
             string FlightRefusal(Flight flight) => $"The departure from {S[From].Name} cannot be flown as planned: {flight.Reason}.";
 
             // ---------------------------------------------------------------- child → parent / ancestor
@@ -260,7 +262,7 @@ namespace K2D2.Transfer
 
                 var plan = NewPlan();
                 plan.Steps.Add(Burn(StepKind.Injection, From, t, dv, text, 0));
-                var arr = BuildArrival(0, (v2 - vC).magnitude, t + tof, 0);
+                var arr = ChooseArrival(v2 - vC, t + tof, 0, true, From, rV, v1, t);
                 plan.Steps.AddRange(arr.Steps);
                 plan.Warnings.AddRange(arr.Warnings);
                 double latest = entry != null ? entry.EndUT : t + tof;
@@ -329,6 +331,30 @@ namespace K2D2.Transfer
                     return Refuse(double.IsInfinity(MaxTrip) ? $"No transfer found to {S[To].Name}." : NoWindow);
                 Report(0.8f);
                 var (best, cand) = Cheapest(candidates, c => BuildPorkchop(c.t, c.tof, c.prograde));
+                // A direct descent into a moon: the moon's phase at the arrival sets the correction and
+                // the capture. Moving the arrival by fractions of the moon's period costs almost nothing
+                // on the cruise: keep the cheapest phase.
+                var entryCorrection = best.Plan.Ok && Down.Count > 1
+                    ? best.Plan.Steps.FirstOrDefault(st => st.Kind == StepKind.Correction && st.Body == Down[0])
+                    : null;
+                if (entryCorrection != null && entryCorrection.DeltaVMagnitude > PhaseShiftMinCorrection)
+                {
+                    double moonPeriod = S.OrbitalPeriod(Down[1]);
+                    for (int i = -PhaseShifts / 2; i < PhaseShifts / 2; i++)
+                    {
+                        if (i == 0)
+                            continue;
+                        var shifted = (cand.t, cand.tof + i * moonPeriod / PhaseShifts, cand.prograde);
+                        var b = BuildPorkchop(shifted.t, shifted.Item2, shifted.prograde);
+                        Trace?.Invoke(Inv($"[Transfer] arrival moved {i}/{PhaseShifts} of a {S[Down[1]].Name} period: ") +
+                            (b.Plan.Ok ? Inv($"{b.Plan.TotalDeltaV:F1} m/s") : $"refused ({b.Plan.Refusal})"));
+                        if (b.Cost < best.Cost)
+                        {
+                            best = b;
+                            cand = shifted;
+                        }
+                    }
+                }
                 Report(0.9f);
                 best = ResolveDeparture(best, shift =>
                     BuildPorkchop(cand.t + shift * ShiftUnit(), cand.tof - shift * ShiftUnit(), cand.prograde));
@@ -410,22 +436,24 @@ namespace K2D2.Transfer
                 }
                 if (!flight.Ok && !crossingOnly)
                     return FlightFailure(FlightRefusal(flight));
-                var arr = BuildArrival(0, wa.magnitude, t + tof, k);
-
                 // Lambert aims at the arrival body's centre: aim the departure at the leg's arrival
                 // periapsis instead, by the correction that would be needed right after the SOI exit.
                 // Otherwise the corrections, each under the 1 m/s skip threshold, are all skipped and
-                // the vessel arrives on a centre-aimed path.
-                double aimPe = arr.FirstTarget.Pe, predicted = double.NaN;
-                if (flight.Ok && !double.IsNaN(aimPe))
+                // the vessel arrives on a centre-aimed path. NaN when that solve fails.
+                double AimAt(Target target)
                 {
+                    double predictedPe = double.NaN;
+                    if (!flight.Ok || double.IsNaN(target.Pe))
+                        return predictedPe;
                     double arrive = t + tof;
                     double horizon = arrive + 0.25 * (arrive - flight.AfterUT);
                     for (int iter = 0; iter < 2; iter++)
                     {
-                        if (!ArrivalTargeting.Solve(S, Ancestor, flight.AfterR, flight.AfterV, flight.AfterUT, cT, aimPe,
-                                arr.FirstTarget.Inc, horizon, arrive, out var dvAim, out predicted, out _)
-                            || dvAim.magnitude < 1e-3)
+                        if (!ArrivalTargeting.Solve(S, Ancestor, flight.AfterR, flight.AfterV, flight.AfterUT, cT, target.Pe,
+                                target.Inc, horizon, arrive, out var dvAim, out double rp, out _))
+                            return double.NaN;
+                        predictedPe = rp;
+                        if (dvAim.magnitude < 1e-3)
                             break;
                         var aimed = Leave(k, aim + dvAim, t);
                         if (!aimed.Ok)
@@ -437,7 +465,24 @@ namespace K2D2.Transfer
                         leg = aimed;
                         flight = aimedFlight;
                     }
+                    return predictedPe;
                 }
+
+                // Aim with the estimate's descent, then choose the descent on budgeted costs (the
+                // direct one flown from the aimed cruise to the intermediate SOI), and aim again when the
+                // choice changed the leg's target.
+                var first = BuildArrival(0, wa.magnitude, t + tof, k);
+                double predicted = AimAt(first.FirstTarget);
+                var arr = flight.Ok
+                    ? ChooseArrival(wa, t + tof, k, true, Ancestor, flight.AfterR, flight.AfterV, flight.AfterUT)
+                    : first;
+                if (arr.FirstTarget.Body != first.FirstTarget.Body || !SameRadius(arr.FirstTarget.Pe, first.FirstTarget.Pe))
+                {
+                    predicted = AimAt(arr.FirstTarget);
+                    if (arr.DirectDescent)
+                        BudgetDirect(arr, Ancestor, flight.AfterR, flight.AfterV, flight.AfterUT, t + tof);
+                }
+                double aimPe = arr.FirstTarget.Pe;
                 var built = new Built { Unplanned = flight.Unplanned, UnplannedUT = flight.UnplannedUT };
                 Trace?.Invoke(Inv($"[Transfer] SOI exit velocity mismatch {mismatch:F2} m/s, aimed excess {aim.magnitude:F1} m/s (Lambert {wd.magnitude:F1}), arrival periapsis predicted {predicted:F0} m for {aimPe:F0} m"));
                 double exit = crossingOnly ? leg.ExitUT : flight.TopExitUT;
@@ -446,6 +491,8 @@ namespace K2D2.Transfer
                 plan.Steps.AddRange(flight.Steps);
                 plan.Steps.AddRange(arr.Steps);
                 plan.Warnings.AddRange(arr.Warnings);
+                if (flight.Ok && !double.IsNaN(aimPe) && double.IsNaN(predicted))
+                    plan.Warnings.Add($"Departure could not be aimed at the arrival periapsis at {S[cT].Name}: the corrections will do it.");
                 var arrival = S[cT];
                 double entry = t + tof - HyperbolicTime(arrival.LowOrbitRadius, Math.Max(1, wa.magnitude), arrival.Mu, arrival.Soi);
                 AddCorrections(plan.Steps, Ancestor, k, arr.FirstTarget, exit, leg.FirstBurnUT, t + tof, entry, arr.Notes);
