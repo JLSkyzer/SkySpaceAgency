@@ -447,13 +447,72 @@ public class TransferFlightTests
     {
         var v = new Vector3d(0, 2000, 0);
         var moved = v + new Vector3d(0, 50, 0);
-        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, false, false, v, moved), "still before its time");
-        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(false, false, false, v, moved));
-        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(false, false, true, v, v));
-        Assert.AreEqual(NodeState.RemovedUnflown, TransferFlight.NodeFlown(false, false, false, v, v + new Vector3d(0.1, 0, 0)));
-        // Flown by hand, the node left on the plan: its time passed and the velocity moved.
-        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(true, true, false, v, moved));
-        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, true, false, v, v + new Vector3d(0.1, 0, 0)), "time passed, not flown yet");
+        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, false, 60, 50, false, v, moved), "still before its time");
+        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(false, false, 0, 50, false, v, moved), "removed after the burn (the Node tab)");
+        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(false, false, 0, 50, true, v, v));
+        Assert.AreEqual(NodeState.RemovedUnflown, TransferFlight.NodeFlown(false, false, 0, 50, false, v, v + new Vector3d(0.1, 0, 0)));
+        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, true, 60, 50, false, v, v + new Vector3d(0.1, 0, 0)), "time passed, not flown yet");
+    }
+
+    // A node left on the plan: the player cuts the throttle halfway (to stage or re-aim), or another
+    // pilot burns a little after the node's time. Neither is the node flown.
+    [Test]
+    public void NodeFlown_ThrottleCutMidBurn_NotFlown()
+    {
+        var v = new Vector3d(0, 2000, 0);
+        var half = v + new Vector3d(0, 25, 0); // 25 of 50 m/s
+        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, true, 60, 50, false, v, half), "half the node's Δv");
+        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, true, 60, 50, false, v, v + new Vector3d(0, 1, 0)), "another pilot's small burn");
+    }
+
+    [Test]
+    public void NodeFlown_FullBurnLeftOnThePlan_FlownOnceTheEnginesStayOff()
+    {
+        var v = new Vector3d(0, 2000, 0);
+        var full = v + new Vector3d(0, 48, 0); // 96 % of 50 m/s
+        Assert.AreEqual(NodeState.Waiting, TransferFlight.NodeFlown(true, true, 2, 50, false, v, full), "engines off for 2 s only");
+        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(true, true, TransferFlight.NodeEnginesOffSeconds, 50, false, v, full));
+        Assert.AreEqual(NodeState.Flown, TransferFlight.NodeFlown(true, true, 10, 50, true, v, v), "left the SOI");
+    }
+
+    // A null read (no vessel for a frame, a new piece without its control owner yet) is waited out
+    // for 30 frames and 1 s, the longer of the two; then the vessel counts as changed.
+    [Test]
+    public void VesselWatch_WaitsOutTransientReads()
+    {
+        var w = new VesselWatch();
+        const string ours = "A", part = "P";
+        Assert.AreEqual(VesselVerdict.Same, w.Decide(ours, part, ours, part, 0));
+        Assert.AreEqual(VesselVerdict.Wait, w.Decide(null, null, ours, part, 0.01), "one null frame");
+        Assert.AreEqual(VesselVerdict.Same, w.Decide(ours, null, ours, part, 0.02), "back, even without the control part");
+
+        // A new piece whose control owner arrives a few frames later: it takes the plan over.
+        Assert.AreEqual(VesselVerdict.Wait, w.Decide("B", null, ours, part, 1.0));
+        Assert.AreEqual(VesselVerdict.TakeOver, w.Decide("B", part, ours, part, 1.1));
+
+        // Another vessel for good: Changed only after 30 frames and 1 s.
+        w.Reset();
+        double t = 10;
+        for (int i = 0; i < VesselWatch.MinFrames - 1; i++, t += 0.1)
+            Assert.AreEqual(VesselVerdict.Wait, w.Decide("C", "Q", ours, part, t), $"frame {i}");
+        Assert.AreEqual(VesselVerdict.Changed, w.Decide("C", "Q", ours, part, t));
+
+        // 30 fast frames are not enough before 1 s.
+        w.Reset();
+        for (int i = 0; i < 40; i++)
+            Assert.AreEqual(VesselVerdict.Wait, w.Decide(null, null, ours, part, 20 + i * 0.01));
+        Assert.AreEqual(VesselVerdict.Changed, w.Decide(null, null, ours, part, 21.0));
+    }
+
+    [Test]
+    public void Next_NoPlannedTime_MissedAtOnce()
+    {
+        var plan = HandPlan();
+        plan.Steps.RemoveAt(5);
+        plan.ArrivalUT = double.NaN;
+        var d = TransferFlight.Next(plan, 5, _kerbol, _duna, 10, 100, double.NaN);
+        Assert.AreEqual(FlightAction.SoiMissed, d.Action, "no limit that moves with now");
+        Assert.IsTrue(double.IsNaN(d.WarpUntilUT));
     }
 
     // ---------------------------------------------------------------- resume and saving

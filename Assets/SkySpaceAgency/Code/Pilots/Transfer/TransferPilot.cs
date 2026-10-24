@@ -109,7 +109,8 @@ namespace K2D2.Transfer
                 return;
             // A staging during a burn may send a vessel change: the same vessel goes on, and so does the
             // piece of a split that holds our control part (it takes the plan over).
-            if (Landing.LandingPilot.reset_by_vessel_change && isRunning && KeepVessel("vessel change message"))
+            // A read still unsure (no id or no control part yet) waits: Fly decides a moment later.
+            if (Landing.LandingPilot.reset_by_vessel_change && isRunning && CheckVessel("vessel change message") != VesselVerdict.Changed)
                 return;
             if (isRunning)
             {
@@ -359,6 +360,8 @@ namespace K2D2.Transfer
             PrepareOnly = prepareOnly;
             ResetFlight(snap.Body);
             control_part = ControlPartOf(ActiveVessel());
+            vessel_watch.Reset();
+            vessel_wait_logged = false;
             saved = null;
             saved_check = null;
             saved_error = null;
@@ -745,31 +748,48 @@ namespace K2D2.Transfer
 
         // The control part of our vessel, kept up to date while it is active.
         string control_part;
+        readonly VesselWatch vessel_watch = new VesselWatch();
+        bool vessel_wait_logged;
 
-        // True when the active vessel is ours, or a new vessel (a split) that holds our control part:
-        // that one takes the plan over, saved under its id (the old file is deleted).
-        bool KeepVessel(string why)
+        // Same: the active vessel is ours. TakeOver: a new vessel (a split) holds our control part and
+        // takes the plan over, saved under its id (the old file is deleted). Wait: the read is unsure or
+        // the vessel differs, for less than VesselWatch's delay. Changed: another vessel, for good.
+        VesselVerdict CheckVessel(string why)
         {
             var vessel = ActiveVessel();
             string now = IdOf(vessel);
             string part = ControlPartOf(vessel);
-            if (now != null && now == vessel_id)
+            var verdict = vessel_watch.Decide(now, part, vessel_id, control_part, UnityEngine.Time.realtimeSinceStartupAsDouble);
+            switch (verdict)
             {
-                if (part != null)
-                    control_part = part;
-                return true;
+                case VesselVerdict.Same:
+                    if (part != null)
+                        control_part = part;
+                    if (vessel_wait_logged)
+                        logger.LogInfo($"[Transfer] the active vessel reads as ours again ({vessel_id})");
+                    vessel_wait_logged = false;
+                    return verdict;
+                case VesselVerdict.Wait:
+                    if (!vessel_wait_logged)
+                    {
+                        vessel_wait_logged = true;
+                        logger.LogInfo($"[Transfer] active vessel unsure ({why}): {now ?? "no id"}, control part {part ?? "none"} " +
+                            $"(ours {vessel_id}, {control_part ?? "unknown"}): waiting");
+                    }
+                    return verdict;
             }
-            bool takeover = now != null && part != null && part == control_part;
+            vessel_wait_logged = false;
             logger.LogInfo($"[Transfer] active vessel changed ({why}): {vessel_id} -> {now ?? "none"}, control part {control_part ?? "unknown"} " +
-                $"vs {part ?? "none"} -> {(takeover ? "the new vessel takes the plan over" : "the transfer stops")}");
-            if (!takeover)
-                return false;
-            string old = vessel_id;
-            vessel_id = now;
-            Save();
-            DeleteSaved(old);
-            logger.LogInfo($"[Transfer] plan moved from vessel {old} to vessel {now}");
-            return true;
+                $"vs {part ?? "none"} -> {(verdict == VesselVerdict.TakeOver ? "the new vessel takes the plan over" : "the transfer stops")}");
+            if (verdict == VesselVerdict.TakeOver)
+            {
+                string old = vessel_id;
+                vessel_id = now;
+                Save();
+                DeleteSaved(old);
+                logger.LogInfo($"[Transfer] plan moved from vessel {old} to vessel {now}");
+            }
+            return verdict;
         }
 
         static int IndexOfName(BodySystem s, string name)

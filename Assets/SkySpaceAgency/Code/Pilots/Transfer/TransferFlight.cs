@@ -47,6 +47,48 @@ namespace K2D2.Transfer
 
     public enum NodeState { Waiting, Flown, RemovedUnflown }
 
+    public enum VesselVerdict { Same, Wait, TakeOver, Changed }
+
+    // Whether the active vessel is still the transfer's. A read with no id or no control part, or a
+    // vessel that differs, is waited out for MinFrames frames and MinSeconds of real time (the
+    // longer of the two) before the pilot stops: a staging can leave one frame without a vessel, or
+    // a new piece without its control owner yet. Pure, tested.
+    public sealed class VesselWatch
+    {
+        public const int MinFrames = 30;
+        public const double MinSeconds = 1;
+
+        int frames;
+        double since = double.NaN;
+
+        public void Reset()
+        {
+            frames = 0;
+            since = double.NaN;
+        }
+
+        public VesselVerdict Decide(string activeId, string activeControlPart, string ourId, string ourControlPart, double realTime)
+        {
+            if (activeId != null && activeId == ourId)
+            {
+                Reset();
+                return VesselVerdict.Same;
+            }
+            if (activeId != null && activeControlPart != null && ourControlPart != null && activeControlPart == ourControlPart)
+            {
+                Reset();
+                return VesselVerdict.TakeOver;
+            }
+            if (double.IsNaN(since) || realTime < since)
+                since = realTime;
+            frames++;
+            if (frames < MinFrames || realTime - since < MinSeconds)
+                return VesselVerdict.Wait;
+            Reset();
+            return VesselVerdict.Changed;
+        }
+    }
+
     // Pure decisions of the transfer pilot (TransferPilot is the game glue): the phase table, when a
     // step falls due, the correction skip rule, the leg re-plan trigger, the plan update after a
     // correction picks its pass, the resume decision, and the texts for the player and the log.
@@ -70,6 +112,9 @@ namespace K2D2.Transfer
         public const double LongBurnShare = 0.10;
         // Prepare only: a velocity off the coast by more than this (m/s) means the node was flown.
         public const double NodeFlownSpeed = 0.5;
+        // Prepare only, a node left on the plan: flown once this share of its Δv is measured and the
+        // engines have been off this long (s of real time).
+        public const double NodeFlownShare = 0.8, NodeEnginesOffSeconds = 5;
         // The alignment the warp stop counts on before a burn: a half turn at BurnWarp's default rate.
         public const double AssumedTurnDeg = 180;
         // An SOI change the plan needs may come this late after its planned time, when none is
@@ -172,7 +217,11 @@ namespace K2D2.Transfer
         // margin (the pilot predicts again there), then the change is missed.
         static FlightDecision Overdue(TransferPlan plan, TransferPhase phase, double now, double plannedUT, int body, bool exit)
         {
-            double limit = (double.IsNaN(plannedUT) ? now : plannedUT) + SoiLateSeconds(plan, plannedUT);
+            // Without a planned time there is nothing to wait for (a limit that moves with now would
+            // wait forever): the change counts as missed.
+            if (double.IsNaN(plannedUT) || double.IsInfinity(plannedUT))
+                return new FlightDecision { Action = FlightAction.SoiMissed, Phase = phase, MissedBody = body, MissedExit = exit, WarpUntilUT = double.NaN };
+            double limit = plannedUT + SoiLateSeconds(plan, plannedUT);
             if (now < limit)
                 return new FlightDecision { Action = FlightAction.Warp, Phase = phase, WarpUntilUT = limit };
             return new FlightDecision { Action = FlightAction.SoiMissed, Phase = phase, MissedBody = body, MissedExit = exit, WarpUntilUT = limit };
@@ -450,14 +499,21 @@ namespace K2D2.Transfer
 
         // Prepare only: has the player flown the node? Flown once the node is gone and the vessel's
         // velocity left the coast it was on when the node was made (or it changed SOI).
-        // Also flown when the node is still there but its time has passed and the velocity moved (the
-        // player flew it by hand and left the node).
-        public static NodeState NodeFlown(bool nodeOnPlan, bool nodeTimePassed, bool bodyChanged, Vector3d expectedVelocity, Vector3d velocity)
+        // Also flown when the node is still there (the player flew it by hand and left it): its time has
+        // passed, the engines have been off for NodeEnginesOffSeconds, and the velocity moved by at
+        // least NodeFlownShare of the node's Δv. A throttle cut in the middle of the burn (to stage or
+        // re-aim) is not the end of it.
+        public static NodeState NodeFlown(bool nodeOnPlan, bool nodeTimePassed, double enginesOffSeconds, double nodeDeltaV,
+            bool bodyChanged, Vector3d expectedVelocity, Vector3d velocity)
         {
-            bool moved = bodyChanged || (velocity - expectedVelocity).magnitude > NodeFlownSpeed;
+            double measured = (velocity - expectedVelocity).magnitude;
             if (nodeOnPlan)
-                return nodeTimePassed && moved ? NodeState.Flown : NodeState.Waiting;
-            return moved ? NodeState.Flown : NodeState.RemovedUnflown;
+            {
+                bool flown = nodeTimePassed && enginesOffSeconds >= NodeEnginesOffSeconds
+                    && (bodyChanged || measured >= NodeFlownShare * nodeDeltaV) && (bodyChanged || measured > NodeFlownSpeed);
+                return flown ? NodeState.Flown : NodeState.Waiting;
+            }
+            return bodyChanged || measured > NodeFlownSpeed ? NodeState.Flown : NodeState.RemovedUnflown;
         }
 
         // The capture holds: a closed orbit inside the body's SOI.

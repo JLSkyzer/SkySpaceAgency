@@ -39,6 +39,9 @@ namespace K2D2.Transfer
         // The burn of StepIndex has ignited (saved: a cut planned-vector burn is planned again on resume).
         bool burn_ignited;
         int solve_retries;
+        double solve_burn_seconds;
+        // Prepare only: since when (real time) the engines are off; NaN while they push.
+        double engines_off_since = double.NaN;
 
         // The SOI change ahead: ours (PatchedPropagator) and the game's patch, cross-checked.
         double soi_ours = double.NaN, soi_game = double.NaN;
@@ -75,11 +78,19 @@ namespace K2D2.Transfer
             node_id = Guid.Empty;
             burn_ignited = false;
             solve_retries = 0;
+            solve_burn_seconds = 0;
+            engines_off_since = double.NaN;
         }
 
         void Fly()
         {
-            if (!KeepVessel("check"))
+            var vesselVerdict = CheckVessel("check");
+            if (vesselVerdict == VesselVerdict.Wait)
+            {
+                Status = "Waiting for the vessel...";
+                return;
+            }
+            if (vesselVerdict == VesselVerdict.Changed)
             {
                 Save();
                 isRunning = false;
@@ -202,6 +213,8 @@ namespace K2D2.Transfer
         {
             burn_ignited = false;
             solve_retries = 0;
+            solve_burn_seconds = 0;
+            engines_off_since = double.NaN;
             StepIndex++;
             node_waiting = node_pending = false;
             Save();
@@ -457,7 +470,8 @@ namespace K2D2.Transfer
             var step = plan.Steps[i];
             int n = TransferFlight.CorrectionNumber(plan, i);
             double mu = MuOf(snap.Body);
-            double burnUT = Math.Max(step.UT, snap.UT + TransferFlight.BurnLead(0));
+            // A retry after a slow solve leaves room for the whole burn (its half before the centre).
+            double burnUT = Math.Max(step.UT, snap.UT + TransferFlight.BurnLead(solve_burn_seconds));
             KeplerPropagator.Propagate(snap.R, snap.V, mu, burnUT - snap.UT, out var rb, out var vb);
             if (step.TargetBody < 0 || double.IsNaN(step.TargetPeriapsisRadius))
             {
@@ -511,6 +525,7 @@ namespace K2D2.Transfer
             double nowUT = GeneralTools.Current_UT;
             if (startUT < nowUT + BurnWarp.MinLead)
             {
+                solve_burn_seconds = double.IsNaN(seconds) ? 0 : seconds;
                 // The solve took too long: its burn time has (nearly) passed. Solve again from now.
                 if (solve_retries++ < 2)
                 {
@@ -726,7 +741,13 @@ namespace K2D2.Transfer
             {
                 // Unknown: assume not thrusting.
             }
-            var state = TransferFlight.NodeFlown(onPlan, now > node_ut && !thrusting, changed, expected, v);
+            double real = Time.realtimeSinceStartupAsDouble;
+            if (thrusting)
+                engines_off_since = double.NaN;
+            else if (double.IsNaN(engines_off_since))
+                engines_off_since = real;
+            double offSeconds = double.IsNaN(engines_off_since) ? 0 : real - engines_off_since;
+            var state = TransferFlight.NodeFlown(onPlan, now > node_ut, offSeconds, node_dv, changed, expected, v);
             switch (state)
             {
                 case NodeState.Waiting:
@@ -876,11 +897,11 @@ namespace K2D2.Transfer
             int final = plan.Request?.ToBody ?? -1;
             string name = d.MissedBody >= 0 && d.MissedBody < System.Count ? System[d.MissedBody].Name : "the next body";
             if (!d.MissedExit && d.MissedBody == final)
-                Fail($"the {name} SOI was not reached by UT {d.WarpUntilUT:F0}", captureFailed: true);
+                Fail($"the {name} SOI was not reached{By(d.WarpUntilUT)}", captureFailed: true);
             else
                 Fail(d.MissedExit
-                    ? $"the planned SOI exit from {name} did not happen by UT {d.WarpUntilUT:F0}"
-                    : $"the planned SOI change into {name} did not happen by UT {d.WarpUntilUT:F0}");
+                    ? $"the planned SOI exit from {name} did not happen{By(d.WarpUntilUT)}"
+                    : $"the planned SOI change into {name} did not happen{By(d.WarpUntilUT)}");
         }
 
         void Fail(string reason, bool captureFailed = false)
@@ -906,6 +927,8 @@ namespace K2D2.Transfer
             Status = text;
             checked_vessel = null; // offer the saved plan again
         }
+
+        static string By(double ut) => double.IsNaN(ut) ? " (the plan gives no time for it)" : $" by UT {ut:F0}";
 
         static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
 
