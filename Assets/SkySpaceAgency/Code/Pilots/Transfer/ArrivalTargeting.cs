@@ -70,7 +70,8 @@ namespace K2D2.Transfer
         // arrival) are solved, and the one of lower total is returned: the correction's Δv plus, when
         // captureApoapsisRadius is given, the capture at the predicted periapsis from the predicted v∞
         // into an orbit of that apoapsis (Hyperbola.CaptureDeltaV); NaN: an encounter, no capture, so
-        // the correction alone. predictedArrivalUT is the chosen pass's arrival periapsis,
+        // the correction alone. Within a small margin a converged pass beats a non-converged cheaper
+        // one (PreferPass). predictedArrivalUT is the chosen pass's arrival periapsis,
         // predictedCaptureDeltaV its capture (0 for an encounter), converged whether its aim was met.
         public static bool Solve(BodySystem s, int body, Vector3d r, Vector3d v, double ut, int targetBody,
             double wantedPeriapsisRadius, double wantedInclinationDeg, double horizonUT, double plannedArrivalUT,
@@ -102,7 +103,7 @@ namespace K2D2.Transfer
                     continue;
                 double capture = double.IsNaN(captureApoapsisRadius) ? 0 : CaptureCost(c3, rp, captureApoapsisRadius, mu);
                 double total = dv.magnitude + capture;
-                if (!(total < best))
+                if (found ? !PreferPass(total, ok, best, converged) : !(total < double.PositiveInfinity))
                     continue;
                 best = total;
                 found = true;
@@ -114,6 +115,26 @@ namespace K2D2.Transfer
                 converged = ok;
             }
             return found;
+        }
+
+        // Two passes closer than this in total (m/s: the larger of 2 m/s and 2 % of the cheaper) cost
+        // the same for the choice: a converged one is then preferred to one whose aim was not met.
+        public const double CloseCostShare = 0.02, CloseCostFloor = 2;
+
+        // Whether a pass of cost 'total' (converged or not) replaces the best one so far. Δv first, but
+        // a converged pass wins against a non-converged one within the close margin, both ways.
+        public static bool PreferPass(double total, bool converged, double bestTotal, bool bestConverged)
+        {
+            if (double.IsNaN(total))
+                return false;
+            if (double.IsNaN(bestTotal) || double.IsPositiveInfinity(bestTotal))
+                return true;
+            double margin = Math.Max(CloseCostFloor, CloseCostShare * Math.Min(total, bestTotal));
+            if (converged && !bestConverged)
+                return total < bestTotal + margin;
+            if (!converged && bestConverged)
+                return total < bestTotal - margin;
+            return total < bestTotal;
         }
 
         // The capture burn at periapsis rp, arriving with c3 = v∞² (negative when already bound).

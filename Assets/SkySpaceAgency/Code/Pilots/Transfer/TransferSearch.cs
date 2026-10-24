@@ -62,6 +62,26 @@ namespace K2D2.Transfer
             return plan;
         }
 
+        // The times of a leg's three corrections: shortly after the SOI exit, at mid-course, on the
+        // approach (before latestUT, the arrival or the SOI entry of a descent). Null when the leg has
+        // no time for them. The pilot uses it again after a re-plan moves the arrival.
+        public static double[] CorrectionTimes(double exitUT, double departureUT, double arrivalUT, double latestUT)
+        {
+            double trip = arrivalUT - departureUT;
+            double end = Math.Min(arrivalUT, latestUT);
+            if (!(trip > 0) || !(end > exitUT))
+                return null;
+            double c1 = exitUT + 0.01 * trip, c2 = departureUT + 0.5 * trip, c3 = Math.Min(departureUT + 0.9 * trip, end - 0.01 * trip);
+            if (!(exitUT < c1 && c1 < c2 && c2 < c3 && c3 < end))
+            {
+                double span = end - exitUT;
+                c1 = exitUT + 0.05 * span;
+                c2 = exitUT + 0.5 * span;
+                c3 = exitUT + 0.9 * span;
+            }
+            return new[] { c1, c2, c3 };
+        }
+
         // The orbit a leg aims at.
         struct Target
         {
@@ -253,18 +273,10 @@ namespace K2D2.Transfer
             void AddCorrections(List<PlanStep> steps, int body, int leg, Target aim, double exitUT, double departureUT,
                 double arrivalUT, double latestUT, List<string> notes)
             {
-                double trip = arrivalUT - departureUT;
-                double end = Math.Min(arrivalUT, latestUT);
-                if (!(trip > 0) || !(end > exitUT))
+                var times = CorrectionTimes(exitUT, departureUT, arrivalUT, latestUT);
+                if (times == null)
                     return;
-                double c1 = exitUT + 0.01 * trip, c2 = departureUT + 0.5 * trip, c3 = Math.Min(departureUT + 0.9 * trip, end - 0.01 * trip);
-                if (!(exitUT < c1 && c1 < c2 && c2 < c3 && c3 < end))
-                {
-                    double span = end - exitUT;
-                    c1 = exitUT + 0.05 * span;
-                    c2 = exitUT + 0.5 * span;
-                    c3 = exitUT + 0.9 * span;
-                }
+                double c1 = times[0], c2 = times[1], c3 = times[2];
                 string what = Describe(aim);
                 string approach = $"Approach correction: sets {what}, the arrival plane included ({Solved})";
                 if (notes != null && notes.Count > 0)

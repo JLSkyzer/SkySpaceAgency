@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Transfer pilot** (transfer to a body, sub-project 4.1, part 1 of 2; 2026-10-24, not yet flown in game). The pilot that the Transfer tab (next) drives. It has no tab of its own yet.
+  - **Plan**: the transfer search runs on a worker thread from the vessel's actual orbit; the result is checked against the Δv of each stage.
+  - **Flight**: warp to the window, then each step of the plan: orbit or plane change, injection toward the departure asymptote, SOI exit, three corrections solved in flight toward the arrival periapsis, and the capture at the periapsis. The warp stops before every burn and every SOI change. A correction under 1 m/s is skipped only when the path already meets the wanted periapsis within 1 km. When a correction picks another arrival pass, the capture and the later steps move with it.
+  - **Staging during the transfer's burns**: an engine running dry for 0.5 s stages, unless the next stage would drop a docking port, a parachute or the command part. Then the burn stops and asks the player to stage. Other tabs never stage by themselves.
+  - **Prepare only**: one game node at a time for the next step, no warp; the next step is planned from the orbit reached once the player has flown the node and removed it.
+  - **Resume**: the plan is saved per vessel in `mods/SkySpaceAgency/plans/` at every phase change. When that vessel is next active in flight, the mod offers "Resume plan to {body} (next: {step} in {time})", and re-plans from the actual state when the vessel no longer matches.
+  - **Failures** stop with the throttle at 0 and the warp off and keep the plan for Resume. A failed capture says "Capture failed: you will fly past {body}".
+
 - **Landing target picker** (Land tab, precision landing part 1).
   - **Pick on map**: the button opens the map view and waits for a click on the body; the latitude and longitude of the clicked point become the target. Esc or a second click cancels. A click on another body than the one orbited is refused. The click does not add a waypoint of its own; if Redux's Waypoints window also saves it, the tab says so.
   - **Target list**: KSC (the launch pad, read from the game) first on Kerbin, then the picked point, the player's waypoints and the `[Mission]` waypoints. The saved target is never replaced by the list: when it matches no entry it shows as "Custom (lat, lon)".

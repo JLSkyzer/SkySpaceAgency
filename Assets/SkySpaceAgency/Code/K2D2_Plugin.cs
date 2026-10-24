@@ -61,6 +61,9 @@ namespace K2D2
         // VAB tools files (exports/, imports/, dumps/), next to the DLL like the settings files above.
         internal static string VabFolder => Path.Combine(AssemblyFolder, "vab");
 
+        // Saved transfer plans, one file per vessel (plan_<vessel GUID>.json). An install must keep it.
+        internal static string PlansFolder => Path.Combine(AssemblyFolder, "plans");
+
 
         /// Singleton instance of the plugin class
         [PublicAPI] public static K2D2_Plugin Instance { get; set; }
@@ -146,6 +149,8 @@ namespace K2D2
             pilots_manager.AddPilot(new LandingPilot());
             pilots_manager.AddPilot(new DockingPilot());
             pilots_manager.AddPilot(new AttitudePilot());
+            // Transfer to a body: its tab comes with the Transfer page (TransferUI).
+            pilots_manager.AddPilot(new K2D2.Transfer.TransferPilot());
 
             // pilots_manager.AddPilot(new DronePilot());
             // pilots_manager.AddPilot(new AttitudePilot());

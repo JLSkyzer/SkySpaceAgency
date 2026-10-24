@@ -429,7 +429,10 @@ namespace K2D2.Transfer
             {
                 double mu = s[currentBody].Mu;
                 double actual = v.sqrMagnitude / 2 - mu / r.magnitude;
-                double off = Math.Abs(actual - expected) / Math.Max(Math.Abs(expected), 1e-9);
+                // Relative to the expected energy, with an absolute floor of mu/r: near a parabolic
+                // orbit the expected energy is close to 0 and any change would count as huge.
+                double scale = Math.Max(Math.Abs(expected), mu / r.magnitude);
+                double off = Math.Abs(actual - expected) / Math.Max(scale, 1e-9);
                 if (off > EnergyTolerance)
                 {
                     string why = $"the orbit around {s[currentBody].Name} differs from the plan by {off * 100:F1} % in energy";

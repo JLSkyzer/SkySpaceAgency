@@ -380,6 +380,40 @@ public class PlanStoreTests
         Assert.AreEqual(ResumeVerdict.Resume, c.Verdict, c.Reason);
     }
 
+    // After an injection onto a parabola the expected energy is ~0: a small difference must not
+    // count as a huge relative one (the absolute floor of mu/r).
+    [Test]
+    public void NearParabolic_SmallDifference_Resume_LargeOne_Replan()
+    {
+        var p = Saved(1);
+        double mu = _s["Kerbin"].Mu;
+        Coast(p, InjectionUT, out var r, out var v);
+        p.Plan.Steps[0].DeltaV = v.normalized * (Math.Sqrt(2 * mu / r.magnitude) - v.magnitude);
+        var after = v + p.Plan.Steps[0].DeltaV;
+        KeplerPropagator.Propagate(r, after, mu, 600, out var r1, out var v1);
+        double ut = InjectionUT + 600;
+
+        var c = PlanStore.Check(p, _s, B("Kerbin"), r1, v1 * 1.001, ut);
+        Assert.AreEqual(ResumeVerdict.Resume, c.Verdict, c.Reason);
+        c = PlanStore.Check(p, _s, B("Kerbin"), r1, v1 * 1.05, ut);
+        Assert.AreEqual(ResumeVerdict.Replan, c.Verdict, "a real burn by hand still counts");
+    }
+
+    // A plan stopped by a failure (saved in the Failed phase) resumes when the state still matches.
+    [Test]
+    public void FailedPhase_Resume()
+    {
+        var p = Saved(2);
+        p.Phase = TransferPhase.Failed;
+        p = RoundTrip(p);
+        Coast(p, InjectionUT, out var r, out var v);
+        v += p.Plan.Steps[0].DeltaV;
+        KeplerPropagator.Propagate(r, v, _s["Kerbin"].Mu, 2000, out r, out v);
+        var c = PlanStore.Check(p, _s, B("Kerbin"), r, v, InjectionUT + 2000);
+        Assert.AreEqual(ResumeVerdict.Resume, c.Verdict, c.Reason);
+        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(p, c));
+    }
+
     [Test]
     public void OffOrbitWithNoStepPending_Mismatch()
     {
