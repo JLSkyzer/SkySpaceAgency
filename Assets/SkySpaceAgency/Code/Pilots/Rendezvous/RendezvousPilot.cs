@@ -77,7 +77,7 @@ namespace K2D2.Rendezvous
             debug_mode_only = false;
             K2D2PilotsMgr.Instance.RegisterPilot("Rendezvous", this);
             node = new PrepareOnlyNode(logger, "[Rendezvous]");
-            // The tab (RendezvousUI) comes with sub-project 4.3's Task 7.
+            _page = new RendezvousUI(this);   // the Rendezvous tab, in the old Dock tab's slot
             burn.stage_when_dry = true;
         }
 

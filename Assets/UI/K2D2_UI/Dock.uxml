@@ -1,62 +1,40 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/K2D2_UI/K2D2.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#K2D2" />
     <Style src="project://database/Assets/Runtime/K2UI/USS/K2UI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#K2UI" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/ToggleButton.uss?fileID=7433441132597879392&amp;guid=1b6a73cd9e0a617469e5d501d696c7be&amp;type=3#ToggleButton" />
     <Style src="project://database/Assets/Runtime/K2UI/USS/K2Toggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#K2Toggle" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Slider.uss?fileID=7433441132597879392&amp;guid=3d8e4d9f1386ac94c97e6381ad01c59b&amp;type=3#K2Slider" />
-    <K2UI.Tabs.TabPage name="dock" label="Dock" style="display: flex;">
-        <ui:VisualElement name="page" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); display: flex;">
-            <ui:Label tabindex="-1" text="Docking Assistant" display-tooltip-when-elided="true" name="Title" class="unselectedContent" style="display: flex; width: 100%; -unity-text-align: upper-center;" />
-            <ui:VisualElement name="select_group" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); display: none;">
-                <ui:DropdownField label="Control From :" index="-1" choices="a,b,c" name="control_from_drop" />
-                <ui:DropdownField label="Target :" index="-1" choices="Duna,Mun,Kerbal,Too" name="target_drop" class="fixed" />
-                <ui:DropdownField label="Dock :" index="-1" choices="Duna,Mun,Kerbal,Too" name="dock_drop" class="fixed" />
+    <!-- Rendezvous and docking around the same body (spec 4.3). It replaces the old Dock tab and
+         keeps its page code "dock" (the window's template slot and the tab bar's styles).
+         RendezvousUI.cs fills it; RendezvousPilot plans, flies and docks. -->
+    <K2UI.Tabs.TabPage name="dock" label="Rendezvous" style="display: flex;">
+        <ui:VisualElement name="page" style="flex-grow: 1;">
+            <ui:Label text="Rendezvous and docking" name="Title" class="unselectedContent" style="width: 100%; -unity-text-align: upper-center;" />
+            <K2UI.Group text="Target">
+                <!-- Every other vessel, grouped by body (ours first); the game's target pre-selected. -->
+                <ui:DropdownField label="Vessel" index="-1" choices="" name="target_vessel" tooltip="Every other vessel, grouped by body. The game's target is selected" />
+                <ui:Label name="relative" text="" style="white-space: normal;" />
+            </K2UI.Group>
+            <K2UI.Group text="Docking ports">
+                <ui:DropdownField label="Ours" index="-1" choices="Auto" name="our_port" tooltip="Auto: the free compatible pair that needs the least rotation" />
+                <ui:DropdownField label="Target's" index="-1" choices="Auto" name="target_port" tooltip="Auto: the free compatible pair that needs the least rotation" />
+                <ui:Label name="port_hint" text="" style="white-space: normal; font-size: 12px; color: rgb(180, 180, 180);" />
+            </K2UI.Group>
+            <K2UI.Group text="Options">
+                <K2UI.K2Toggle label="Prepare only" name="prepare_only" tooltip="Make one game node at a time for the rendezvous burns; no warp. The docking is always flown" />
+            </K2UI.Group>
+            <ui:VisualElement style="margin-top: 8px;">
+                <ui:Button name="rendezvous_dock" text="Rendezvous + dock" class="big" style="height: 30px;" />
+                <ui:VisualElement style="flex-direction: row;">
+                    <ui:Button name="rendezvous_only" text="Rendezvous only" class="big" style="flex-grow: 1; height: 30px;" />
+                    <ui:Button name="dock_only" text="Dock only" class="big" style="flex-grow: 1; height: 30px;" tooltip="Within 2 km of the target" />
+                </ui:VisualElement>
+                <ui:Button name="stop" text="Stop" class="big" style="height: 30px;" />
             </ui:VisualElement>
-            <!-- Same table treatment as Land's landing_infos - Control/Target readout built into
-                 label/value rows from C# (see DockingUI.cs's AddInfoRow/updateContext) instead of
-                 a free-text console block. -->
-            <ui:VisualElement name="context" class="advanced-info-table" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);" />
-            <!-- Main Thrust Brake/RCS Final Approach restyled to the shared light-gray pixel-bevel
-                 (see #main_brake, #rcs_final_approach in K2D2.uss) - Align Dock (a K2Toggle switch)
-                 and Stop/Start (already themed via the shared "#run" id) needed no changes. Cheat
-                 is a debug-only utility button (only shown when Debug Mode is on), left as the
-                 stock look rather than restyled along with the other two. -->
-            <ui:VisualElement name="button_bars" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); flex-direction: column;">
-                <K2UI.K2Toggle label="Align Dock" name="align_dock" />
-                <K2UI.ToggleButton label="Stop" name="run" class="big" style="display: flex;" />
-                <ui:Button text="Main Thrust Brake" display-tooltip-when-elided="true" name="main_brake" class="big" />
-                <ui:Button text="RCS Final Approach" display-tooltip-when-elided="true" name="rcs_final_approach" class="big" />
-                <ui:Button text="Cheat" display-tooltip-when-elided="true" name="cheat" class="big" style="display: flex;" />
+            <ui:VisualElement style="flex-direction: row;">
+                <ui:Button name="resume" text="Resume" style="flex-grow: 1; height: 26px;" />
+                <ui:Button name="cancel_saved" text="Cancel saved plan" style="flex-grow: 1; height: 26px;" />
             </ui:VisualElement>
-            <ui:VisualElement name="final_approach_group" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
-                <K2UI.InlineEnum name="final_mode" labels="Manual;Auto" />
-                <K2UI.Group name="manual_group" text="Manual Mode">
-                    <ui:Label tabindex="-1" text="RCS - Kill Speed" display-tooltip-when-elided="true" />
-                    <ui:VisualElement name="rcs_kill_speed" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); flex-direction: row;">
-                        <K2UI.ToggleButton label="Hor." name="horizontal_bt" style="flex-grow: 1;" />
-                        <K2UI.ToggleButton label="Vert." name="vertical_bt" style="flex-grow: 1;" />
-                        <K2UI.ToggleButton label="Depth" name="depth_bt" style="flex-grow: 1;" />
-                        <K2UI.ToggleButton label="All" name="all_bt" style="flex-grow: 1;" />
-                    </ui:VisualElement>
-                </K2UI.Group>
-                <K2UI.Group name="auto_group" text="Automatic Mode&#10;">
-                    <ui:Label tabindex="-1" text="Axis :" display-tooltip-when-elided="true" />
-                    <K2UI.K2Toggle label="Center axis" name="center_axis" />
-                    <K2UI.K2Slider name="center_power" label="Pilot - speed adapt" print-value="true" max="5" value="1" label-on-top="true" min-max-label="x" />
-                    <ui:Label tabindex="-1" text="Forward :" display-tooltip-when-elided="true" />
-                    <K2UI.K2Toggle label="Auto Approach" name="auto_forward" />
-                    <ui:VisualElement style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); flex-direction: row;">
-                        <K2UI.K2Slider name="forward_speed" label="Forward Speed" print-value="true" max="10" value="0" label-on-top="true" min-max-label="x" min="-10" style="flex-grow: 1; margin-bottom: 7px;" />
-                        <ui:Button text="R." display-tooltip-when-elided="true" name="reset_fspeed" style="height: 40%; top: 27px;" />
-                    </ui:VisualElement>
-                </K2UI.Group>
-            </ui:VisualElement>
-
-            <!-- K2 arrives on the Dock tab too: same merged "K2 is talking" element as Node/Lift/
-                 Landing (yellow status line + console read together, next to K2's animated icon)
-                 instead of the shared StatusGroup template's plain status_pilot/pilot_console
-                 pair. -->
-            <ui:VisualElement name="status_progress_group" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); margin-top: 10px; margin-bottom: 12px;">
+            <ui:Label name="resume_offer" text="" style="white-space: normal; color: rgb(224, 200, 132); display: none;" />
+            <ui:VisualElement name="status_progress_group" style="margin-top: 8px; margin-bottom: 8px;">
                 <ui:VisualElement name="k2_status_row" class="k2-status-row">
                     <K2UI.K2Avatar name="k2_avatar" />
                     <ui:VisualElement name="k2_status_speech" class="k2-status-speech">
@@ -64,28 +42,28 @@
                         <K2UI.Console tabindex="-1" name="pilot_console" text="Console Pilot" />
                     </ui:VisualElement>
                 </ui:VisualElement>
-                <K2UI.K2ProgressBar name="progress" set-label-to-value="false" value="70.27" max="100" label=" " postfix=" %" style="height: 25px;" />
+                <K2UI.K2ProgressBar name="progress" set-label-to-value="false" value="0" max="100" label=" " postfix=" %" style="height: 25px;" />
             </ui:VisualElement>
-
-            <!-- Same treatment as the other tabs: the old separate "settings" page is redundant
-                 now that its one real control (RCS Power, plus its explanatory note) fits in an
-                 inline ADVANCED dropdown here on "page" instead - collapsed by default. Only one
-                 section for now ("// RCS") since RCS Power is the only tunable Dock actually has;
-                 more sections can join it here later the same way Node/Lift/Land grew theirs.
-                 "settings" below is kept only because K2Page.Init()'s Q<VisualElement>("settings")
-                 lookup expects to find it, but it no longer carries any real controls - the Reset
-                 button now lives at the bottom of this ADVANCED foldout instead (see
-                 DockingUI.cs's addResetButton call). -->
-            <ui:Foldout text="ADVANCED" value="false" name="advanced_foldout">
-                <ui:VisualElement name="RCS">
-                    <ui:Label text="// RCS" class="k2-section-header" />
-                    <K2UI.K2Slider name="rcs_power" label="RCS Power" print-value="true" label-on-top="true" min-max-label="x" />
-                    <ui:Label tabindex="-1" text="For the moment, the real vessel rcs power is not computed.&#10;It should be computed for each direction depending on the RCS thust are localized&#10;Use This slider to adapt to your vessel." display-tooltip-when-elided="true" style="white-space: normal;" />
-                </ui:VisualElement>
+            <ui:VisualElement name="dock_group" style="display: none;">
+                <K2UI.Group text="Docking">
+                    <ui:Label name="dock_ports" text="" style="white-space: normal;" />
+                    <ui:Label name="translate_mode" text="" style="white-space: normal;" />
+                    <ui:Label name="dock_phase" text="" style="white-space: normal;" />
+                    <ui:Label name="dock_aborts" text="" style="white-space: normal; color: rgb(224, 200, 132);" />
+                </K2UI.Group>
+            </ui:VisualElement>
+            <ui:VisualElement name="plan_group" style="display: none;">
+                <K2UI.Group text="Plan">
+                    <ui:VisualElement name="steps" />
+                    <ui:Label name="totals" text="" style="white-space: normal; margin-top: 4px;" />
+                </K2UI.Group>
+            </ui:VisualElement>
+            <ui:Foldout text="STAGES" value="false" name="stages_foldout">
+                <ui:VisualElement name="stages" />
             </ui:Foldout>
         </ui:VisualElement>
-        <ui:VisualElement name="settings" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); display: none;">
-            <ui:Label tabindex="-1" text="Docking Settings" display-tooltip-when-elided="true" name="Title" class="unselectedContent" style="display: flex;" />
+        <ui:VisualElement name="settings" style="display: none;">
+            <ui:Label text="No Rendezvous Settings..." name="Title" class="unselectedContent" />
         </ui:VisualElement>
     </K2UI.Tabs.TabPage>
 </ui:UXML>

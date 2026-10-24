@@ -147,11 +147,10 @@ namespace K2D2
             pilots_manager.AddPilot(new NodeExPilot());
             pilots_manager.AddPilot(new LiftPilot());
             pilots_manager.AddPilot(new LandingPilot());
-            pilots_manager.AddPilot(new DockingPilot());
             pilots_manager.AddPilot(new AttitudePilot());
             // Transfer to a body: its tab comes with the Transfer page (TransferUI).
             pilots_manager.AddPilot(new K2D2.Transfer.TransferPilot());
-            // Rendezvous and docking (4.3): its tab comes with RendezvousUI.
+            // Rendezvous and docking (4.3): its tab (RendezvousUI) replaces the old Dock tab.
             pilots_manager.AddPilot(new K2D2.Rendezvous.RendezvousPilot());
 
             // pilots_manager.AddPilot(new DronePilot());

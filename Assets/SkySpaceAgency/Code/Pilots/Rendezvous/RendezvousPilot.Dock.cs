@@ -26,6 +26,8 @@ namespace K2D2.Rendezvous
         public double DockClosing { get; private set; } = double.NaN;
         public string OurPortName => dock_our_port?.Part?.PartName;
         public string TargetPortName => dock_target_port?.Part?.PartName;
+        public int DockAborts => guidance?.Aborts ?? 0;
+        public string DockAbortReason => guidance?.LastAbortReason;
 
         // ---------------------------------------------------------------- state
 

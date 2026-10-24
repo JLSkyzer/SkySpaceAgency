@@ -1,4 +1,5 @@
 using System.Linq;
+using K2D2.Rendezvous;
 using K2D2.Transfer;
 using K2UI.Tabs;
 using NUnit.Framework;
@@ -50,5 +51,27 @@ public class WindowLayoutTests
         Assert.IsNotNull(lift.Q<Label>("transfer_hint"));
         foreach (string element in new[] { "transfer_goal_group", "transfer_infos", "heading_row", "heading", "lift_infos" })
             Assert.IsNotNull(lift.Q(element), $"the Lift tab has no element named {element}");
+    }
+
+    [Test]
+    public void RendezvousTab_TakesTheDockSlot_WithEveryElementItsPageUses()
+    {
+        var pages = CloneWindow().Q<TabbedPage>().Query<TabPage>().ToList();
+        // The page code stays "dock": the window's template slot and the tab bar's styles use it.
+        var page = pages.Single(p => p.name == "dock");
+        Assert.AreEqual("Rendezvous", page.label);
+        Assert.IsNotNull(page.Q("page"));
+        Assert.IsNotNull(page.Q("settings"));
+        foreach (string element in RendezvousUI.Elements)
+            Assert.IsNotNull(page.Q(element), $"the Rendezvous tab has no element named {element}");
+        Assert.IsNotNull(page.Q<DropdownField>("target_vessel"));
+        Assert.IsNotNull(page.Q<DropdownField>("our_port"));
+        Assert.IsNotNull(page.Q<DropdownField>("target_port"));
+        Assert.IsNotNull(page.Q<K2UI.K2Toggle>("prepare_only"));
+        foreach (string button in new[] { "rendezvous_dock", "rendezvous_only", "dock_only", "stop", "resume", "cancel_saved" })
+            Assert.IsNotNull(page.Q<Button>(button), $"the Rendezvous tab has no button named {button}");
+        // The old Dock assistant's controls are gone.
+        foreach (string old in new[] { "align_dock", "main_brake", "rcs_final_approach", "cheat", "final_mode", "rcs_power" })
+            Assert.IsNull(page.Q(old), $"the old Dock tab's {old} is still there");
     }
 }
