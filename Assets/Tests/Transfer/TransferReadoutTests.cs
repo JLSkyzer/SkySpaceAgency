@@ -63,45 +63,77 @@ public class TransferReadoutTests
         Assert.IsFalse(TransferReadout.TryParseDays("-3", out _, out _));
     }
 
-    [Test]
-    public void Request_LowCircular_LeavesTheOrbitToTheSearch()
+    // The tab's input, then the pilot's resolution against its own snapshot of the bodies.
+    bool Req(string target, ArrivalKind arrival, bool low, double pe, double ap, bool setInc, double inc, string days,
+        out TransferRequest q, out string error)
     {
-        Assert.IsTrue(TransferReadout.TryRequest(_s, _duna, ArrivalKind.Orbit, true, 5, 7, true, 30, "", out var q, out string error), error);
+        q = null;
+        return TransferReadout.TryInput(target, arrival, low, pe, ap, setInc, inc, days, out var input, out error)
+            && input.Resolve(_s, out q, out error);
+    }
+
+    [Test]
+    public void Request_LowCircular_LeavesPeAndApToTheSearch_KeepsTheChosenPlane()
+    {
+        Assert.IsTrue(Req("Duna", ArrivalKind.Orbit, true, 5, 7, true, 30, "", out var q, out string error), error);
         Assert.AreEqual(_duna, q.ToBody);
         Assert.AreEqual(ArrivalKind.Orbit, q.Arrival);
         Assert.IsNaN(q.ArrivalPeriapsisRadius);
         Assert.IsNaN(q.ArrivalApoapsisRadius);
-        Assert.IsNaN(q.ArrivalInclinationDeg);
+        Assert.AreEqual(30, q.ArrivalInclinationDeg, 1e-9, "a low circular orbit in a chosen plane");
         Assert.IsTrue(double.IsPositiveInfinity(q.MaxTripSeconds));
+        Assert.IsTrue(Req("Duna", ArrivalKind.Orbit, true, 5, 7, false, 30, "", out q, out error), error);
+        Assert.IsNaN(q.ArrivalInclinationDeg, "inclination unticked: free");
     }
 
     [Test]
-    public void Request_CustomOrbit_AltitudesToRadii()
+    public void Request_CustomOrbit_AltitudesToRadii_OfTheResolvingSnapshot()
     {
-        Assert.IsTrue(TransferReadout.TryRequest(_s, _duna, ArrivalKind.Orbit, false, 60, 120, true, 45, "300", out var q, out string error), error);
+        Assert.IsTrue(Req("Duna", ArrivalKind.Orbit, false, 60, 120, true, 45, "300", out var q, out string error), error);
         Assert.AreEqual(320000 + 60000, q.ArrivalPeriapsisRadius, 1e-6);
         Assert.AreEqual(320000 + 120000, q.ArrivalApoapsisRadius, 1e-6);
         Assert.AreEqual(45, q.ArrivalInclinationDeg, 1e-9);
         Assert.AreEqual(300 * 21600, q.MaxTripSeconds, 1e-6);
 
-        Assert.IsTrue(TransferReadout.TryRequest(_s, _duna, ArrivalKind.Encounter, false, 60, 10, false, 45, "", out q, out error), error);
+        Assert.IsTrue(Req("Duna", ArrivalKind.Encounter, false, 60, 10, false, 45, "", out q, out error), error);
         Assert.AreEqual(380000, q.ArrivalPeriapsisRadius, 1e-6);
         Assert.IsNaN(q.ArrivalApoapsisRadius, "an encounter has no Ap");
         Assert.IsNaN(q.ArrivalInclinationDeg, "inclination unticked: free");
+
+        // The altitudes stay altitudes until the resolution: another snapshot, another radius.
+        Assert.IsTrue(TransferReadout.TryInput("Duna", ArrivalKind.Orbit, false, 60, 120, false, 0, "", out var input, out error), error);
+        Assert.AreEqual(60000, input.PeriapsisAltitude, 1e-9);
+        var other = KerbolFixture.Build();
+        other["Duna"].Radius = 400000;
+        Assert.IsTrue(input.Resolve(other, out q, out error), error);
+        Assert.AreEqual(460000, q.ArrivalPeriapsisRadius, 1e-6);
+    }
+
+    // The target is found by name in the resolving snapshot, whatever its index there.
+    [Test]
+    public void Request_TargetByName()
+    {
+        Assert.IsTrue(TransferReadout.TryInput("Ike", ArrivalKind.Orbit, true, 0, 0, false, 0, "", out var input, out string error), error);
+        Assert.IsTrue(input.Resolve(_s, out var q, out error), error);
+        Assert.AreEqual(_s["Ike"].Index, q.ToBody);
+        input.TargetName = "Eeloo";
+        Assert.IsFalse(input.Resolve(_s, out _, out error));
+        Assert.AreEqual("The target Eeloo is not among the game's bodies: choose it again.", error);
+        Assert.IsFalse(input.Resolve(null, out _, out _));
     }
 
     [Test]
     public void Request_Refusals()
     {
-        Assert.IsFalse(TransferReadout.TryRequest(_s, -1, ArrivalKind.Orbit, true, 0, 0, false, 0, "", out _, out string error));
+        Assert.IsFalse(Req("", ArrivalKind.Orbit, true, 0, 0, false, 0, "", out _, out string error));
         Assert.AreEqual("Choose a target body.", error);
-        Assert.IsFalse(TransferReadout.TryRequest(_s, _duna, ArrivalKind.Orbit, false, 100, 50, false, 0, "", out _, out error));
+        Assert.IsFalse(Req("Duna", ArrivalKind.Orbit, false, 100, 50, false, 0, "", out _, out error));
         StringAssert.Contains("Ap cannot be lower", error);
-        Assert.IsFalse(TransferReadout.TryRequest(_s, _duna, ArrivalKind.Orbit, false, -1, 50, false, 0, "", out _, out error));
+        Assert.IsFalse(Req("Duna", ArrivalKind.Orbit, false, -1, 50, false, 0, "", out _, out error));
         StringAssert.Contains("above the surface", error);
-        Assert.IsFalse(TransferReadout.TryRequest(_s, _duna, ArrivalKind.Orbit, false, 60, 60, true, 200, "", out _, out error));
+        Assert.IsFalse(Req("Duna", ArrivalKind.Orbit, true, 60, 60, true, 200, "", out _, out error));
         StringAssert.Contains("inclination", error);
-        Assert.IsFalse(TransferReadout.TryRequest(_s, _duna, ArrivalKind.Orbit, true, 60, 60, false, 0, "x", out _, out error));
+        Assert.IsFalse(Req("Duna", ArrivalKind.Orbit, true, 60, 60, false, 0, "x", out _, out error));
         StringAssert.Contains("Max trip", error);
     }
 
@@ -179,10 +211,10 @@ public class TransferReadoutTests
         var stages = new List<StageDv> { S(5, 1200, command: true), S(4, 800, chute: true), S(3, 500, command: true) };
         var budget = TransferFlight.RemainingBudget(plan, 0, stages);
         Assert.IsTrue(budget.Ok, budget.Refusal);
-        var rows = TransferReadout.Stages(plan, 0, stages, budget, out string note);
+        var rows = TransferReadout.Stages(plan, 0, stages, budget, 4, out string note);
         Assert.AreEqual(3, rows.Count);
         Assert.AreEqual("Stage 5: 1200 m/s, pays the injection burn, capture burn", rows[0].Text);
-        Assert.IsFalse(rows[0].ByHand, "the first stage is the one burning now");
+        Assert.IsFalse(rows[0].ByHand, "stage 5 is staged already (the next to fire is 4)");
         Assert.AreEqual("Stage 4: 800 m/s, pays the capture burn. Stage it by hand: it drops a parachute", rows[1].Text);
         Assert.IsTrue(rows[1].ByHand);
         Assert.IsTrue(rows[2].ByHand);
@@ -198,7 +230,7 @@ public class TransferReadoutTests
         var plan = KerbinToDuna();
         var stages = new List<StageDv> { S(5, 1200), S(4, 800, chute: true) };
         var budget = TransferFlight.RemainingBudget(plan, 3, stages);
-        var rows = TransferReadout.Stages(plan, 3, stages, budget, out string note);
+        var rows = TransferReadout.Stages(plan, 3, stages, budget, null, out string note);
         Assert.AreEqual("capture burn", rows[0].Pays);
         Assert.AreEqual("", rows[1].Pays);
         Assert.IsNull(note, "the guarded stage is not needed");
@@ -211,8 +243,42 @@ public class TransferReadoutTests
         var stages = new List<StageDv> { S(5, 1200) };
         var budget = TransferFlight.RemainingBudget(plan, 0, stages);
         Assert.IsFalse(budget.Ok);
-        TransferReadout.Stages(plan, 0, stages, budget, out string note);
+        TransferReadout.Stages(plan, 0, stages, budget, null, out string note);
         Assert.AreEqual("No stage is left for the last step(s).", note);
+    }
+
+    // An empty stage that drops a parachute between two paying stages: the mod stops there, so
+    // the Δv of stage 3 needs the player to stage by hand, though stage 4 itself pays nothing.
+    [Test]
+    public void StageTable_EmptyGuardedStageBetweenPayingStages_GetsTheNote()
+    {
+        var plan = KerbinToDuna();
+        var stages = new List<StageDv> { S(5, 1200), S(4, 0, chute: true), S(3, 800) };
+        var budget = TransferFlight.RemainingBudget(plan, 0, stages);
+        Assert.IsTrue(budget.Ok, budget.Refusal);
+        var rows = TransferReadout.Stages(plan, 0, stages, budget, 4, out string note);
+        Assert.AreEqual("", rows[1].Pays);
+        Assert.IsTrue(rows[1].ByHand);
+        Assert.AreEqual("capture burn", rows[2].Pays);
+        Assert.AreEqual("The Δv from stage 4 on needs you to stage by hand: the mod does not fire a stage that drops a parachute.", note);
+    }
+
+    // On the pad (nothing staged yet), the first stage is still to fire and is judged too; once
+    // every stage is staged, none is.
+    [Test]
+    public void StageTable_FirstStage_FlaggedUnlessStagedAlready()
+    {
+        var plan = KerbinToDuna();
+        var stages = new List<StageDv> { S(5, 1200, command: true), S(4, 800) };
+        var budget = TransferFlight.RemainingBudget(plan, 0, stages);
+        var notStaged = TransferReadout.Stages(plan, 0, stages, budget, 5, out string note);
+        Assert.IsTrue(notStaged[0].ByHand);
+        Assert.AreEqual("The Δv from stage 5 on needs you to stage by hand: the mod does not fire a stage that drops the command part.", note);
+        var staged = TransferReadout.Stages(plan, 0, stages, budget, 4, out note);
+        Assert.IsFalse(staged[0].ByHand);
+        Assert.IsNull(note);
+        var unknown = TransferReadout.Stages(plan, 0, stages, budget, null, out note);
+        Assert.IsFalse(unknown[0].ByHand, "unknown: the first stage is taken as the active one");
     }
 
     // A 100 km Kerbin orbit lasts ~1960 s and the 380 km Duna orbit ~2680 s: 10 % of them is the limit.

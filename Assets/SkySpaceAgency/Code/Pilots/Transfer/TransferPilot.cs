@@ -147,14 +147,14 @@ namespace K2D2.Transfer
         /// Searches the transfer asked for (target and arrival; the vessel's body and state are read
         /// now) on a worker thread. The result arrives in Current, with Budget and Status.
         /// </summary>
-        public void Plan(TransferRequest request)
+        public void Plan(TransferInput input)
         {
             if (isRunning)
             {
                 Status = "Stop the transfer before planning another one.";
                 return;
             }
-            if (request == null)
+            if (input == null)
                 return;
             CancelJob();
             if (!TakeSnapshot(out var snap, out string error, out _))
@@ -162,7 +162,12 @@ namespace K2D2.Transfer
                 Status = "Cannot plan: " + error;
                 return;
             }
-            var q = CopyRequest(request);
+            // The target name and altitudes are resolved against this snapshot's bodies.
+            if (!input.Resolve(snap.System, out var q, out error))
+            {
+                Status = error;
+                return;
+            }
             q.FromBody = snap.Body;
             q.R0 = snap.R;
             q.V0 = snap.V;

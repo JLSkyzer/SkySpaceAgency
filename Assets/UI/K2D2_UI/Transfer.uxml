@@ -21,10 +21,11 @@
                         <ui:Label text="Ap (km)" style="width: 50%;" />
                         <ui:FloatField name="ap_km" value="100" style="flex-grow: 1;" />
                     </ui:VisualElement>
-                    <ui:VisualElement style="flex-direction: row; align-items: center;">
-                        <K2UI.K2Toggle label="Inclination (°)" name="inc_enabled" tooltip="Set the arrival inclination (the approach correction sets the plane). Unticked: free" style="width: 50%;" />
-                        <ui:FloatField name="inc_deg" value="0" style="flex-grow: 1;" />
-                    </ui:VisualElement>
+                </ui:VisualElement>
+                <!-- Outside orbit_fields: a low circular orbit can still have a chosen plane. -->
+                <ui:VisualElement style="flex-direction: row; align-items: center;">
+                    <K2UI.K2Toggle label="Inclination (°)" name="inc_enabled" tooltip="Set the arrival inclination (the approach correction sets the plane). Unticked: free" style="width: 50%;" />
+                    <ui:FloatField name="inc_deg" value="0" style="flex-grow: 1;" />
                 </ui:VisualElement>
             </K2UI.Group>
             <K2UI.Group text="Options">

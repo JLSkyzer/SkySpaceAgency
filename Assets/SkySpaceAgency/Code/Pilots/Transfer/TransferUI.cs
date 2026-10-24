@@ -86,15 +86,8 @@ namespace K2D2.Transfer
             panel.Q<InlineEnum>("arrival").Bind(TransferSettings.arrival, "Encounter;Orbit");
             panel.Q<K2Toggle>("low_circular").Bind(TransferSettings.low_circular);
             // Unticking starts the fields from the target's low orbit.
-            TransferSettings.low_circular.listeners += on =>
-            {
-                if (!on && TryTarget(out var body))
-                {
-                    float km = (float)Math.Round((body.LowOrbitRadius - body.Radius) / 1000, 1);
-                    TransferSettings.pe_km.V = km;
-                    TransferSettings.ap_km.V = km;
-                }
-            };
+            TransferSettings.low_circular.listeners -= OnLowCircular; // once, even after a re-init
+            TransferSettings.low_circular.listeners += OnLowCircular;
             low_orbit_hint = panel.Q<Label>("low_orbit_hint");
             orbit_fields = panel.Q("orbit_fields");
             ap_row = panel.Q("ap_row");
@@ -208,8 +201,10 @@ namespace K2D2.Transfer
             start_bt.SetEnabled(pilot.CanStart);
             stop_bt.SetEnabled(pilot.isRunning || pilot.Searching);
             stop_bt.text = pilot.Searching && !pilot.isRunning ? "Cancel" : "Stop";
+            // Resume only with a saved plan; Cancel with a saved plan or while flying.
+            resume_bt.Show(pilot.HasSavedPlan);
             resume_bt.SetEnabled(pilot.CanResume);
-            cancel_bt.SetEnabled(pilot.HasSavedPlan || pilot.isRunning);
+            cancel_bt.Show(pilot.HasSavedPlan || pilot.isRunning);
 
             bool low = TransferSettings.low_circular.V;
             bool orbit = TransferSettings.arrival.V == ArrivalKind.Orbit;
@@ -228,23 +223,30 @@ namespace K2D2.Transfer
                 low_orbit_hint.text = "Choose a target body.";
         }
 
+        // Unticking Low circular starts the fields from the target's low orbit.
+        void OnLowCircular(bool on)
+        {
+            if (!on && TryTarget(out var body))
+            {
+                float km = (float)Math.Round((body.LowOrbitRadius - body.Radius) / 1000, 1);
+                TransferSettings.pe_km.V = km;
+                TransferSettings.ap_km.V = km;
+            }
+        }
+
+        // The target goes by name and the orbit as altitudes: the pilot resolves both against the
+        // bodies of its own snapshot, not against this tab's list.
         void OnPlan()
         {
             ui_error = null;
-            if (!TryTarget(out var body))
-            {
-                ui_error = "Choose a target body.";
-                return;
-            }
-            if (!TransferReadout.TryRequest(list_system, body.Index, TransferSettings.arrival.V, TransferSettings.low_circular.V,
+            if (!TransferReadout.TryInput(TransferSettings.target_body.V, TransferSettings.arrival.V, TransferSettings.low_circular.V,
                     TransferSettings.pe_km.V, TransferSettings.ap_km.V, TransferSettings.inc_enabled.V, TransferSettings.inc_deg.V,
-                    TransferSettings.max_trip_days.V, out var request, out string error))
+                    TransferSettings.max_trip_days.V, out var input, out string error))
             {
                 ui_error = error;
                 return;
             }
-            // The index is the same in the pilot's fresh snapshot: both lists come from GameBodies().
-            pilot.Plan(request);
+            pilot.Plan(input);
         }
 
         // ---------------------------------------------------------------- status
@@ -314,7 +316,7 @@ namespace K2D2.Transfer
             margin_label.style.color = budget.Ok ? new StyleColor(StyleKeyword.Null) : new StyleColor(new UnityEngine.Color(1f, 0.55f, 0.4f));
 
             stages_el.Clear();
-            var stage_rows = TransferReadout.Stages(plan, from, pilot.Stages, budget, out string note);
+            var stage_rows = TransferReadout.Stages(plan, from, pilot.Stages, budget, NextStage(), out string note);
             foreach (var row in stage_rows)
             {
                 var label = new Label(row.Text);
@@ -366,6 +368,24 @@ namespace K2D2.Transfer
                 label.style.whiteSpace = WhiteSpace.Normal;
                 label.style.color = new UnityEngine.Color(0.88f, 0.78f, 0.52f);
                 warnings_el.Add(label);
+            }
+        }
+
+        // The next stage the game would fire (above it: staged already), null when unknown.
+        static int? NextStage()
+        {
+            try
+            {
+                var staging = K2D2_Plugin.Instance?.current_vessel?.VesselComponent?.SimulationObject?.Staging;
+                if (staging == null)
+                    return null;
+                int count = staging.StageCount;
+                bool lastActive = count > 0 && staging.AvailableStages[count - 1].IsActive;
+                return K2D2.Landing.Precision.JettisonPlan.NextStage(count, lastActive);
+            }
+            catch (Exception)
+            {
+                return null;
             }
         }
 

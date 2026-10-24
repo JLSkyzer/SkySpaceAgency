@@ -54,6 +54,51 @@ namespace K2D2.Transfer
         }
     }
 
+    // What the tab asks for, before the pilot reads the game: the target by name and the arrival
+    // orbit as altitudes (NaN: the target's default; inclination NaN: free).
+    public class TransferInput
+    {
+        public string TargetName;
+        public ArrivalKind Arrival = ArrivalKind.Orbit;
+        public double PeriapsisAltitude = double.NaN;
+        public double ApoapsisAltitude = double.NaN;
+        public double InclinationDeg = double.NaN;
+        public double MaxTripSeconds = double.PositiveInfinity;
+
+        // The request against the bodies the pilot plans with (its own snapshot).
+        public bool Resolve(BodySystem s, out TransferRequest request, out string error)
+        {
+            request = null;
+            int target = -1;
+            if (s != null && !string.IsNullOrEmpty(TargetName))
+                for (int i = 0; i < s.Count; i++)
+                    if (s[i].Name == TargetName)
+                    {
+                        target = i;
+                        break;
+                    }
+            if (target < 0)
+            {
+                error = string.IsNullOrEmpty(TargetName)
+                    ? "Choose a target body."
+                    : $"The target {TargetName} is not among the game's bodies: choose it again.";
+                return false;
+            }
+            double radius = s[target].Radius;
+            request = new TransferRequest
+            {
+                ToBody = target,
+                Arrival = Arrival,
+                ArrivalPeriapsisRadius = double.IsNaN(PeriapsisAltitude) ? double.NaN : radius + PeriapsisAltitude,
+                ArrivalApoapsisRadius = double.IsNaN(ApoapsisAltitude) ? double.NaN : radius + ApoapsisAltitude,
+                ArrivalInclinationDeg = InclinationDeg,
+                MaxTripSeconds = MaxTripSeconds,
+            };
+            error = null;
+            return true;
+        }
+    }
+
     // The Transfer tab's texts and tables, from a plan and the stages. Pure, tested in EditMode.
     public static class TransferReadout
     {
@@ -77,30 +122,30 @@ namespace K2D2.Transfer
 
         // ---------------------------------------------------------------- inputs
 
-        // The request from the tab's fields (the vessel's state is filled in by the pilot). With low
-        // circular, the arrival orbit is the target's default (NaN). An empty max trip means no cap.
-        public static bool TryRequest(BodySystem s, int target, ArrivalKind arrival, bool lowCircular,
+        // The input from the tab's fields: the target by name and the orbit as altitudes, resolved by
+        // the pilot against its own snapshot of the bodies. With low circular, Pe and Ap are the
+        // target's default (NaN); the inclination applies either way. An empty max trip means no cap.
+        public static bool TryInput(string targetName, ArrivalKind arrival, bool lowCircular,
             double peKm, double apKm, bool setInclination, double inclinationDeg, string maxTripDays,
-            out TransferRequest request, out string error)
+            out TransferInput input, out string error)
         {
-            request = null;
-            if (s == null || target < 0 || target >= s.Count)
+            input = null;
+            if (string.IsNullOrEmpty(targetName))
             {
                 error = "Choose a target body.";
                 return false;
             }
             if (!TryParseDays(maxTripDays, out double maxTrip, out error))
                 return false;
-            var q = new TransferRequest { ToBody = target, Arrival = arrival, MaxTripSeconds = maxTrip };
+            var x = new TransferInput { TargetName = targetName, Arrival = arrival, MaxTripSeconds = maxTrip };
             if (!lowCircular)
             {
-                double radius = s[target].Radius;
                 if (!(peKm >= 0))
                 {
                     error = "The Pe must be above the surface.";
                     return false;
                 }
-                q.ArrivalPeriapsisRadius = radius + peKm * 1000;
+                x.PeriapsisAltitude = peKm * 1000;
                 if (arrival == ArrivalKind.Orbit)
                 {
                     if (!(apKm >= peKm))
@@ -108,19 +153,19 @@ namespace K2D2.Transfer
                         error = "The Ap cannot be lower than the Pe.";
                         return false;
                     }
-                    q.ArrivalApoapsisRadius = radius + apKm * 1000;
-                }
-                if (setInclination)
-                {
-                    if (!(inclinationDeg >= 0 && inclinationDeg <= 180))
-                    {
-                        error = "The inclination must be between 0° and 180°.";
-                        return false;
-                    }
-                    q.ArrivalInclinationDeg = inclinationDeg;
+                    x.ApoapsisAltitude = apKm * 1000;
                 }
             }
-            request = q;
+            if (setInclination)
+            {
+                if (!(inclinationDeg >= 0 && inclinationDeg <= 180))
+                {
+                    error = "The inclination must be between 0° and 180°.";
+                    return false;
+                }
+                x.InclinationDeg = inclinationDeg;
+            }
+            input = x;
             error = null;
             return true;
         }
@@ -197,12 +242,16 @@ namespace K2D2.Transfer
         }
 
         // The stages in firing order, with the steps each pays for (budget from
-        // TransferFlight.RemainingBudget(plan, from, stages): its step indices start at 'from'). The
-        // first stage is the one burning now; a later stage that would drop a docking port, a
-        // parachute or the command part is not fired by the mod (StagingGuard). note says when the
-        // plan needs such a stage, or null.
+        // TransferFlight.RemainingBudget(plan, from, stages): its step indices start at 'from').
+        // nextStage is the next stage the game would fire (JettisonPlan.NextStage): a stage numbered
+        // above it is already staged (active or spent) and is never flagged. Unknown (null): the
+        // first stage is taken as the active one. A stage still to fire that would drop a docking
+        // port, a parachute or the command part is not fired by the mod (StagingGuard), judged from
+        // the per-stage part flags (StageList), not from the part tree the in-flight guard cuts
+        // (StageDrop). note names the first such stage at or before the last stage the plan uses:
+        // every Δv from there on needs the player to stage by hand. null when there is none.
         public static List<StageRow> Stages(TransferPlan plan, int from, IReadOnlyList<StageDv> stages,
-            BudgetResult budget, out string note)
+            BudgetResult budget, int? nextStage, out string note)
         {
             note = null;
             var rows = new List<StageRow>();
@@ -225,13 +274,21 @@ namespace K2D2.Transfer
                         list.Add(index);
                 }
 
+            int lastPaying = -1;
+            for (int k = 0; k < stages.Count; k++)
+                if (pays.ContainsKey(stages[k].Stage))
+                    lastPaying = k;
+            if (unpaid)
+                lastPaying = stages.Count - 1;
+
             int firstByHand = -1;
             string firstReason = null;
             for (int k = 0; k < stages.Count; k++)
             {
                 var st = stages[k];
                 string reason = null;
-                bool byHand = k > 0 && !StagingGuard.MayDrop(st, out reason);
+                bool toFire = nextStage.HasValue ? st.Stage <= nextStage.Value : k > 0;
+                bool byHand = toFire && !StagingGuard.MayDrop(st, out reason);
                 var names = new List<string>();
                 if (pays.TryGetValue(st.Stage, out var steps))
                     foreach (int i in steps)
@@ -242,7 +299,7 @@ namespace K2D2.Transfer
                                 names.Add(n);
                         }
                 string paysText = string.Join(", ", names);
-                if (byHand && firstByHand < 0 && names.Count > 0)
+                if (byHand && firstByHand < 0 && k <= lastPaying)
                 {
                     firstByHand = st.Stage;
                     firstReason = reason;
