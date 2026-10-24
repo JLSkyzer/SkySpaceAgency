@@ -1,0 +1,78 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/K2D2_UI/K2D2.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#K2D2" />
+    <Style src="project://database/Assets/Runtime/K2UI/USS/K2UI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#K2UI" />
+    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Toggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#K2Toggle" />
+    <!-- Transfer to a body (spec 4.1). TransferUI.cs fills it; TransferPilot plans and flies. -->
+    <K2UI.Tabs.TabPage name="transfer" label="Transfer" style="display: flex;">
+        <ui:VisualElement name="page" style="flex-grow: 1;">
+            <ui:Label text="Transfer to a body" name="Title" class="unselectedContent" style="width: 100%; -unity-text-align: upper-center;" />
+            <K2UI.Group text="Target">
+                <!-- Every body, grouped by parent and indented (BodyChoices). -->
+                <ui:DropdownField label="Body" index="-1" choices="" name="target_body" tooltip="Every body, grouped by parent" />
+                <K2UI.InlineEnum name="arrival" labels="Encounter;Orbit" tooltip="Encounter: fly past the body. Orbit: capture at the periapsis" />
+                <K2UI.K2Toggle label="Low circular" name="low_circular" tooltip="Circular orbit 10 km above the atmosphere or the highest terrain" />
+                <ui:Label name="low_orbit_hint" text="" style="white-space: normal; font-size: 12px; color: rgb(180, 180, 180);" />
+                <ui:VisualElement name="orbit_fields">
+                    <ui:VisualElement style="flex-direction: row; align-items: center;">
+                        <ui:Label text="Pe (km)" style="width: 50%;" />
+                        <ui:FloatField name="pe_km" value="100" style="flex-grow: 1;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ap_row" style="flex-direction: row; align-items: center;">
+                        <ui:Label text="Ap (km)" style="width: 50%;" />
+                        <ui:FloatField name="ap_km" value="100" style="flex-grow: 1;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement style="flex-direction: row; align-items: center;">
+                        <K2UI.K2Toggle label="Inclination (°)" name="inc_enabled" tooltip="Set the arrival inclination (the approach correction sets the plane). Unticked: free" style="width: 50%;" />
+                        <ui:FloatField name="inc_deg" value="0" style="flex-grow: 1;" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </K2UI.Group>
+            <K2UI.Group text="Options">
+                <K2UI.K2Toggle label="Prepare only" name="prepare_only" tooltip="Make one game node at a time for you to fly; no warp" />
+                <K2UI.K2Toggle label="Use gravity assist" name="gravity_assist" tooltip="Coming soon" />
+                <ui:VisualElement style="flex-direction: row; align-items: center;">
+                    <ui:Label text="Max trip (days)" style="width: 50%;" tooltip="Days of 6 h. Empty: no limit" />
+                    <ui:TextField name="max_trip_days" value="" tooltip="Days of 6 h. Empty: no limit" style="flex-grow: 1;" />
+                </ui:VisualElement>
+            </K2UI.Group>
+            <ui:VisualElement style="flex-direction: row; margin-top: 8px;">
+                <ui:Button name="plan" text="Plan" class="big" style="flex-grow: 1; height: 30px;" />
+                <ui:Button name="start" text="Start" class="big" style="flex-grow: 1; height: 30px;" />
+                <ui:Button name="stop" text="Stop" class="big" style="flex-grow: 1; height: 30px;" />
+            </ui:VisualElement>
+            <ui:VisualElement style="flex-direction: row;">
+                <ui:Button name="resume" text="Resume" style="flex-grow: 1; height: 26px;" />
+                <ui:Button name="cancel_saved" text="Cancel saved plan" style="flex-grow: 1; height: 26px;" />
+            </ui:VisualElement>
+            <ui:Label name="resume_offer" text="" style="white-space: normal; color: rgb(224, 200, 132); display: none;" />
+            <ui:VisualElement name="status_progress_group" style="margin-top: 8px; margin-bottom: 8px;">
+                <ui:VisualElement name="k2_status_row" class="k2-status-row">
+                    <K2UI.K2Avatar name="k2_avatar" />
+                    <ui:VisualElement name="k2_status_speech" class="k2-status-speech">
+                        <K2UI.StatusLine tabindex="-1" text="Status Pilot" name="status_pilot" />
+                        <K2UI.Console tabindex="-1" name="pilot_console" text="Console Pilot" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <K2UI.K2ProgressBar name="progress" set-label-to-value="false" value="0" max="100" label=" " postfix=" %" style="height: 25px;" />
+            </ui:VisualElement>
+            <ui:VisualElement name="plan_group" style="display: none;">
+                <K2UI.Group text="Plan">
+                    <ui:Label name="case" text="" style="white-space: normal;" />
+                    <ui:Label name="departure" text="" style="white-space: normal;" />
+                    <ui:Label name="trip" text="" style="white-space: normal;" />
+                    <ui:VisualElement name="steps" />
+                    <ui:Label name="totals" text="" style="white-space: normal; margin-top: 4px;" />
+                    <ui:Label name="margin" text="" style="white-space: normal;" />
+                </K2UI.Group>
+                <ui:Foldout text="STAGES" value="false" name="stages_foldout">
+                    <ui:VisualElement name="stages" />
+                    <ui:Label name="stage_note" text="" style="white-space: normal; color: rgb(224, 200, 132); display: none;" />
+                </ui:Foldout>
+            </ui:VisualElement>
+            <ui:VisualElement name="warnings" />
+        </ui:VisualElement>
+        <ui:VisualElement name="settings" style="display: none;">
+            <ui:Label text="No Transfer Settings..." name="Title" class="unselectedContent" />
+        </ui:VisualElement>
+    </K2UI.Tabs.TabPage>
+</ui:UXML>

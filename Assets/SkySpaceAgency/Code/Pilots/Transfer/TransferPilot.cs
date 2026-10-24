@@ -76,6 +76,7 @@ namespace K2D2.Transfer
             Instance = this;
             debug_mode_only = false;
             K2D2PilotsMgr.Instance.RegisterPilot("Transfer", this);
+            _page = new TransferUI(this);
             burn.stage_when_dry = true;
             burn.allow_warp = true;
         }
