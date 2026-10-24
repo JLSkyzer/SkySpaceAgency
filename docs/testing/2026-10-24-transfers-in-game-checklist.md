@@ -2,7 +2,7 @@
 
 This list covers sub-projects 4.1 (Transfer tab) and 4.2 (Lift "Prepare transfer"). Items for 4.3 (Rendezvous tab) are in sections 8–11; 4.4 to 4.6 will be added as they are delivered.
 
-**For every test:** quicksave first, and send `Ksp2-2.log` afterwards. The lines to read start with `[Transfer]` or `[Lift]`.
+**For every test:** quicksave first, and send `Player.log` afterwards (`%USERPROFILE%AppDataocallowintercept gameskerbal space program 2player.log`; `ksp2-2.log` does not hold the mod lines). the lines to read start with `[transfer]`, `[lift]`, `[targetorbitburn]`, `[rendezvous]` or `[docking]`.
 
 ## 0. First start
 - `[Transfer] game trajectory model: …` should show patched conics while coasting.
