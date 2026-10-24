@@ -284,7 +284,7 @@ namespace K2D2.KSPService
                 return;
             if (o.Active)
             {
-                o.logger?.LogInfo($"{o.Prefix} the burn stopped updating: leaving");
+                o.logger?.LogInfo($"{o.Prefix} the burn was not updated this frame (stopped, failed, scene change or staging pause): leaving");
                 o.Leave(true);
             }
             owner = null;

@@ -351,6 +351,10 @@ namespace K2D2
                 if (main_window != null && main_window.IsWindowOpen)
                     main_window.IsWindowOpen = false;
             }
+
+            // A burn under physics time warp that was not updated this frame (pilot stopped, scene
+            // change, staging pause) gives the warp back to 1x and the player's mode.
+            KSPService.PhysicsWarp.ReleaseIfAbandoned();
         }
 
         // call on reset on controller, each on can reset it's status

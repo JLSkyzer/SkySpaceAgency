@@ -27,8 +27,9 @@ namespace K2D2.Node
     /// alignment lead before the burn start (BurnWarp.AlignmentLead from the angle still to turn
     /// and the measured turn rate, 20 to 120 s), stop the warp instantly there, and ignite at the
     /// start time once within 10° (a late alignment delays the ignition, the closed loop corrects
-    /// the orbit). While burning the warp is managed (BurnWarp.MaxBurnRate) and the throttle is
-    /// frame-aware (BurnWarp.Throttle). Refusals go through Fail(). CircularizeBurn derives from it
+    /// the orbit). While burning the warp is physics warp only, x4 at most (PhysicsWarpPolicy, under
+    /// BurnWarp.MaxBurnRate), given back as the player had it on every end path, and the throttle
+    /// is frame-aware (BurnWarp.Throttle). Refusals go through Fail(). CircularizeBurn derives from it
     /// with its own target (circular at the current radius) and start time (centered on the apsis).
     ///
     /// With stage_when_dry (off by default, set by the transfer pilot only) a burn whose engines
@@ -120,10 +121,8 @@ namespace K2D2.Node
         int last_warp_index;     // warp index at the previous angle sample
         bool warp_stopped;       // the warp was stopped at WarpEndUT
         bool late_logged;
-        // Warp while burning: the rate levels, whether a change was already logged, the last index.
-        float[] warp_rates;
-        bool burn_warp_logged;
-        int burn_warp_index;
+        // Physics time warp while burning (ManageBurnWarp), left on every end path.
+        readonly PhysicsWarp physics_warp;
 
         protected KSPVessel current_vessel;
         protected BurndV burn_dV = new BurndV();
@@ -135,6 +134,7 @@ namespace K2D2.Node
         protected TargetOrbitBurn(string loggerName)
         {
             logger = SpaceWarp2.API.Logging.LogManager.GetLogger(loggerName);
+            physics_warp = new PhysicsWarp(logger, () => BurnLogTag);
         }
 
         public TargetOrbit Target => target;
@@ -222,6 +222,8 @@ namespace K2D2.Node
         // Resets the run. False, after a refusal, when there is no active vessel.
         protected bool BeginRun()
         {
+            // A restart in the middle of a physics-warped burn gives the warp back first.
+            physics_warp.Leave(true);
             base.Start();
             mode = Mode.Warp;
             remaining_dv = 0;
@@ -247,9 +249,6 @@ namespace K2D2.Node
             last_warp_index = -1;
             warp_stopped = false;
             late_logged = false;
-            warp_rates = null;
-            burn_warp_logged = false;
-            burn_warp_index = -1;
 
             current_vessel = K2D2_Plugin.Instance.current_vessel;
             if (current_vessel?.VesselComponent == null)
@@ -402,8 +401,17 @@ namespace K2D2.Node
 
         public override void Update()
         {
-            if (finished)
-                return;
+            if (!finished)
+                UpdateRun();
+            // Done, refused, aborted or failed: the physics warp goes back to 1x and the player's
+            // mode. A burn stopped from outside (its Update no longer called) is caught by
+            // PhysicsWarp.ReleaseIfAbandoned instead.
+            if (finished && physics_warp.Active)
+                physics_warp.Leave(true);
+        }
+
+        void UpdateRun()
+        {
             if (current_vessel?.VesselComponent == null)
                 return;
 
@@ -613,73 +621,27 @@ namespace K2D2.Node
             }
         }
 
-        // Every burn is held at 1x (the player's warp included). On rails warp the game replaces
+        // Warp while burning: physics warp only, never rails. On rails warp the game replaces
         // thrust by a burn it precomputes once when the warp starts (HandleOrbitalPhysicsUnder-
         // ThrustStart, IL): fixed direction, the stage's flow until it is empty, and steering or
-        // throttle changes ignored. Our closed loop cannot steer that. In game on 2026-10-24, three
-        // transfer injections warped to x4 right after ignition burned ~500 m/s of fuel each while
-        // the orbit stayed 100 x 100 km, and aborted as "diverging".
-        public const bool WarpWhileBurning = false;
-
-        // Warp while burning (off, see WarpWhileBurning): capped by BurnWarp.MaxBurnRate (5 % of
-        // the remaining Δv per frame, at least 10 s of real time left), 1x when not aligned or
-        // under 10 s of burn left. With allow_warp the warp is raised to the cap, otherwise the
-        // player's warp is only lowered.
+        // throttle changes ignored. In game on 2026-10-24, three transfer injections warped to x4
+        // on rails right after ignition burned ~500 m/s of fuel each while the orbit stayed
+        // 100 x 100 km. Physics warp (TimeWarp.ToggleTimeWarpMode at 1x, then x2 or x4) keeps the
+        // vessel RigidBody, so steering and throttle keep working.
+        //
+        // PhysicsWarpPolicy decides each frame: a rails index, physics mode off or a vessel no
+        // longer RigidBody drop to 1x at once; otherwise the cap is BurnWarp.MaxBurnRate (5 % of
+        // the remaining Δv per frame of real time, at least 10 s of real time left), x4 at most,
+        // x2 under 30 s of game time left, 1x when not aligned. With allow_warp the warp is raised
+        // to the cap, otherwise the player's warp is only lowered.
         void ManageBurnWarp(double remainingDv, double accel, bool aligned)
         {
-            int current = TimeWarpTools.CurrentRateIndex;
             double frame = Time.unscaledDeltaTime;
             double burnLeft = accel > 0 ? remainingDv / accel : double.PositiveInfinity;
             double cap = 1;
-            if (WarpWhileBurning && aligned && accel > 0 && burnLeft >= BurnWarp.MinRealBurnTime)
+            if (aligned && accel > 0 && burnLeft >= BurnWarp.MinRealBurnTime)
                 cap = BurnWarp.MaxBurnRate(remainingDv, accel, frame);
-            if (warp_rates == null || warp_rates.Length == 0)
-                warp_rates = WarpRates();
-            int capIndex = BurnWarp.HighestIndexAtOrBelow(warp_rates, cap);
-
-            int wanted = current;
-            if (current > capIndex)
-                wanted = capIndex;
-            else if (allow_warp && current < capIndex)
-                wanted = capIndex;
-            if (wanted == current)
-                return;
-
-            // Lowering is instant (safety), raising goes through the game's ramp.
-            TimeWarpTools.SetRateIndex(wanted, wanted < current);
-            if (!burn_warp_logged || (wanted == 0 && burn_warp_index != 0))
-            {
-                burn_warp_logged = true;
-                string why = !aligned ? "not aligned" : accel <= 0 ? "no thrust"
-                    : burnLeft < BurnWarp.MinRealBurnTime ? $"{burnLeft:n1} s of burn left" : $"cap x{cap:n0}";
-                logger.LogInfo($"{BurnLogTag} burn warp: x{RateText(current)} -> x{RateText(wanted)} ({why}; " +
-                    $"dv {remainingDv:n1} m/s, accel {accel:n2} m/s2, burn left {burnLeft:n1} s, frame {frame * 1000:n0} ms)");
-            }
-            burn_warp_index = wanted;
-        }
-
-        string RateText(int index) =>
-            warp_rates != null && index >= 0 && index < warp_rates.Length ? $"{warp_rates[index]:0.##}" : $"[{index}]";
-
-        // The game's warp levels in ascending order (TimeWarpTools.indexToRatio is 0 past the end).
-        static float[] WarpRates()
-        {
-            var rates = new System.Collections.Generic.List<float>();
-            try
-            {
-                for (int i = 0; i < 32; i++)
-                {
-                    float r = TimeWarpTools.indexToRatio(i);
-                    if (!(r > 0))
-                        break;
-                    rates.Add(r);
-                }
-            }
-            catch (Exception)
-            {
-                // No time warp object (scene change): no level above 1x is allowed.
-            }
-            return rates.ToArray();
+            physics_warp.Update(cap, aligned, burnLeft, allow_warp);
         }
 
         protected virtual string BurningStatus(double dv) => $"Target orbit: {dv:n1} m/s left";
