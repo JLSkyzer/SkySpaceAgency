@@ -103,6 +103,7 @@ namespace K2D2.Lift
                         // Transfer goal: no plan search left running, and no warp left on by the
                         // pad wait or the trim.
                         wait_launch.Cancel();
+                        settings.SetApOverride(-1);
                         if (previous == LiftStatus.WaitLaunch || previous == LiftStatus.PlaneTrim)
                             TimeWarpTools.SetRateIndex(0, false);
                     }
@@ -160,6 +161,7 @@ namespace K2D2.Lift
         {
             transfer = null;
             ascent.transfer_plan = null;
+            settings.SetApOverride(-1);
             if (settings.goal.V == LiftGoal.PrepareTransfer)
                 status = LiftStatus.WaitLaunch;
             else
@@ -200,6 +202,11 @@ namespace K2D2.Lift
             var vessel = current_vessel.VesselComponent;
             if (p == null || double.IsNaN(p.LiftoffUT) || vessel == null)
                 return;
+            if (p.EarlyLiftoff)
+            {
+                logger.LogInfo("[Lift] ascent lead not measured: the vessel lifted off before the launch time");
+                return;
+            }
             double now = GeneralTools.Current_UT;
             double dt = now - p.LiftoffUT;
             double downrange = LiftGoalRules.DownrangeRad(p.LiftoffPosition, vessel.Orbit.GetRelativePositionAtUTZup(now), p.Omega, dt);
@@ -208,11 +215,12 @@ namespace K2D2.Lift
                 $"[Lift] ascent lead measured: {dt:F1} s, downrange {downrangeDeg:F2}° on {p.BodyName} ") +
                 System.FormattableString.Invariant(
                 $"(the window used {p.LeadSeconds:F0} s, {p.DownrangeRad * 180 / System.Math.PI:F2}°, {(p.LeadMeasured ? "measured" : "estimate")})"));
-            if (dt > 0)
+            var stored = settings.MeasuredLead(p.BodyName);
+            if (LiftGoalRules.UpdatedLead(stored.s.V, stored.deg.V, dt, downrangeDeg, out double s, out double deg))
             {
-                settings.measured_lead_s.V = (float)dt;
-                settings.measured_downrange_deg.V = (float)downrangeDeg;
-                settings.measured_lead_body.V = p.BodyName;
+                stored.s.V = (float)s;
+                stored.deg.V = (float)deg;
+                logger.LogInfo(System.FormattableString.Invariant($"[Lift] ascent lead stored for {p.BodyName}: {s:F1} s, {deg:F2}° (clamped, smoothed)"));
             }
         }
 

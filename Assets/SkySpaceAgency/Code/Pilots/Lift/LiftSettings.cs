@@ -27,8 +27,8 @@ namespace K2D2.Lift
 
         public void update_altitudes()
         {
-            _mid_rotate_altitude_km = Mathf.Lerp(start_altitude_km.V, destination_Ap_km.V, mid_rotate_ratio.V);
-            _end_rotate_altitude_km = Mathf.Lerp(start_altitude_km.V, destination_Ap_km.V, end_rotate_ratio.V);
+            _mid_rotate_altitude_km = Mathf.Lerp(start_altitude_km.V, target_Ap_km, mid_rotate_ratio.V);
+            _end_rotate_altitude_km = Mathf.Lerp(start_altitude_km.V, target_Ap_km, end_rotate_ratio.V);
         }
 
         float _mid_rotate_altitude_km = -1;
@@ -54,7 +54,7 @@ namespace K2D2.Lift
 
         public float end_ascent_error
         {
-            get => destination_Ap_km.V * end_ascent_pc.V/100;
+            get => target_Ap_km * end_ascent_pc.V/100;
         }
 
         public Setting<bool> coasting_warp = new ("lift.coasting_warp", true);
@@ -63,7 +63,7 @@ namespace K2D2.Lift
 
         public float end_adjust_error
         {
-            get => destination_Ap_km.V * end_adjust_pc.V/100;
+            get => target_Ap_km * end_adjust_pc.V/100;
         }
 
         // Default on: run straight through ascent -> atmosphere clear -> circularize with no
@@ -95,11 +95,33 @@ namespace K2D2.Lift
         public EnumSetting<LiftGoal> goal = new("lift.goal", LiftGoal.Orbit);
         // The target body, by name (resolved against the snapshot the plan is made from).
         public Setting<string> transfer_target = new("lift.transfer_target", "");
-        // The ascent lead measured by the last transfer ascent, and the body it was measured on;
-        // -1 until then (LiftGoalRules.AscentLead then uses its estimate).
-        public Setting<float> measured_lead_s = new("lift.measured_lead_s", -1f);
-        public Setting<float> measured_downrange_deg = new("lift.measured_downrange_deg", -1f);
-        public Setting<string> measured_lead_body = new("lift.measured_lead_body", "");
+
+        // The ascent lead measured by the transfer ascents, per body (lift.ascent_lead.<body>.s and
+        // .deg); -1 until a first one (LiftGoalRules.AscentLead then uses its estimate).
+        readonly System.Collections.Generic.Dictionary<string, (Setting<float> s, Setting<float> deg)> measured_leads =
+            new System.Collections.Generic.Dictionary<string, (Setting<float>, Setting<float>)>();
+
+        public (Setting<float> s, Setting<float> deg) MeasuredLead(string body)
+        {
+            body = body ?? "";
+            if (!measured_leads.TryGetValue(body, out var pair))
+            {
+                pair = (new Setting<float>($"lift.ascent_lead.{body}.s", -1f), new Setting<float>($"lift.ascent_lead.{body}.deg", -1f));
+                measured_leads[body] = pair;
+            }
+            return pair;
+        }
+
+        // The Ap the ascent flies to: the setting, or for one transfer run the parking orbit's
+        // (never written into the player's setting).
+        int ap_override_km = -1;
+        public int target_Ap_km => ap_override_km > 0 ? ap_override_km : destination_Ap_km.V;
+
+        public void SetApOverride(int km)
+        {
+            ap_override_km = km;
+            update_altitudes();
+        }
 
         Label end_ascent_alt;
         Label end_adjust_alt;
@@ -108,8 +130,8 @@ namespace K2D2.Lift
 
         void setLabels()
         {
-            end_ascent_alt.text = $"End Ascent Alt. : {destination_Ap_km.V - end_ascent_error:n2} km";
-            end_adjust_alt.text = $"Final Adjust Alt : {destination_Ap_km.V - end_adjust_error:n2} km";
+            end_ascent_alt.text = $"End Ascent Alt. : {target_Ap_km - end_ascent_error:n2} km";
+            end_adjust_alt.text = $"Final Adjust Alt : {target_Ap_km - end_adjust_error:n2} km";
         }
 
         public void setupUI(VisualElement root)

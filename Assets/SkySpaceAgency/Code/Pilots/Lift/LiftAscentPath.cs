@@ -107,17 +107,17 @@ namespace K2D2.Lift
 
         public void updateProfile(float current_altitude_km)
         {
-            float scale = (float)(lift_settings.destination_Ap_km.V / y_range);
+            float scale = (float)(lift_settings.target_Ap_km / y_range);
 
             if (lastbody != K2D2_Plugin.Instance.current_vessel.currentBody() ||
-                last_max_alt != lift_settings.destination_Ap_km.V)
+                last_max_alt != lift_settings.target_Ap_km)
             {
-                UpdateAtmoTexture(K2D2_Plugin.Instance.current_vessel.currentBody(), lift_settings.destination_Ap_km.V);
+                UpdateAtmoTexture(K2D2_Plugin.Instance.current_vessel.currentBody(), lift_settings.target_Ap_km);
             }
 
             reset();
             // update range
-            y_range = lift_settings.destination_Ap_km.V;
+            y_range = lift_settings.target_Ap_km;
             x_range = 1 * y_range * get_line().aspectRatio();
             reset();
 
@@ -155,9 +155,9 @@ namespace K2D2.Lift
             points.Add(prev_point);
             Vector2 point = Vector2.zero;
 
-            float definition = lift_settings.destination_Ap_km.V / 100f;
+            float definition = lift_settings.target_Ap_km / 100f;
 
-            while ((alt < lift_settings.destination_Ap_km.V) && (downrange < x_range))
+            while ((alt < lift_settings.target_Ap_km) && (downrange < x_range))
             {
                 float desiredAngle = (float)(alt < lift_settings.start_altitude_km.V ? 90 : compute_elevation(alt));
 
@@ -198,7 +198,7 @@ namespace K2D2.Lift
             else
                 HideLine();
 
-            if (current_altitude_km > 0 && current_altitude_km < lift_settings.destination_Ap_km.V)
+            if (current_altitude_km > 0 && current_altitude_km < lift_settings.target_Ap_km)
                 setHLine(current_altitude_km, Color.green);
             else
                 HideLine();

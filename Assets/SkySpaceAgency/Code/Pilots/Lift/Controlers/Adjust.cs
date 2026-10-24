@@ -66,7 +66,7 @@ namespace K2D2.Lift
             finished = false;
             ascent.computeValues(false);
 
-            float remaining_Ap = lift_settings.destination_Ap_km.V - ascent.ap_km;
+            float remaining_Ap = lift_settings.target_Ap_km - ascent.ap_km;
             if (remaining_Ap <= lift_settings.end_adjust_error) // we stop at 0.1% of dest AP
             {
                 // Whatever throttle the line below set last frame is still commanded - without

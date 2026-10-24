@@ -43,6 +43,11 @@ namespace K2D2.Lift
         Stopwatch job_watch;
         string refusal;
 
+        // A first stage fired and not yet confirmed: the staging read just before it.
+        bool stage_pending;
+        int stage_count_before;
+        bool last_active_before;
+
         public WaitLaunch(LiftPilot lift, LiftSettings settings)
         {
             this.lift = lift;
@@ -58,6 +63,7 @@ namespace K2D2.Lift
             current_vessel = K2D2_Plugin.Instance.current_vessel;
             refusal = null;
             status_line = "";
+            stage_pending = false;
             var p = lift.transfer;
             if (p != null && p.Ready)
             {
@@ -126,8 +132,9 @@ namespace K2D2.Lift
             int apKm = LiftGoalRules.ParkingApKm(node.LowOrbitRadius, node.Radius, settings.destination_Ap_km.V);
             if (apKm != settings.destination_Ap_km.V)
             {
-                logger.LogInfo($"[Lift] Ap raised from {settings.destination_Ap_km.V} km to {apKm} km: the low orbit of {node.Name}");
-                settings.destination_Ap_km.V = apKm;
+                // For this run only: the player's saved Ap stays as it is.
+                logger.LogInfo($"[Lift] Ap raised from {settings.destination_Ap_km.V} km to {apKm} km for this run: the low orbit of {node.Name}");
+                settings.SetApOverride(apKm);
             }
             double radius = node.Radius + apKm * 1000.0;
 
@@ -138,9 +145,8 @@ namespace K2D2.Lift
             bool decisive = BodyRotation.IsDecisive(r, v, w);
             Vector3d omega = BodyRotation.AngularVelocity(w, sign);
 
-            bool sameBody = settings.measured_lead_body.V == node.Name;
-            LiftGoalRules.AscentLead(sameBody ? settings.measured_lead_s.V : -1, sameBody ? settings.measured_downrange_deg.V : -1,
-                out double lead, out double downrange, out bool measured);
+            var stored = settings.MeasuredLead(node.Name);
+            LiftGoalRules.AscentLead(stored.s.V, stored.deg.V, out double lead, out double downrange, out bool measured);
 
             var p = new LiftTransferPlan
             {
@@ -237,6 +243,7 @@ namespace K2D2.Lift
             IKeplerPatch orbit = vessel.Orbit;
             Vector3d r = orbit.GetRelativePositionAtUTZup(now);
             double missed = p.Window.LaunchUT;
+            stage_pending = false;
             var window = LaunchWindow.Find(p.BodyRadius, p.Mu, p.Omega, r, now, p.Parking.PlaneNormal, p.OrbitRadius,
                 p.LeadSeconds, p.DownrangeRad, Horizon(p.Omega));
             p.Resolves++;
@@ -299,12 +306,8 @@ namespace K2D2.Lift
                         TimeWarpTools.SetRateIndex(0, true);
                         return;
                     }
-                    current_vessel.SetThrottle(settings.max_throttle.V);
-                    if (!p.Staged)
-                    {
-                        p.Staged = true;
-                        vessel.ActivateNextStage();
-                    }
+                    if (!Launch(p, vessel, now))
+                        return;
                     logger.LogInfo(Inv($"[Lift] launch: UT {now:F1} against the planned UT {launch:F1} (T{now - launch:+0.0;-0.0;+0.0} s), ") +
                         Inv($"first plan UT {p.PlannedLaunchUT:F1}, {p.Resolves} pass(es) solved again, azimuth {p.Window.AzimuthDeg:F2}°"));
                     status_line = "Launch!";
@@ -314,11 +317,73 @@ namespace K2D2.Lift
                     Resolve("the clock passed the launch time on the pad");
                     break;
                 case PadAction.LiftedOff:
+                    p.EarlyLiftoff = true;
                     logger.LogWarning(Inv($"[Lift] lifted off at UT {now:F1}, before the launch time UT {launch:F1} (T{now - launch:+0.0;-0.0;+0.0} s): ") +
                         "the plane will be off, the ascent steering and the trim take it out");
                     finished = true;
                     break;
             }
+        }
+
+        // Staging at T-0. True once the vessel is under way: the stage fired (confirmed a frame
+        // later), or engines already lit (throttle only). A refusal sets 'refusal'.
+        bool Launch(LiftTransferPlan p, VesselComponent vessel, double now)
+        {
+            StagingComponent staging = vessel.SimulationObject?.Staging;
+            int count = staging?.StageCount ?? 0;
+            bool lastActive = count > 0 && staging.AvailableStages[count - 1].IsActive;
+
+            if (stage_pending)
+            {
+                if (LiftGoalRules.StageFired(stage_count_before, last_active_before, count, lastActive))
+                {
+                    stage_pending = false;
+                    p.Staged = true;
+                    logger.LogInfo($"[Lift] launch: first stage fired ({stage_count_before} -> {count} stage(s), last stage active {lastActive})");
+                    return true;
+                }
+                // ActivateNextStage did nothing (paused, or warp on rails): it fires nothing, so
+                // trying again cannot fire a second stage.
+                var universe = GeneralTools.Game?.UniverseModel;
+                if (universe != null && universe.Time.IsPaused)
+                    return false;
+                vessel.ActivateNextStage();
+                return false;
+            }
+
+            int engines = ActiveEngines(vessel);
+            switch (LiftGoalRules.LaunchStagingFor(p.Staged, count, lastActive, engines))
+            {
+                case LaunchStaging.Stage:
+                    current_vessel.SetThrottle(settings.max_throttle.V);
+                    stage_pending = true;
+                    stage_count_before = count;
+                    last_active_before = lastActive;
+                    vessel.ActivateNextStage();
+                    status_line = "Staging...";
+                    return false;
+                case LaunchStaging.ThrottleOnly:
+                    logger.LogInfo($"[Lift] launch: {engines} engine(s) already lit ({count} stage(s), last stage active {lastActive}): " +
+                        "lift-off on the throttle, no stage fired");
+                    current_vessel.SetThrottle(settings.max_throttle.V);
+                    return true;
+                default:
+                    logger.LogInfo($"[Lift] launch refused: {count} stage(s), last stage active {lastActive}, {engines} engine(s) lit");
+                    refusal = LiftGoalRules.StagedRefusal;
+                    return false;
+            }
+        }
+
+        static int ActiveEngines(VesselComponent vessel)
+        {
+            var infos = vessel.VesselDeltaV?.EngineInfo;
+            if (infos == null)
+                return 0;
+            int n = 0;
+            foreach (var e in infos)
+                if (e != null && BurndV.IsActive(e))
+                    n++;
+            return n;
         }
 
         public override void updateUI(VisualElement root_el, FullStatus st)
@@ -327,10 +392,10 @@ namespace K2D2.Lift
             st.Console(status_line);
         }
 
+        // The plan's readout is shown once, by the tab's transfer table (LiftUI).
         public override void UpdateInfoRows(Action<string, string> addRow)
         {
-            foreach (var (label, value) in LiftGoalRules.Readout(lift.transfer, GeneralTools.Current_UT))
-                addRow(label, value);
+            addRow("Status", "Waiting on the pad");
         }
 
         static string Inv(FormattableString text) => text.ToString(CultureInfo.InvariantCulture);

@@ -15,6 +15,10 @@ namespace K2D2.Lift
     // What the pad wait does now (LiftGoalRules.Decide).
     public enum PadAction { Warp, Hold, Launch, Resolve, LiftedOff }
 
+    // How the launch goes at T-0 (LiftGoalRules.LaunchStagingFor): fire the first stage, lift off
+    // on the throttle alone (engines already lit), or refuse.
+    public enum LaunchStaging { Stage, ThrottleOnly, Refuse }
+
     // The transfer goal's plan, filled by WaitLaunch and read by the ascent, the trim and the tab. All
     // vectors are in the launch body's inertial Zup frame of the snapshot the plan was made from.
     public class LiftTransferPlan
@@ -35,7 +39,8 @@ namespace K2D2.Lift
 
         public double PlannedLaunchUT = double.NaN;  // the first window, for the log
         public int Resolves;                         // passes missed and solved again
-        public bool Staged;                          // the mod fired the first stage this run
+        public bool Staged;                          // the mod fired the first stage this run (confirmed)
+        public bool EarlyLiftoff;                    // lifted off before the launch time: no lead measured
 
         public double LiftoffUT = double.NaN;
         public Vector3d LiftoffPosition;
@@ -63,7 +68,54 @@ namespace K2D2.Lift
         public const double EstimatedLeadSeconds = 150;
         public const double EstimatedDownrangeDeg = 5;
 
+        // The stored ascent lead stays in this range (a value outside is clamped), and a new
+        // measurement counts for this share against the previous one.
+        public const double MinLeadSeconds = 60, MaxLeadSeconds = 600;
+        public const double MinDownrangeDeg = 1, MaxDownrangeDeg = 30;
+        public const double LeadSmoothing = 0.5;
+
+        public const string StagedRefusal =
+            "The vessel was staged before the launch time and no engine is lit: the mod does not fire another stage on the pad. Revert to the launch, or light the engines yourself.";
+
         const double Deg = Math.PI / 180;
+
+        // The first stage is fired only on a vessel nothing was staged on: the stage
+        // ActivateNextStage would fire is the first one (the last stage, StageCount-1, not active:
+        // JettisonPlan.NextStage) and no engine is lit. Otherwise the player has staged already:
+        // lift off on the throttle if engines are lit, else refuse (the next stage could be the
+        // boosters' decouplers).
+        public static LaunchStaging LaunchStagingFor(bool stagedByMod, int stageCount, bool lastStageActive, int activeEngines)
+        {
+            if (!stagedByMod && stageCount > 0 && !lastStageActive && activeEngines == 0)
+                return LaunchStaging.Stage;
+            if (activeEngines > 0)
+                return LaunchStaging.ThrottleOnly;
+            return LaunchStaging.Refuse;
+        }
+
+        // ActivateNextStage either fires at once or does nothing (paused, warp on rails): a stage
+        // fired shows on the next frame as a new stage count or a newly active last stage.
+        public static bool StageFired(int countBefore, bool lastActiveBefore, int countNow, bool lastActiveNow) =>
+            countNow != countBefore || lastActiveNow != lastActiveBefore;
+
+        // The lead and downrange to store after an ascent: the measurement clamped to the plausible
+        // range, averaged with the previous stored value when there is one. False when the
+        // measurement is unusable (non-finite or not positive): keep the previous value.
+        public static bool UpdatedLead(double previousSeconds, double previousDeg, double measuredSeconds, double measuredDeg,
+            out double seconds, out double deg)
+        {
+            seconds = previousSeconds;
+            deg = previousDeg;
+            if (!(measuredSeconds > 0) || double.IsInfinity(measuredSeconds) || double.IsNaN(measuredDeg) || double.IsInfinity(measuredDeg))
+                return false;
+            double s = Math.Max(MinLeadSeconds, Math.Min(MaxLeadSeconds, measuredSeconds));
+            double d = Math.Max(MinDownrangeDeg, Math.Min(MaxDownrangeDeg, measuredDeg));
+            bool hasPrevious = previousSeconds >= MinLeadSeconds && previousSeconds <= MaxLeadSeconds
+                               && previousDeg >= MinDownrangeDeg && previousDeg <= MaxDownrangeDeg;
+            seconds = hasPrevious ? LeadSmoothing * previousSeconds + (1 - LeadSmoothing) * s : s;
+            deg = hasPrevious ? LeadSmoothing * previousDeg + (1 - LeadSmoothing) * d : d;
+            return true;
+        }
 
         public static double WarpEndUT(double launchUT) => launchUT - HoldSeconds;
 
@@ -94,8 +146,8 @@ namespace K2D2.Lift
         public static void AscentLead(double measuredLeadSeconds, double measuredDownrangeDeg,
             out double leadSeconds, out double downrangeRad, out bool measured)
         {
-            measured = measuredLeadSeconds > 0 && !double.IsInfinity(measuredLeadSeconds)
-                       && measuredDownrangeDeg >= 0 && measuredDownrangeDeg < 90;
+            measured = measuredLeadSeconds >= MinLeadSeconds && measuredLeadSeconds <= MaxLeadSeconds
+                       && measuredDownrangeDeg >= MinDownrangeDeg && measuredDownrangeDeg <= MaxDownrangeDeg;
             leadSeconds = measured ? measuredLeadSeconds : EstimatedLeadSeconds;
             downrangeRad = (measured ? measuredDownrangeDeg : EstimatedDownrangeDeg) * Deg;
         }

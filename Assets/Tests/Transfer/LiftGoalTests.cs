@@ -60,6 +60,82 @@ public class LiftGoalTests
         Assert.AreEqual(4970, LiftGoalRules.WarpEndUT(5000), 1e-9);
     }
 
+    // ---------------------------------------------------------------- staging at T-0
+
+    [Test]
+    public void UnstagedVessel_NoEngineLit_IsStaged()
+    {
+        // 3 stages, the last (StageCount-1, the first to fire) not active yet.
+        Assert.AreEqual(LaunchStaging.Stage, LiftGoalRules.LaunchStagingFor(false, 3, false, 0));
+    }
+
+    [Test]
+    public void PlayerStaged_EnginesLit_LiftsOffOnTheThrottleOnly()
+    {
+        Assert.AreEqual(LaunchStaging.ThrottleOnly, LiftGoalRules.LaunchStagingFor(false, 3, true, 2));
+        // Engines lit by hand (action group) with nothing staged: still no stage fired.
+        Assert.AreEqual(LaunchStaging.ThrottleOnly, LiftGoalRules.LaunchStagingFor(false, 3, false, 1));
+        // The mod staged already (a re-solved pass): never a second stage.
+        Assert.AreEqual(LaunchStaging.ThrottleOnly, LiftGoalRules.LaunchStagingFor(true, 2, true, 1));
+    }
+
+    [Test]
+    public void PlayerStaged_NoEngineLit_Refuses()
+    {
+        // Clamps released or a decoupler fired by hand, engines off: the next stage could drop the boosters.
+        Assert.AreEqual(LaunchStaging.Refuse, LiftGoalRules.LaunchStagingFor(false, 3, true, 0));
+        Assert.AreEqual(LaunchStaging.Refuse, LiftGoalRules.LaunchStagingFor(true, 2, true, 0));
+        Assert.AreEqual(LaunchStaging.Refuse, LiftGoalRules.LaunchStagingFor(false, 0, false, 0));
+    }
+
+    [Test]
+    public void StageFired_OnlyWhenTheStagingChanged()
+    {
+        Assert.IsTrue(LiftGoalRules.StageFired(3, false, 3, true));   // first staging: stage L activated
+        Assert.IsTrue(LiftGoalRules.StageFired(3, true, 2, true));    // later: stage L removed
+        Assert.IsFalse(LiftGoalRules.StageFired(3, false, 3, false)); // paused or on rails: nothing happened
+    }
+
+    // ---------------------------------------------------------------- stored ascent lead
+
+    [Test]
+    public void UpdatedLead_FirstMeasurement_IsClamped()
+    {
+        Assert.IsTrue(LiftGoalRules.UpdatedLead(-1, -1, 170, 6, out double s, out double d));
+        Assert.AreEqual(170, s, 1e-9);
+        Assert.AreEqual(6, d, 1e-9);
+        Assert.IsTrue(LiftGoalRules.UpdatedLead(-1, -1, 2000, 0.2, out s, out d));
+        Assert.AreEqual(LiftGoalRules.MaxLeadSeconds, s, 1e-9);
+        Assert.AreEqual(LiftGoalRules.MinDownrangeDeg, d, 1e-9);
+    }
+
+    [Test]
+    public void UpdatedLead_IsSmoothedWithThePreviousValue()
+    {
+        Assert.IsTrue(LiftGoalRules.UpdatedLead(150, 5, 190, 7, out double s, out double d));
+        Assert.AreEqual(170, s, 1e-9);
+        Assert.AreEqual(6, d, 1e-9);
+    }
+
+    [Test]
+    public void UpdatedLead_UnusableMeasurement_KeepsThePrevious()
+    {
+        Assert.IsFalse(LiftGoalRules.UpdatedLead(150, 5, double.NaN, 7, out double s, out double d));
+        Assert.AreEqual(150, s, 1e-9);
+        Assert.AreEqual(5, d, 1e-9);
+        Assert.IsFalse(LiftGoalRules.UpdatedLead(150, 5, -3, 7, out _, out _));
+    }
+
+    [Test]
+    public void AscentLead_OutOfTheRange_UsesTheEstimate()
+    {
+        LiftGoalRules.AscentLead(20, 4, out double lead, out _, out bool measured);
+        Assert.IsFalse(measured);
+        Assert.AreEqual(LiftGoalRules.EstimatedLeadSeconds, lead, 1e-9);
+        LiftGoalRules.AscentLead(160, 45, out _, out _, out measured);
+        Assert.IsFalse(measured);
+    }
+
     // ---------------------------------------------------------------- parking altitude
 
     [Test]

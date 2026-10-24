@@ -77,7 +77,7 @@ namespace K2D2.Lift
 
             CelestialBodyComponent mainBody = K2D2_Plugin.Instance.current_vessel.currentBody();
             var maxAtmosphereAltitude_km = (float)(mainBody.atmosphereDepth / 1000);
-            if (lift_settings.destination_Ap_km.V < maxAtmosphereAltitude_km)
+            if (lift_settings.target_Ap_km < maxAtmosphereAltitude_km)
             {
                 lift.EndLiftPilot(false, "Warning Ap is under Atm. limit");
                 return;

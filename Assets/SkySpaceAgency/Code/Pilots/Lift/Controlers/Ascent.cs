@@ -535,7 +535,7 @@ namespace K2D2.Lift
             UpdateRollProgram();
             applyDirection();
             finished = false;
-            float remaining_Ap = settings.destination_Ap_km.V - ap_km;
+            float remaining_Ap = settings.target_Ap_km - ap_km;
             if (remaining_Ap <= settings.end_ascent_error)
             {
                 finished = true;

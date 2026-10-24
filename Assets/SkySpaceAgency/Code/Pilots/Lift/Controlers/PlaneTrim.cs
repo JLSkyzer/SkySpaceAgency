@@ -70,6 +70,12 @@ namespace K2D2.Lift
             var thrust = new BurndV();
             thrust.Compute_Thrust();
             double duration = BurnTiming.Duration(dv, thrust.active_thrust, thrust.mass, thrust.active_isp);
+            if (double.IsNaN(duration) || double.IsInfinity(duration))
+            {
+                refusal = Inv($"Plane trim: no active engine for the {dv:F1} m/s plane change ({error_before:F2}° off). Stage an engine and burn it yourself, or open the Transfer tab, which plans from this orbit.");
+                logger.LogInfo("[Lift] " + refusal);
+                return;
+            }
             double nodeUT = now + toNode;
             double start = BurnTiming.CenteredStart(nodeUT, duration, now);
             logger.LogInfo(Inv($"[Lift] plane trim: {error_before:F3}° at the node in {toNode:F0} s, about {dv:F1} m/s, burn {duration:F1} s, start in {start - now:F0} s"));
