@@ -54,7 +54,7 @@ public class RailsBurnPolicyTests
     [Test]
     public void LongSteadyBurn_EntersRailsAtHighestSafeRate()
     {
-        // 1000 s left, 15 s margin: 985 s to the planned exit, 19.7 s real at x50: x50.
+        // 1000 s left: 985 s to the exit less 100 s (2 s real at x50): 17.7 s real at x50.
         RailsStep step = RailsBurnPolicy.Decide(Eligible());
         Assert.That(step.Action, Is.EqualTo(RailsAction.EnterRails));
         Assert.That(step.WantedIndex, Is.EqualTo(4));
@@ -143,21 +143,30 @@ public class RailsBurnPolicyTests
     [Test]
     public void GuardFailsWithin2Frames_DropsAndNeverRetries()
     {
-        // Frame 1 after entering: the game may not have switched yet, a failed check waits.
+        // Frame 1 after entering, the game has not switched yet (pending): wait.
         RailsInputs r = OnRails(4);
         r.GuardOk = false;
+        r.GuardPending = true;
         r.FramesSinceRailsEntry = 1;
         RailsStep step = RailsBurnPolicy.Decide(r);
         Assert.That(step.Action, Is.EqualTo(RailsAction.Stay));
         Assert.That(step.WantedIndex, Is.EqualTo(4));
 
-        // Frame 2: still not confirmed (failed or never read): drop to 1x.
+        // Frame 2, still pending (or never read): drop to 1x.
         r.FramesSinceRailsEntry = 2;
         step = RailsBurnPolicy.Decide(r);
         Assert.That(step.Action, Is.EqualTo(RailsAction.DropGuard));
         Assert.That(step.WantedIndex, Is.EqualTo(0));
         r.GuardOk = null;
+        r.GuardPending = false;
         Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.DropGuard));
+
+        // Frame 0: the game switched (Active) but with no patch or still on the conic: at once.
+        RailsInputs now = OnRails(4);
+        now.GuardOk = false;
+        now.GuardPending = false;
+        now.FramesSinceRailsEntry = 0;
+        Assert.That(RailsBurnPolicy.Decide(now).Action, Is.EqualTo(RailsAction.DropGuard));
 
         // A guard confirmed then lost (the game ended its burn) drops too.
         RailsInputs lost = OnRails(4);
@@ -175,14 +184,12 @@ public class RailsBurnPolicyTests
     [Test]
     public void ExitBeforeFifteenSecondsOfBurn()
     {
-        // x50 at 0.02 s frames: 1 s of game time per frame. 16.5 s left: the next frame keeps
-        // more than 15 s, stay.
-        RailsInputs r = OnRails(4);
-        r.BurnLeftGameSeconds = 16.5;
+        // x10 at 0.02 s frames: 0.2 s of game time per frame; margin 15 s + 2 s real (20 s).
+        RailsInputs r = OnRails(3);
+        r.BurnLeftGameSeconds = 35.5;
         Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
 
-        // 15.9 s left: the next frame would go under 15 s, leave now.
-        r.BurnLeftGameSeconds = 15.9;
+        r.BurnLeftGameSeconds = 35.1;
         RailsStep step = RailsBurnPolicy.Decide(r);
         Assert.That(step.Action, Is.EqualTo(RailsAction.LeaveRails));
         Assert.That(step.WantedIndex, Is.EqualTo(0));
@@ -192,32 +199,106 @@ public class RailsBurnPolicyTests
     [Test]
     public void ExitBeforeStageBurnout()
     {
-        RailsInputs r = OnRails(4);
-        r.StageBurnLeftSeconds = 10.9;   // under 10 s + one frame (1 s)
+        // x10: margin 10 s + 20 s.
+        RailsInputs r = OnRails(3);
+        r.StageBurnLeftSeconds = 30.1;
         RailsStep step = RailsBurnPolicy.Decide(r);
         Assert.That(step.Action, Is.EqualTo(RailsAction.LeaveRails));
         Assert.That(step.Reason, Does.Contain("stage"));
 
-        r.StageBurnLeftSeconds = 11.5;
+        r.StageBurnLeftSeconds = 30.5;
         Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
 
         // Not entered when the stage ends too soon for any rails stretch.
         RailsInputs i = Eligible();
-        i.StageBurnLeftSeconds = 100;   // 90 s to the exit: 9 s real at x10
+        i.StageBurnLeftSeconds = 100;   // 90 s to the exit, 70 s after the real margin: 7 s real at x10
         Assert.That(RailsBurnPolicy.Decide(i).Action, Is.EqualTo(RailsAction.Stay));
+    }
+
+    [Test]
+    public void AtFiftyWithMaxFrame_StepsDownThenLeavesInTime()
+    {
+        // x50 with Unity's longest frame (0.33 s = 16.5 s of game time): margin 15 + 100 s.
+        RailsInputs r = OnRails(4);
+        r.RealFrameSeconds = 0.33;
+
+        // Well before the end: stay at x50.
+        r.BurnLeftGameSeconds = 400;   // 385 - 116.5 = 268.5 s to the exit: 5.4 s real
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
+
+        // Under 5 s real to the exit at x50: step down to x10.
+        r.BurnLeftGameSeconds = 380;   // 248.5 s: 5.0 s real
+        RailsStep step = RailsBurnPolicy.Decide(r);
+        Assert.That(step.Action, Is.EqualTo(RailsAction.StepDown));
+        Assert.That(step.WantedIndex, Is.EqualTo(3));
+
+        // Still at x50 near the end (the step down was not granted): leave in time.
+        r.BurnLeftGameSeconds = 131;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.LeaveRails));
+        r.BurnLeftGameSeconds = 2000;
+        r.StageBurnLeftSeconds = 126;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.LeaveRails));
+
+        // Whatever the state, a frame that stays leaves room for two more of the longest frames
+        // above the margins.
+        foreach (int index in new[] { 3, 4 })
+            for (double left = 20; left < 1000; left += 0.5)
+            {
+                RailsInputs s = OnRails(index);
+                s.RealFrameSeconds = 0.33;
+                s.BurnLeftGameSeconds = left;
+                s.StageBurnLeftSeconds = left;
+                if (RailsBurnPolicy.Decide(s).Action != RailsAction.Stay)
+                    continue;
+                double frame = Rates[index] * 0.33;
+                Assert.That(left - 2 * frame, Is.GreaterThan(RailsBurnPolicy.BurnMargin), $"x{Rates[index]} at {left} s");
+            }
+    }
+
+    [Test]
+    public void StaleRate_UsesTheRateApplied()
+    {
+        // The table says x10 but the game applies x50 (ramp): the margins use x50.
+        RailsInputs r = OnRails(3);
+        r.RealFrameSeconds = 0.33;
+        r.BurnLeftGameSeconds = 120;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
+        r.CurrentRate = 50;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.LeaveRails));
+    }
+
+    [Test]
+    public void MeasuredAccel_AndTheEarlierExit()
+    {
+        // No gravity: a velocity change of 3 m/s in 2 s is 1.5 m/s².
+        var r0 = new Vector3d(7e5, 0, 0);
+        Assert.That(RailsBurnPolicy.MeasuredAccel(r0, Vector3d.zero, r0, new Vector3d(0, 3, 0), 2, 0),
+            Is.EqualTo(1.5).Within(1e-9));
+
+        // A coast on a circular orbit: gravity only, close to 0.
+        const double mu = 3.5316e12;
+        var v0 = new Vector3d(0, Math.Sqrt(mu / 7e5), 0);
+        KSP2FlightAssistant.MathLibrary.KeplerPropagator.Propagate(r0, v0, mu, 1, out Vector3d r1, out Vector3d v1);
+        Assert.That(RailsBurnPolicy.MeasuredAccel(r0, v0, r1, v1, 1, mu), Is.LessThan(0.01));
+
+        // The exit is timed with the lower value; either alone when the other is unknown.
+        Assert.That(RailsBurnPolicy.ExitAccel(2, 1.5), Is.EqualTo(1.5));
+        Assert.That(RailsBurnPolicy.ExitAccel(2, double.NaN), Is.EqualTo(2));
+        Assert.That(RailsBurnPolicy.ExitAccel(double.NaN, 1.5), Is.EqualTo(1.5));
     }
 
     [Test]
     public void RateLeavesFifteenRealSeconds()
     {
-        // 600 s left: 585 s to the exit, 11.7 s real at x50 (too short), 58.5 s at x10: x10.
+        // 600 s left: 585 s to the exit less 2 s real at the rate: 9.7 s real at x50 (too short),
+        // 56.5 s at x10: x10.
         RailsInputs i = Eligible();
         i.BurnLeftGameSeconds = 600;
         RailsStep step = RailsBurnPolicy.Decide(i);
         Assert.That(step.Action, Is.EqualTo(RailsAction.EnterRails));
         Assert.That(step.WantedIndex, Is.EqualTo(3));
 
-        // 160 s left: 145 s to the exit, 14.5 s real at x10: no rails.
+        // 160 s left: 145 - 20 s, 12.5 s real at x10: no rails.
         i.BurnLeftGameSeconds = 160;
         Assert.That(RailsBurnPolicy.Decide(i).Action, Is.EqualTo(RailsAction.Stay));
 

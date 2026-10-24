@@ -143,7 +143,10 @@ namespace K2D2.Node
         bool rails_done;             // a rails stretch ended (or was refused): no more in this burn
         bool rails_guard_logged;
         double rails_entry_UT, rails_entry_dv, rails_entry_accel, rails_mu;
-        double rails_thrust_N, rails_mass_kg, rails_mdot, rails_stage_seconds, rails_rate;
+        double rails_thrust_N, rails_mass_kg, rails_mdot, rails_stage_seconds, rails_max_rate;
+        // Measured thrust acceleration on rails (smoothed, NaN until two samples) and the last sample.
+        double rails_measured_accel = double.NaN, rails_last_ut = double.NaN;
+        Vector3d rails_last_r, rails_last_v;
         Vector3d rails_entry_r, rails_entry_v, rails_dir;
 
         protected KSPVessel current_vessel;
@@ -673,6 +676,10 @@ namespace K2D2.Node
             return alt < envelope || Math.Min(r, minRadius) - body.radius < envelope;
         }
 
+        // Rails warp needs the warp itself allowed (allow_warp, the auto-warp setting) and the
+        // burn's own flag (off for landing and reentry).
+        bool RailsAllowed => allow_warp && allow_rails_warp;
+
         // Off rails, once the physics warp is managed: asks RailsBurnPolicy, enters rails when it
         // says so. The aim drift (a path integration) is computed only when every cheaper
         // condition already holds.
@@ -680,7 +687,7 @@ namespace K2D2.Node
         {
             if (rails_done || finished || !(accel > 0))
                 return;
-            bool allowed = allow_rails_warp;
+            bool allowed = RailsAllowed;
             double burnLeft = remaining_dv / accel;
 
             IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
@@ -717,6 +724,7 @@ namespace K2D2.Node
                 Rates = rates,
                 RealFrameSeconds = Time.unscaledDeltaTime,
                 CurrentIndex = TimeWarpTools.CurrentRateIndex,
+                CurrentRate = TimeWarpTools.CurrentRate,
                 RefusedBefore = rails_done,
             });
             if (step.Action != RailsAction.EnterRails)
@@ -735,19 +743,35 @@ namespace K2D2.Node
             rails_mass_kg = burn_dV.mass * 1000;
             rails_mdot = burn_dV.active_isp > 0 ? rails_thrust_N / (burn_dV.active_isp * 9.80665) : 0;
             rails_stage_seconds = stageLeft;
-            rails_rate = RailsBurnPolicy.RateAt(rates, step.WantedIndex);
             rails_guard_logged = false;
+            rails_measured_accel = double.NaN;
+            rails_last_ut = double.NaN;
+            rails_max_rate = 0;
 
             string from = $"index {TimeWarpTools.CurrentRateIndex} x{TimeWarpTools.CurrentRate:0.##}";
-            if (!rails.TryEnter(step.WantedIndex))
+            int index = step.WantedIndex;
+            bool entered = rails.TryEnter(index);
+            // x50 refused (an acceleration or event bound of the game): x10 once, unless the
+            // game's setting refuses every rails index under thrust.
+            if (!entered && index > RailsBurnPolicy.LowRailsIndex && !rails.RefusedBySetting)
+            {
+                index = RailsBurnPolicy.LowRailsIndex;
+                logger.LogInfo($"{BurnLogTag} rails burn: x{RailsBurnPolicy.RateAt(rates, step.WantedIndex):0} refused, trying " +
+                    $"x{RailsBurnPolicy.RateAt(rates, index):0}");
+                entered = rails.TryEnter(index);
+            }
+            if (!entered)
             {
                 rails_done = true;
                 return;
             }
-            logger.LogInfo($"{BurnLogTag} rails burn: entering index {step.WantedIndex} (x{rails_rate:0}) from {from}: {step.Reason}; " +
+            logger.LogInfo($"{BurnLogTag} rails burn: entering index {index} (x{TimeWarpTools.CurrentRate:0}, table " +
+                $"x{RailsBurnPolicy.RateAt(rates, index):0}) from {from}: {step.Reason}; " +
                 $"dv {remaining_dv:n1} m/s, burn left {burnLeft:n1} s, stage burn left {stageLeft:n1} s, aim drift {drift:n2}° " +
                 $"until the exit, planned dv on rails {PlannedRailsDv(planned):n1} m/s, " +
                 $"{rails.ManeuverNodeCount()} maneuver node(s) on the vessel (never changed while on rails); {RailsBurn.ReflectionStatus()}");
+            // Frame 0: a game that already switched without a burn trajectory drops at once.
+            BurnOnRails(now, entryFrame: true);
         }
 
         // Δv (m/s) the game's burn gives in t game seconds from the entry: the rocket equation
@@ -762,32 +786,54 @@ namespace K2D2.Node
             return rails_entry_accel * t;
         }
 
-        // A frame on rails: guard, state from the burn trajectory, exit conditions. No steering,
-        // no throttle command.
-        void BurnOnRails(double now)
+        // Smoothing weight of a new measured acceleration on rails.
+        const double MeasuredAccelWeight = 0.3;
+        // Shortest game time between two samples of the measured acceleration.
+        const double MeasuredAccelMinDt = 0.05;
+
+        // Measured thrust acceleration on rails: successive states of the burn trajectory, minus
+        // gravity, smoothed.
+        void MeasureRailsAccel(double now, Vector3d r, Vector3d v, double mu)
         {
-            rails.Tick();
+            if (!double.IsNaN(rails_last_ut) && now - rails_last_ut >= MeasuredAccelMinDt)
+            {
+                double a = RailsBurnPolicy.MeasuredAccel(rails_last_r, rails_last_v, r, v, now - rails_last_ut, mu);
+                if (a > 0)
+                    rails_measured_accel = double.IsNaN(rails_measured_accel) ? a
+                        : rails_measured_accel + MeasuredAccelWeight * (a - rails_measured_accel);
+            }
+            if (double.IsNaN(rails_last_ut) || now - rails_last_ut >= MeasuredAccelMinDt)
+            {
+                rails_last_ut = now;
+                rails_last_r = r;
+                rails_last_v = v;
+            }
+        }
+
+        // A frame on rails: guard, state from the burn trajectory, exit conditions. No steering,
+        // no throttle command. entryFrame: the frame of TryEnter (frame 0, not counted).
+        void BurnOnRails(double now, bool entryFrame = false)
+        {
+            if (!entryFrame)
+                rails.Tick();
             physics_warp.KeepAlive();
             last_burn_UT = now;
             int frames = rails.FramesSinceEntry;
+            double rate = TimeWarpTools.CurrentRate;
+            rails_max_rate = Math.Max(rails_max_rate, rate);
 
             bool haveState = rails.TryReadState(now, out Vector3d r, out Vector3d v, out double mu);
-            bool? guard = null;
-            string detail = "";
-            if (frames >= 1)
+            bool guard = rails.GuardOk(out string detail, out bool pending);
+            if (guard && !haveState)
             {
-                guard = rails.GuardOk(out detail);
-                if (guard == true && !haveState)
-                {
-                    guard = false;
-                    detail += ", state unreadable at UT now";
-                }
+                guard = false;
+                detail += ", state unreadable at UT now";
             }
-            if (guard.HasValue && !rails_guard_logged && (guard == true || frames >= RailsBurnPolicy.GuardFrames))
+            if (!rails_guard_logged && (guard || !pending || frames >= RailsBurnPolicy.GuardFrames))
             {
                 rails_guard_logged = true;
-                string text = $"{BurnLogTag} rails burn: guard {(guard == true ? "ok" : "FAILED")} at frame {frames}: {detail}";
-                if (guard == true)
+                string text = $"{BurnLogTag} rails burn: guard {(guard ? "ok" : "FAILED")} at frame {frames}: {detail}";
+                if (guard)
                 {
                     // The burn trajectory against the conic the game also writes back (both Zup).
                     IKeplerPatch conic = current_vessel.VesselComponent.Orbit;
@@ -809,9 +855,12 @@ namespace K2D2.Node
             double dvMag = dv.magnitude;
             if (!double.IsNaN(dvMag))
                 remaining_dv = dvMag;
-            double accel = RailsBurnPolicy.AccelAfter(rails_thrust_N, rails_mass_kg, rails_mdot, now - rails_entry_UT);
-            if (double.IsNaN(accel))
-                accel = rails_entry_accel;
+            if (guard)
+                MeasureRailsAccel(now, r, v, mu);
+            double modelled = RailsBurnPolicy.AccelAfter(rails_thrust_N, rails_mass_kg, rails_mdot, now - rails_entry_UT);
+            if (double.IsNaN(modelled))
+                modelled = rails_entry_accel;
+            double accel = RailsBurnPolicy.ExitAccel(modelled, rails_measured_accel);
             double endUT = rails.BurnEndUT();
             if (double.IsNaN(endUT))
                 endUT = rails_entry_UT + rails_stage_seconds;
@@ -823,27 +872,35 @@ namespace K2D2.Node
                 StageBurnLeftSeconds = endUT - now,
                 AlignedSteadyRealSeconds = 0,
                 AimDriftDegAtExit = double.IsNaN(dvMag) ? double.NaN : Vector3d.Angle(rails_dir, dv),
-                RailsAllowed = allow_rails_warp,
+                RailsAllowed = RailsAllowed,
                 InAtmosphereOrEnvelope = !haveState || LowOrInAtmosphere(body, r.magnitude, r.magnitude),
                 NearTarget = near_target,
                 CurrentlyOnRails = true,
                 GuardOk = guard,
+                GuardPending = pending,
                 FramesSinceRailsEntry = frames,
                 Rates = RailsBurn.Rates,
                 RealFrameSeconds = Time.unscaledDeltaTime,
                 CurrentIndex = TimeWarpTools.CurrentRateIndex,
+                CurrentRate = rate,
                 RefusedBefore = rails_done,
             });
             switch (step.Action)
             {
                 case RailsAction.DropGuard:
-                    logger.LogWarning($"{BurnLogTag} rails burn: guard failed, back to physics warp, no rails again in this burn: " +
-                        $"{step.Reason} ({detail})");
+                    logger.LogWarning($"{BurnLogTag} rails burn: guard failed at frame {frames}, back to physics warp, " +
+                        $"no rails again in this burn: {step.Reason} ({detail})");
                     ExitRails(now, step.Reason);
                     return;
                 case RailsAction.LeaveRails:
                     ExitRails(now, step.Reason);
                     return;
+                case RailsAction.StepDown:
+                    bool down = rails.StepDown(step.WantedIndex);
+                    logger.LogInfo($"{BurnLogTag} rails burn: step down to index {step.WantedIndex} " +
+                        $"{(down ? "applied" : "NOT applied")} ({step.Reason}); now x{TimeWarpTools.CurrentRate:0}, " +
+                        $"acceleration modelled {modelled:n3} measured {rails_measured_accel:n3} m/s²");
+                    break;
             }
             status_line = $"Rails warp x{TimeWarpTools.CurrentRate:0}: {BurningStatus(remaining_dv)}";
         }
@@ -854,6 +911,7 @@ namespace K2D2.Node
         void ExitRails(double now, string reason)
         {
             double t = now - rails_entry_UT;
+            double rate = TimeWarpTools.CurrentRate;
             string applied = "Δv applied unknown";
             Vector3d v = default;
             bool haveState = rails.TryReadState(now, out _, out v, out _);
@@ -875,8 +933,9 @@ namespace K2D2.Node
             rails_done = true;
             steady_real = 0;
             last_steady_real = double.NaN;
-            logger.LogInfo($"{BurnLogTag} rails burn: leaving ({reason}) after {t:n1} s of game time at x{rails_rate:0}: " +
-                $"dv to go {rails_entry_dv:n1} -> {remaining_dv:n1} m/s, {applied}");
+            logger.LogInfo($"{BurnLogTag} rails burn: leaving ({reason}) after {t:n1} s of game time, at x{rate:0} " +
+                $"(highest x{rails_max_rate:0}): dv to go {rails_entry_dv:n1} -> {remaining_dv:n1} m/s, {applied}; " +
+                $"acceleration measured {rails_measured_accel:n3} m/s², modelled at entry {rails_entry_accel:n3} m/s²");
         }
 
         // Opt-in staging when the engines run dry (BurnStaging). True when this frame ends here:

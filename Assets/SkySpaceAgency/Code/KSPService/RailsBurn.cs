@@ -120,10 +120,44 @@ namespace K2D2.KSPService
                 FramesSinceEntry = 0;
                 return true;
             }
-            logger?.LogWarning($"{Prefix} refused by the game: asked index {index}, got index {TimeWarpTools.CurrentRateIndex} " +
-                $"(physics mode {(PhysicsMode ? "on" : "off")}; the game's DisableTimeWarpWhileUnderThrust setting?): back to 1x");
+            RefusedBySetting = DisableTimeWarpWhileUnderThrust;
+            if (RefusedBySetting)
+                logger?.LogWarning($"{Prefix} refused: the game's DisableTimeWarpWhileUnderThrust setting is on, so it allows no " +
+                    "warp under thrust out of physics mode; burns stay in physics warp");
+            else
+                logger?.LogWarning($"{Prefix} refused by the game: asked index {index}, got index {TimeWarpTools.CurrentRateIndex} " +
+                    $"(physics mode {(PhysicsMode ? "on" : "off")}): back to 1x");
             TimeWarpTools.SetRateIndex(0, true);
             return false;
+        }
+
+        // The last TryEnter was refused because of PhysicsSettings.DisableTimeWarpWhileUnderThrust
+        // (then no other rails index can be granted either).
+        public bool RefusedBySetting { get; private set; }
+
+        // PhysicsSettings.DisableTimeWarpWhileUnderThrust (public static getter, IL: ldsfld
+        // _physicsSettings). Unreadable counts as off.
+        static bool DisableTimeWarpWhileUnderThrust
+        {
+            get
+            {
+                try { return PhysicsSettings.DisableTimeWarpWhileUnderThrust; }
+                catch (Exception) { return false; }
+            }
+        }
+
+        /// <summary>
+        /// Lowers the rails rate to index (instant; still rails, the game's burn goes on). True
+        /// when the game applied it.
+        /// </summary>
+        public bool StepDown(int index)
+        {
+            TimeWarp tw = Tw;
+            if (tw == null || !Entered || index <= K2D2.Node.PhysicsWarpPolicy.MaxPhysicsIndex)
+                return false;
+            try { tw.SetRateIndex(index, true); }
+            catch (Exception e) { logger?.LogWarning($"{Prefix} step down failed: {e.GetType().Name}: {e.Message}"); }
+            return TimeWarpTools.CurrentRateIndex == index;
         }
 
         /// <summary>Counts one real frame on rails.</summary>
@@ -151,6 +185,7 @@ namespace K2D2.KSPService
         {
             Entered = false;
             FramesSinceEntry = 0;
+            RefusedBySetting = false;
         }
 
         static int? NumBurnPatches(VesselComponent v)
@@ -171,10 +206,12 @@ namespace K2D2.KSPService
         /// <summary>
         /// The three checks: IsOrbitalPhysicsUnderThrustActive, Orbiter.PatchedOrbit is the burn
         /// trajectory (a PatchedNBodyOrbit, not PatchedConicsOrbit), and _numBurnPatches > 0.
-        /// Anything unreadable fails. detail: the values, for the log.
+        /// Anything unreadable fails. pending: the game has not switched yet (Active still false),
+        /// the only failure that may wait. detail: the values, for the log.
         /// </summary>
-        public bool GuardOk(out string detail)
+        public bool GuardOk(out string detail, out bool pending)
         {
+            pending = false;
             try
             {
                 VesselComponent v = vessel?.Invoke();
@@ -185,6 +222,7 @@ namespace K2D2.KSPService
                     return false;
                 }
                 bool active = v.IsOrbitalPhysicsUnderThrustActive;
+                pending = !active;
                 IPatchedOrbit patched = orbiter.PatchedOrbit;
                 bool trajectory = patched is PatchedNBodyOrbit && !ReferenceEquals(patched, orbiter.PatchedConicsOrbit);
                 int? patches = NumBurnPatches(v);

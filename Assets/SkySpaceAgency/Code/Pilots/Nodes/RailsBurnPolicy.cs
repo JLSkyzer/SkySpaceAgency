@@ -30,6 +30,9 @@ namespace K2D2.Node
         public bool CurrentlyOnRails;
         // The game's precomputed burn is running (RailsBurn.GuardOk). Null: not read yet.
         public bool? GuardOk;
+        // The game has not switched to its burn yet (IsOrbitalPhysicsUnderThrustActive still
+        // false): the only failed guard that may wait, until frame GuardFrames.
+        public bool GuardPending;
         // Real frames since TryEnter (the entry frame is 0).
         public int FramesSinceRailsEntry;
         // The game's warp rates (TimeWarp.GetWarpRates, index 0 = 1x).
@@ -38,17 +41,21 @@ namespace K2D2.Node
         public double RealFrameSeconds;
         // TimeWarp.CurrentRateIndex.
         public int CurrentIndex;
+        // TimeWarp.CurrentRate, the rate really applied this frame (the game may ramp or clamp
+        // it). The margins use the higher of it and the table's rate at CurrentIndex.
+        public double CurrentRate;
         // A guard already failed for this burn: no rails again until the next burn.
         public bool RefusedBefore;
     }
 
-    public enum RailsAction { Stay, EnterRails, LeaveRails, DropGuard }
+    public enum RailsAction { Stay, EnterRails, LeaveRails, DropGuard, StepDown }
 
     /// <summary>The rails decision for this frame.</summary>
     public struct RailsStep
     {
         public RailsAction Action;
-        // EnterRails: the rails index. LeaveRails, DropGuard: 0. Stay: the current index.
+        // EnterRails: the rails index. StepDown: LowRailsIndex. LeaveRails, DropGuard: 0. Stay:
+        // the current index.
         public int WantedIndex;
         public string Reason;
     }
@@ -80,6 +87,12 @@ namespace K2D2.Node
         // acceleration, or the stage's burn under StageMargin.
         public const double BurnMargin = 15;
         public const double StageMargin = 10;
+        // On top of those game-time margins, this much real time at the current rate: one frame
+        // hitch (Unity caps a frame at 0.33 s, 16.5 s of game time at x50) must not run past them.
+        public const double RealMargin = 2;
+        // Above x10, step down to x10 when less than this much real time is left before the exit
+        // at the current rate.
+        public const double StepDownRealSeconds = 5;
         // The rails stretch lasts at least this much real time at the chosen rate.
         public const double MinRealSeconds = 15;
         // Rails indices used: x10 and x50 in the game's table.
@@ -125,12 +138,13 @@ namespace K2D2.Node
                 double rate = RateAt(i.Rates, index);
                 if (!(rate > RateAt(i.Rates, PhysicsWarpPolicy.MaxPhysicsIndex)))
                     continue;
-                if (planned / rate >= MinRealSeconds)
+                double stretch = planned - RealMargin * rate;
+                if (stretch / rate >= MinRealSeconds)
                     return new RailsStep
                     {
                         Action = RailsAction.EnterRails,
                         WantedIndex = index,
-                        Reason = $"x{rate:0}: {planned:n0} s to the planned exit, {planned / rate:n1} s real",
+                        Reason = $"x{rate:0}: {stretch:n0} s to the exit, {stretch / rate:n1} s real",
                     };
             }
             return Stay(current, $"{planned:n0} s to the planned exit: under {MinRealSeconds:n0} s real even at x{RateAt(i.Rates, LowRailsIndex):0}");
@@ -139,14 +153,15 @@ namespace K2D2.Node
         static RailsStep DecideOnRails(RailsInputs i)
         {
             int current = Math.Max(0, i.CurrentIndex);
-            // Frames 0 and 1 may come before the game's switch to Orbital; from frame 2 on (and
-            // whenever it is lost later) an unconfirmed guard drops.
+            // Only a game that has not switched yet may wait (frames 0 and 1). A switch without a
+            // burn trajectory or patch, or a guard lost later, drops at once.
             if (i.GuardOk != true)
             {
-                if (i.FramesSinceRailsEntry >= GuardFrames)
-                    return new RailsStep { Action = RailsAction.DropGuard, WantedIndex = 0,
-                        Reason = i.GuardOk == false ? "the game's precomputed burn is not running" : "the guard was not read in time" };
-                return Stay(current, "waiting for the guard");
+                if (i.GuardPending && i.FramesSinceRailsEntry < GuardFrames)
+                    return Stay(current, "waiting for the guard");
+                return new RailsStep { Action = RailsAction.DropGuard, WantedIndex = 0,
+                    Reason = i.GuardPending ? "the game did not start its precomputed burn in time"
+                        : i.GuardOk == false ? "the game's precomputed burn has no trajectory or patch" : "the guard was not read" };
             }
             if (!i.RailsAllowed)
                 return Leave("rails warp no longer allowed");
@@ -155,16 +170,60 @@ namespace K2D2.Node
             if (i.InAtmosphereOrEnvelope)
                 return Leave("in the atmosphere or below the surface envelope");
 
-            double frame = RateAt(i.Rates, current) * Math.Max(0, i.RealFrameSeconds);
-            if (double.IsNaN(frame))
-                frame = 0;
-            if (!(i.BurnLeftGameSeconds - frame > BurnMargin))
-                return Leave($"{i.BurnLeftGameSeconds:n1} s of burn left (margin {BurnMargin:n0} s)");
-            if (!(i.StageBurnLeftSeconds - frame > StageMargin))
-                return Leave($"{i.StageBurnLeftSeconds:n1} s of stage burn left (margin {StageMargin:n0} s)");
+            // Margins in game time plus RealMargin of real time at the rate applied, checked after
+            // this frame's game time has passed.
+            double rate = EffectiveRate(i);
+            double frame = rate * Math.Max(0, i.RealFrameSeconds);
+            double real = RealMargin * rate;
+            if (!(i.BurnLeftGameSeconds - frame > BurnMargin + real))
+                return Leave($"{i.BurnLeftGameSeconds:n1} s of burn left (margin {BurnMargin:n0} s + {real:n0} s at x{rate:0})");
+            if (!(i.StageBurnLeftSeconds - frame > StageMargin + real))
+                return Leave($"{i.StageBurnLeftSeconds:n1} s of stage burn left (margin {StageMargin:n0} s + {real:n0} s at x{rate:0})");
             if (i.AimDriftDegAtExit >= MaxAimDriftDeg)
                 return Leave($"aim {i.AimDriftDegAtExit:n1}° away from the fixed burn direction");
+            if (current > LowRailsIndex)
+            {
+                double left = PlannedRailsSeconds(i.BurnLeftGameSeconds, i.StageBurnLeftSeconds) - real - frame;
+                if (left / rate < StepDownRealSeconds)
+                    return new RailsStep { Action = RailsAction.StepDown, WantedIndex = LowRailsIndex,
+                        Reason = $"{left:n0} s to the exit at x{rate:0}: {left / rate:n1} s real" };
+            }
             return Stay(current, "on rails");
+        }
+
+        // The rate for the margins: the higher of the rate applied and the table's (1 if unknown).
+        static double EffectiveRate(RailsInputs i)
+        {
+            double table = RateAt(i.Rates, Math.Max(0, i.CurrentIndex));
+            double rate = double.IsNaN(table) ? 1 : table;
+            if (i.CurrentRate > rate)
+                rate = i.CurrentRate;
+            return Math.Max(1, rate);
+        }
+
+        /// <summary>
+        /// Thrust acceleration (m/s²) between two states dt game seconds apart: the velocity change
+        /// minus gravity (mean of both ends). NaN for bad inputs.
+        /// </summary>
+        public static double MeasuredAccel(Vector3d r0, Vector3d v0, Vector3d r1, Vector3d v1, double dt, double mu)
+        {
+            if (!(dt > 0))
+                return double.NaN;
+            Vector3d g = (Accel(r0, mu, Vector3d.zero) + Accel(r1, mu, Vector3d.zero)) * 0.5;
+            double a = ((v1 - v0) - g * dt).magnitude / dt;
+            return double.IsNaN(a) || double.IsInfinity(a) ? double.NaN : a;
+        }
+
+        /// <summary>
+        /// Acceleration to time the exit with on rails: the lower of the modelled and the measured
+        /// (smoothed) values, the earlier exit. Either one alone when the other is unknown.
+        /// </summary>
+        public static double ExitAccel(double modelled, double measured)
+        {
+            bool m = modelled > 0, s = measured > 0;
+            if (m && s)
+                return Math.Min(modelled, measured);
+            return m ? modelled : s ? measured : double.NaN;
         }
 
         /// <summary>Game seconds from now to the planned rails exit: the earlier of the two margins.</summary>
