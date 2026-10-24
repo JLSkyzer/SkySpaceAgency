@@ -49,6 +49,57 @@ public class DockingReadsTests
         Assert.AreEqual("t", t.PartId);
     }
 
+    // NodeTypes overlap OR the game's IsCompatibleWith: a pair the game accepts is choosable
+    // without a common node type, and one it does not accept still needs the overlap.
+    [Test]
+    public void Choose_GameCompatibleWithoutOverlap()
+    {
+        var ours = DockingReads.Port("o", new[] { "size1" }, true, false, false, new Vector3d(100, 0, 0), new Vector3d(-1, 0, 0), 1.25);
+        var theirs = DockingReads.Port("t", new[] { "inline" }, true, false, false, new Vector3d(1, 0, 0), new Vector3d(1, 0, 0), 1.25);
+        var o = new List<PortInfo> { ours };
+        var t = new List<PortInfo> { theirs };
+        var fwd = new Vector3d(-1, 0, 0);
+        var toUs = new Vector3d(1, 0, 0);
+
+        Assert.IsNotNull(PortChooser.Choose(o, t, fwd, toUs).reason, "no overlap, no game answer");
+        Assert.IsNotNull(PortChooser.Choose(o, t, fwd, toUs, (a, b) => false).reason);
+        var (co, ct, reason) = PortChooser.Choose(o, t, fwd, toUs, (a, b) => a.PartId == "o" && b.PartId == "t");
+        Assert.IsNull(reason);
+        Assert.AreEqual("o", co.PartId);
+        Assert.AreEqual("t", ct.PartId);
+
+        // The game's answer also covers a gender pair the node-type rule refuses.
+        var male = DockingReads.Port("m", new[] { "size1" }, true, true, false, new Vector3d(100, 0, 0), new Vector3d(-1, 0, 0), 1.25);
+        var male2 = DockingReads.Port("m2", new[] { "size1" }, true, true, false, new Vector3d(1, 0, 0), new Vector3d(1, 0, 0), 1.25);
+        Assert.IsNotNull(PortChooser.Choose(new List<PortInfo> { male }, new List<PortInfo> { male2 }, fwd, toUs).reason);
+        Assert.IsNull(PortChooser.Choose(new List<PortInfo> { male }, new List<PortInfo> { male2 }, fwd, toUs, (a, b) => true).reason);
+        // A busy port stays refused whatever the game says.
+        var busy = DockingReads.Port("b", new[] { "size1" }, false, false, false, new Vector3d(1, 0, 0), new Vector3d(1, 0, 0), 1.25);
+        Assert.IsNotNull(PortChooser.Choose(o, new List<PortInfo> { busy }, fwd, toUs, (a, b) => true).reason);
+    }
+
+    [Test]
+    public void Limits_PortSizeIsTheSmallerOfThePair()
+    {
+        var c = new PortCapture { CaptureMinFwdDot = 0.95, CaptureMaxRvel = 0.4 };
+        Assert.AreEqual(DockLimits.ContactLateralFor(1.25), DockingReads.Limits(c, c, true, 6, 2.5, 1.25).ContactLateral, 1e-12);
+        Assert.AreEqual(DockLimits.ContactLateralFor(1.25), DockingReads.Limits(c, c, false, 6, 1.25, 2.5).ContactLateral, 1e-12);
+        Assert.AreEqual(DockLimits.ContactLateralFor(2.5), DockingReads.Limits(c, c, true, 6, 0, 2.5).ContactLateral, 1e-12, "an unknown size is left out");
+        Assert.AreEqual(DockLimits.ContactLateralFor(0), DockingReads.Limits(c, c, true, 6).ContactLateral, 1e-12);
+        Assert.AreNotEqual(DockLimits.ContactLateralFor(0), DockLimits.ContactLateralFor(1.25), "the test can see the size");
+        Assert.AreEqual(1.25, DockingReads.PairSize(double.NaN, 1.25));
+        Assert.AreEqual(0, DockingReads.PairSize(-1, double.PositiveInfinity));
+    }
+
+    [Test]
+    public void RcsRestore_MixedIsLeftAlone()
+    {
+        Assert.AreEqual(true, DockingReads.RcsRestore(KSPActionGroupState.True));
+        Assert.AreEqual(false, DockingReads.RcsRestore(KSPActionGroupState.False));
+        Assert.IsNull(DockingReads.RcsRestore(KSPActionGroupState.Mixed));
+        Assert.IsNull(DockingReads.RcsRestore(null));
+    }
+
     [Test]
     public void SizeMetres_Categories()
     {

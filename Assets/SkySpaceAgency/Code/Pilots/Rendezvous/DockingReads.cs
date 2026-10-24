@@ -77,8 +77,11 @@ namespace K2D2.Rendezvous
 
         // The approach limits for a pair of ports: the stricter value of the two ports, and of the
         // acquire and capture steps (the game checks AcquireMinFwdDot on the docker, then captures).
-        // A roll dot ≤ 0 means any roll will do, which DockLimits writes as 0.
-        public static DockLimits Limits(PortCapture ours, PortCapture theirs, bool rcs, double targetRadius)
+        // A roll dot ≤ 0 means any roll will do, which DockLimits writes as 0. The port size given
+        // to DockLimits (its contact tolerance) is the smaller of the pair's PortInfo.Size, in m;
+        // an unknown size (≤ 0) is left out.
+        public static DockLimits Limits(PortCapture ours, PortCapture theirs, bool rcs, double targetRadius,
+            double ourSize = 0, double theirSize = 0)
         {
             double fwd = Max(ours.AcquireMinFwdDot, ours.CaptureMinFwdDot, theirs.AcquireMinFwdDot, theirs.CaptureMinFwdDot);
             double rvel = Math.Min(Positive(ours.CaptureMaxRvel), Positive(theirs.CaptureMaxRvel));
@@ -87,7 +90,25 @@ namespace K2D2.Rendezvous
             fwd = Math.Max(-1, Math.Min(1, fwd));
             roll = roll > 0 ? Math.Min(1, roll) : 0;
             double radius = targetRadius > 0 && !double.IsInfinity(targetRadius) ? targetRadius : PartHalfSize;
-            return rcs ? DockLimits.Rcs(fwd, rvel, roll, radius) : DockLimits.MainEngine(fwd, rvel, roll, radius);
+            double size = PairSize(ourSize, theirSize);
+            return rcs ? DockLimits.Rcs(fwd, rvel, roll, radius, size) : DockLimits.MainEngine(fwd, rvel, roll, radius, size);
+        }
+
+        // The RCS action group value to restore: on for True, off for False, null (leave it as it
+        // is) for Mixed or an unknown state.
+        public static bool? RcsRestore(KSPActionGroupState? before)
+        {
+            if (before == KSPActionGroupState.True) return true;
+            if (before == KSPActionGroupState.False) return false;
+            return null;
+        }
+
+        // The smaller of two port sizes, ignoring unknown (≤ 0 or non-finite) ones; 0 when both are unknown.
+        public static double PairSize(double a, double b)
+        {
+            bool okA = a > 0 && !double.IsInfinity(a), okB = b > 0 && !double.IsInfinity(b);
+            if (okA && okB) return Math.Min(a, b);
+            return okA ? a : okB ? b : 0;
         }
 
         // The target's bounding radius about its centre of mass: the farthest part centre plus

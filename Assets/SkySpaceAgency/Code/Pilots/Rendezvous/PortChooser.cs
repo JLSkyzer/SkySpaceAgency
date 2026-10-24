@@ -21,8 +21,9 @@ namespace K2D2.Rendezvous
     }
 
     // Picks our port and the target's for the docking.
-    // - Compatible: both free, their NodeTypes overlap, and either both are ungendered or both
-    //   gendered and of opposite gender.
+    // - Compatible: both free, and either the game accepts the pair (gameCompatible, from
+    //   PartComponentModule_DockingNode.IsCompatibleWith) or their NodeTypes overlap and either
+    //   both are ungendered or both gendered and of opposite gender.
     // - Cost, in degrees: the rotation our vessel needs to point our port's axis at −(their axis),
     //   plus 90 × (1 − facing), facing = their axis · the direction from the target to us. A port
     //   facing us adds nothing, one side-on 90, one facing away 180: a pair on the side facing us
@@ -34,7 +35,8 @@ namespace K2D2.Rendezvous
     {
         // reason is null on success, else why no pair was found.
         public static (PortInfo ours, PortInfo theirs, string reason) Choose(IReadOnlyList<PortInfo> ours,
-            IReadOnlyList<PortInfo> theirs, Vector3d ourForward, Vector3d fromTargetToUs)
+            IReadOnlyList<PortInfo> theirs, Vector3d ourForward, Vector3d fromTargetToUs,
+            Func<PortInfo, PortInfo, bool> gameCompatible = null)
         {
             if (ours == null || ours.Count == 0) return Refuse("our vessel has no docking port");
             if (theirs == null || theirs.Count == 0) return Refuse("the target has no docking port");
@@ -52,9 +54,14 @@ namespace K2D2.Rendezvous
                 if (!o.Free) continue;
                 foreach (var t in theirs)
                 {
-                    if (!t.Free || !Overlap(o.NodeTypes, t.NodeTypes)) continue;
-                    typeMatch = true;
-                    if (o.Gendered != t.Gendered || (o.Gendered && o.Female == t.Female)) continue;
+                    if (!t.Free) continue;
+                    bool gameSays = gameCompatible != null && gameCompatible(o, t);
+                    if (!gameSays)
+                    {
+                        if (!Overlap(o.NodeTypes, t.NodeTypes)) continue;
+                        typeMatch = true;
+                        if (o.Gendered != t.Gendered || (o.Gendered && o.Female == t.Female)) continue;
+                    }
 
                     double rotation = AngleDeg(Unit(o.Axis), -Unit(t.Axis));
                     double facing = Vector3d.Dot(Unit(t.Axis), toUs);

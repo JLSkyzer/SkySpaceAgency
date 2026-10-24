@@ -41,6 +41,43 @@ namespace K2D2.Rendezvous
         const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
         static readonly FieldInfo DockingTransformField = typeof(Module_DockingNode).GetField("_dockingTransform", Private);
         static readonly MethodInfo ControlFromHereMethod = typeof(Module_DockingNode).GetMethod("OnControlFromHere", Private, null, Type.EmptyTypes, null);
+        static string frameError;   // the last exception logged by TryFrame: each one is logged once
+
+        static DockingParts()
+        {
+            if (DockingTransformField == null)
+                K2D2_Plugin.logger.LogWarning("[Docking] reflection: Module_DockingNode._dockingTransform not found, port frames cannot be read");
+            if (ControlFromHereMethod == null)
+                K2D2_Plugin.logger.LogWarning("[Docking] reflection: Module_DockingNode.OnControlFromHere() not found, control falls back to SetControlOwner");
+        }
+
+        // A new docking run: forget what an earlier run recorded and did not restore.
+        public static void BeginRun()
+        {
+            previousControlId = null;
+            controlVessel = null;
+            rcsBefore = null;
+            rcsBeforeRecorded = false;
+        }
+
+        // PortChooser.Choose with the game's own compatibility (IsCompatibleWith) folded in:
+        // a pair the game accepts is choosable even without a common node type.
+        public static (PortRead ours, PortRead theirs, string reason) Choose(List<PortRead> ours, List<PortRead> theirs,
+            Vector3d ourForward, Vector3d fromTargetToUs)
+        {
+            var oursInfo = new List<PortInfo>();
+            var theirsInfo = new List<PortInfo>();
+            if (ours != null) foreach (var p in ours) oursInfo.Add(p.Info);
+            if (theirs != null) foreach (var p in theirs) theirsInfo.Add(p.Info);
+            var (o, t, reason) = PortChooser.Choose(oursInfo, theirsInfo, ourForward, fromTargetToUs,
+                (a, b) => GameSaysCompatible(Find(ours, a.PartId), Find(theirs, b.PartId)));
+            if (reason != null) return (null, null, reason);
+            return (Find(ours, o.PartId), Find(theirs, t.PartId), null);
+        }
+
+        // The approach limits for a chosen pair: both ports' capture values and sizes.
+        public static DockLimits Limits(PortRead ours, PortRead theirs, bool rcs, double targetRadius) =>
+            DockingReads.Limits(ours.Capture, theirs.Capture, rcs, targetRadius, ours.Info.Size, theirs.Info.Size);
 
         static string Id(PartComponent part) => part?.GlobalId.Guid.ToString("D");
 
@@ -110,7 +147,12 @@ namespace K2D2.Rendezvous
             }
             catch (Exception e)
             {
-                K2D2_Plugin.logger.LogInfo($"[Docking] port frame unreadable: {e.GetType().Name}: {e.Message}");
+                string line = $"[Docking] port frame unreadable: {e.GetType().Name}: {e.Message}";
+                if (line != frameError)
+                {
+                    frameError = line;
+                    K2D2_Plugin.logger.LogInfo(line);
+                }
                 return false;
             }
         }
@@ -141,9 +183,18 @@ namespace K2D2.Rendezvous
             return state == Data_DockingNode.DockingState.Docked;
         }
 
-        // The game's own compatibility test, for the log next to PortChooser's.
-        public static bool GameSaysCompatible(PortRead a, PortRead b) =>
-            a?.Module != null && b?.Module != null && a.Module.IsCompatibleWith(b.Module);
+        // The game's own compatibility test (Choose folds it into PortChooser's).
+        public static bool GameSaysCompatible(PortRead a, PortRead b)
+        {
+            try
+            {
+                return a?.Module != null && b?.Module != null && a.Module.IsCompatibleWith(b.Module);
+            }
+            catch (Exception)
+            {
+                return false;   // the node-type rule still applies
+            }
+        }
 
         // The target's bounding radius about its centre of mass, from its parts' centres of mass.
         public static double TargetRadius(VesselComponent target)
@@ -179,7 +230,10 @@ namespace K2D2.Rendezvous
                 try
                 {
                     ControlFromHereMethod.Invoke(port.View, null);
-                    how = "the port's own action";
+                    if (Id(ours.GetControlOwner()) == port.Info.PartId)
+                        how = "the port's own action";
+                    else
+                        K2D2_Plugin.logger.LogInfo("[Docking] the port's control action left the control part unchanged");
                 }
                 catch (Exception e)
                 {
@@ -218,23 +272,39 @@ namespace K2D2.Rendezvous
         // ---- RCS ----
 
         static KSPActionGroupState? rcsBefore;
+        static bool rcsBeforeRecorded;
 
         public static KSPActionGroupState RcsState(VesselComponent vessel) => vessel.GetActionGroupState(KSPActionGroup.RCS);
 
-        // Turns the RCS action group on or off. The state before the first call is kept for RestoreRcs.
+        // Turns the RCS action group on or off. The state before the first call of a run is kept
+        // for RestoreRcs.
         public static void SetRcs(VesselComponent vessel, bool on)
         {
             if (vessel == null) return;
-            if (rcsBefore == null) rcsBefore = RcsState(vessel);
+            if (!rcsBeforeRecorded)
+            {
+                rcsBefore = RcsState(vessel);
+                rcsBeforeRecorded = true;
+            }
             vessel.SetActionGroup(KSPActionGroup.RCS, on);
         }
 
+        // Back to the RCS state before the first SetRcs (DockingReads.RcsRestore). A Mixed state
+        // (some thrusters on, some off) is left as it is and logged: the group sets all of them.
         public static void RestoreRcs(VesselComponent vessel)
         {
             var before = rcsBefore;
+            bool recorded = rcsBeforeRecorded;
             rcsBefore = null;
-            if (vessel == null || before == null) return;
-            vessel.SetActionGroup(KSPActionGroup.RCS, before == KSPActionGroupState.True);
+            rcsBeforeRecorded = false;
+            if (vessel == null || !recorded) return;
+            bool? on = DockingReads.RcsRestore(before);
+            if (on == null)
+            {
+                K2D2_Plugin.logger.LogInfo($"[Docking] RCS left as it is: it was {before?.ToString() ?? "unknown"} before, which the action group cannot set back");
+                return;
+            }
+            vessel.SetActionGroup(KSPActionGroup.RCS, on.Value);
             K2D2_Plugin.logger.LogInfo($"[Docking] RCS restored to {before}");
         }
 
