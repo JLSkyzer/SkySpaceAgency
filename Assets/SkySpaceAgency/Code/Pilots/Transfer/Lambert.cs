@@ -13,6 +13,9 @@ namespace K2D2.Transfer
     {
         const int MaxIterations = 200;
         const double AngleTolerance = 1e-6;
+        // Relative time-of-flight residual above which a root is not a solution. 1e-9 of the flight
+        // keeps the arrival within centimetres on the Kerbin cases of LambertTests.
+        const double TimeTolerance = 1e-9;
 
         // prograde: the motion is counter-clockwise about +z. Returns false, with zero outputs, when
         // there is no solution or the transfer angle is within 1e-6 rad of 0 or π.
@@ -28,7 +31,6 @@ namespace K2D2.Transfer
                 return false;
 
             Vector3d cross = Vector3d.Cross(r1, r2);
-            double cosTheta = Vector3d.Dot(r1, r2) / (r1m * r2m);
             double theta = Math.Atan2(cross.magnitude, Vector3d.Dot(r1, r2)); // [0, π], precise near both ends
             if (theta < AngleTolerance || Math.PI - theta < AngleTolerance)
                 return false;
@@ -39,7 +41,10 @@ namespace K2D2.Transfer
             {
                 R1 = r1m,
                 R2 = r2m,
-                A = Math.Sin(theta) * Math.Sqrt(r1m * r2m / (1 - cosTheta)),
+                // Curtis's A = sin θ √(r1 r2 / (1 − cos θ)), rewritten without the 1 − cos θ that
+                // loses most of its digits at small transfer angles (θ/2 lies in (0, π)).
+                A = Math.Sqrt(2 * r1m * r2m) * Math.Cos(0.5 * theta),
+                HalfTheta = 0.5 * theta,
                 SqrtMu = Math.Sqrt(mu),
                 Tof = tof,
                 Revolutions = revolutions,
@@ -54,6 +59,10 @@ namespace K2D2.Transfer
             else if (!SolveMultiRevolution(p, longPeriodBranch, out z))
                 return false;
 
+            // Never report a root that does not fly in 'tof': a wrong success would send the caller
+            // (the transfer and rendezvous searches) towards a point the orbit misses.
+            if (!(Math.Abs(p.Time(z) - tof) <= TimeTolerance * tof))
+                return false;
             double y = p.Y(z);
             if (!(y > 0))
                 return false;
@@ -74,10 +83,25 @@ namespace K2D2.Transfer
 
         class Problem
         {
-            public double R1, R2, A, SqrtMu, Tof;
+            public double R1, R2, A, HalfTheta, SqrtMu, Tof;
             public int Revolutions;
 
-            public double Y(double z) => R1 + R2 + A * (z * StumpffS(z) - 1) / Math.Sqrt(StumpffC(z));
+            // y(z) = r1 + r2 + A (z S − 1) / √C. Written that way, it subtracts two terms of the size
+            // of r1 + r2, and near the asymptotes z = (2nπ)² it keeps only a few digits: rounding
+            // then dips below 0 there, Time turns NaN, and the root finder took the jump for a root.
+            // For z > 0 the identity (z S − 1) / √C = −√2 cos(√z/2) sgn(sin(√z/2)) turns it into
+            // (√r1 − √r2)² + 2√(r1 r2) (1 − cos(θ/2) cos b), with b = √z/2 − nπ, and
+            // 1 − cos a cos b = sin²((a − b)/2) + sin²((a + b)/2): a sum of squares, exact to rounding.
+            public double Y(double z)
+            {
+                if (!(z > 0))
+                    return R1 + R2 + A * (z * StumpffS(z) - 1) / Math.Sqrt(StumpffC(z));
+                double half = 0.5 * Math.Sqrt(z);
+                double b = half - Math.Floor(half / Math.PI) * Math.PI;
+                double d = Math.Sqrt(R1) - Math.Sqrt(R2);
+                double sm = Math.Sin(0.5 * (HalfTheta - b)), sp = Math.Sin(0.5 * (HalfTheta + b));
+                return d * d + 2 * Math.Sqrt(R1 * R2) * (sm * sm + sp * sp);
+            }
 
             // Time of flight for z, or NaN where y ≤ 0 (no orbit).
             public double Time(double z)
@@ -85,7 +109,7 @@ namespace K2D2.Transfer
                 double c = StumpffC(z);
                 if (!(c > 0))
                     return double.NaN;
-                double y = R1 + R2 + A * (z * StumpffS(z) - 1) / Math.Sqrt(c);
+                double y = Y(z);
                 if (!(y >= 0))
                     return double.NaN;
                 return (Math.Pow(y / c, 1.5) * StumpffS(z) + A * Math.Sqrt(y)) / SqrtMu;
@@ -200,7 +224,8 @@ namespace K2D2.Transfer
         }
 
         // Root of time(z) = tof between lo and hi, where the two ends straddle tof: Newton steps,
-        // with bisection whenever Newton leaves the bracket or has no derivative.
+        // with bisection whenever Newton leaves the bracket or has no derivative. A bracket that
+        // collapses on a jump of the time (an asymptote) is not a root: success needs the residual.
         static bool FindRoot(Problem p, double lo, double hi, out double z)
         {
             double gLo = p.TimeOrBound(lo) - p.Tof;
@@ -222,7 +247,7 @@ namespace K2D2.Transfer
                 else
                     hi = z;
                 if (hi - lo <= 1e-15 * Math.Max(1, Math.Abs(z)))
-                    return !double.IsInfinity(g);
+                    return Math.Abs(g) <= TimeTolerance * p.Tof;
 
                 double next = double.NaN;
                 if (!double.IsInfinity(g))
@@ -233,13 +258,16 @@ namespace K2D2.Transfer
                 }
                 z = next > lo && next < hi ? next : 0.5 * (lo + hi);
             }
-            return Math.Abs(p.TimeOrBound(z) - p.Tof) <= 1e-9 * p.Tof;
+            return Math.Abs(p.TimeOrBound(z) - p.Tof) <= TimeTolerance * p.Tof;
         }
 
         static double StumpffC(double z)
         {
             if (z > 1e-3)
-                return (1 - Math.Cos(Math.Sqrt(z))) / z;
+            {
+                double s = Math.Sin(0.5 * Math.Sqrt(z)); // 1 − cos x = 2 sin²(x/2), exact near the asymptotes
+                return 2 * s * s / z;
+            }
             if (z < -1e-3)
                 return (Math.Cosh(Math.Sqrt(-z)) - 1) / -z;
             return 0.5 - z / 24 + z * z / 720 - z * z * z / 40320;

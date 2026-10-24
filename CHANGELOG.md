@@ -63,6 +63,7 @@
 
 ### Changed
 
+- **Transfer and rendezvous search** (2026-10-24): the search no longer considers a wrong solution. The orbit solver behind it could report, between two points of nearly the same orbit with several revolutions, an orbit that missed the aim by up to 700 km; it now finds those orbits precisely or reports none.
 - **Precision landing rewritten for bodies without atmosphere** (precision landing part 2, 2026-10-21; not yet flown in game).
   - Goal: stop within 100 m of the target for at most 20 % more Δv than a landing without target; over 20 % the landing is refused at start with the numbers.
   - The planner predicts the real stop point (braking and body rotation included, the longitude and rotation directions measured in game), searches the deorbit time, plans a plane change itself when the target is not under the orbit, solves a mid-course correction, brakes to a stop at the Touch Down altitude, then a terminal guidance brings the vessel down above the target. Δv per phase, predicted and final distances are shown in the Land tab.

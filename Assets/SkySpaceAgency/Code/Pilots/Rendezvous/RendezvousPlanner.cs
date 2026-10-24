@@ -309,9 +309,9 @@ namespace K2D2.Rendezvous
                 if (!Lambert.Solve(ToFrame(rd), ToFrame(aim), tof, mu, true, rev, longBranch, out var v1f, out _))
                     return double.PositiveInfinity;
                 Vector3d v1 = FromFrame(v1f);
-                // The multi-revolution solver can report success on a root it did not converge to
-                // (near a transfer angle of 0, the same-orbit phasing case): keep only orbits that
-                // really reach the aim point in 'tof'.
+                // Defence in depth: keep only orbits that really reach the aim point in 'tof'.
+                // Lambert used to report wrong multi-revolution roots near a transfer angle of 0
+                // (fixed 2026-10-24); this check costs one propagation, about 4 % of a Lambert solve.
                 KeplerPropagator.Propagate(rd, v1, mu, tof, out var rEnd, out var v2);
                 if (!((rEnd - aim).magnitude <= ArrivalTolerance))
                     return double.PositiveInfinity;
