@@ -40,6 +40,7 @@ namespace K2D2.Transfer
         public const string NoPlane = "Launch window: no target plane.";
         public const string AtPole = "Launch window: the launch site is at a pole.";
         public const string NoPass = "No launch window within the horizon.";
+        public const string TiltedAxis = "Launch window: the body's rotation axis is not the frame's z axis.";
 
         // Below this out-of-plane angle of the insertion point, launching now is as good as a pass.
         public const double NowToleranceDeg = 0.01;
@@ -58,6 +59,11 @@ namespace K2D2.Transfer
                 return Refuse(BadInput, start);
             if (!Finite(targetPlaneNormal) || !(targetPlaneNormal.magnitude > 0))
                 return Refuse(NoPlane, start);
+
+            // The frame's z must be the rotation axis: anything else is a frame mismatch.
+            double omegaXY = Math.Sqrt(bodyAngularVelocity.x * bodyAngularVelocity.x + bodyAngularVelocity.y * bodyAngularVelocity.y);
+            if (bodyAngularVelocity.magnitude > 0 && Math.Atan2(omegaXY, Math.Abs(bodyAngularVelocity.z)) > 1e-3)
+                return Refuse(TiltedAxis, start);
 
             Vector3d n = targetPlaneNormal.normalized;
             Vector3d up = siteAtUT0.normalized;
@@ -117,7 +123,11 @@ namespace K2D2.Transfer
             Vector3d qNow = Turn(q0, omega * lead);
             bool degenerate = rho * nh < 1e-12 || Math.Abs(omega) < 1e-15;
             double dt;
-            if (degenerate || (reachable && Math.Abs(Math.Asin(Clamp(Vector3d.Dot(qNow, n)))) < NowToleranceDeg * Deg))
+            // "Now" also needs the crossing to go the candidate's way: an Ascending heading at the
+            // descending crossing reaches a plane about 2i off.
+            bool nowInPlane = reachable && Math.Abs(Math.Asin(Clamp(Vector3d.Dot(qNow, n)))) < NowToleranceDeg * Deg
+                              && (pass == PlanePass.Ascending) == (Vector3d.Cross(n, qNow).z > 0);
+            if (degenerate || nowInPlane)
             {
                 dt = 0;
                 if (degenerate)

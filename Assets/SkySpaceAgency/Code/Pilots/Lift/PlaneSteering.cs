@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace K2D2.Lift
 {
     // Steering the ascent into a target orbit plane (inertial Zup frame, body-relative r and v; east
     // is z × up, the way a positive rotation about z moves the ground; headings are compass degrees,

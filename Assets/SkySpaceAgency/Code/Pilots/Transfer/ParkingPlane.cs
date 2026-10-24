@@ -88,11 +88,15 @@ namespace K2D2.Transfer
             if (best == null)
                 return Result(equatorial, new Vector3d(0, 0, 1), orbitRadius,
                     "equatorial: no transfer was found from a plane holding the departure", body);
+            bool converged = false;
             for (int round = 0; round < MaxRounds; round++)
             {
                 var dNow = Departure(s, launchBody, best, ut0, orbitRadius);
                 if (dNow.magnitude == 0 || OutOfPlaneDeg(dNow, bestN) <= ToleranceDeg)
+                {
+                    converged = true;
                     break;
+                }
                 // The plane nearer to the current one: the same side of the asymptote.
                 Vector3d next = Vector3d.zero;
                 foreach (var n in Planes(dNow, latDeg))
@@ -110,6 +114,9 @@ namespace K2D2.Transfer
             string why = Math.Abs(dec) >= latDeg
                 ? Inv($"it holds the departure asymptote (declination {dec:F2}°)")
                 : Inv($"it holds the departure asymptote (declination {dec:F2}°) and the site's latitude ({latDeg:F2}°) allows no lower one");
+            double off = dFinal.magnitude > 0 ? OutOfPlaneDeg(dFinal, bestN) : 0;
+            if (!converged && off > ToleranceDeg)
+                why += Inv($" (the departure asymptote is still {off:F2}° out of this plane after {MaxRounds} rounds: the Transfer tab will plan the rest)");
             return Result(best, bestN, orbitRadius, why, body);
         }
 

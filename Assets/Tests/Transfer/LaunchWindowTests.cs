@@ -119,6 +119,34 @@ public class LaunchWindowTests
     }
 
     [Test]
+    public void SiteAtDescendingCrossing_AscendingIsNotLaunchedNow()
+    {
+        // An equatorial site exactly at the plane's descending node: launching now is right, but only
+        // southeast (Descending). Northeast from here would reach a plane about 2i off.
+        var n = Normal(28.5, 180);
+        var w = Find(new Vector3d(R, 0, 0), n, ut0: 0);
+        Assert.IsTrue(w.Ok, w.Refusal);
+        Assert.AreEqual(PlanePass.Descending, w.Pass);
+        Assert.AreEqual(0, w.LaunchUT, 1e-6);
+        Assert.That(w.AzimuthDeg, Is.InRange(90.0, 180.0));
+        Assert.Less(AngleDeg(w.ReachedPlaneNormal, n), 0.01);
+
+        // Mirror: at the ascending node, Ascending now.
+        var a = Find(new Vector3d(R, 0, 0), Normal(28.5, 0), ut0: 0);
+        Assert.AreEqual(PlanePass.Ascending, a.Pass);
+        Assert.AreEqual(0, a.LaunchUT, 1e-6);
+        Assert.That(a.AzimuthDeg, Is.InRange(0.0, 90.0));
+    }
+
+    [Test]
+    public void TiltedRotationAxis_Refused()
+    {
+        var w = LaunchWindow.Find(R, Mu, new Vector3d(1e-5, 0, 2.9e-4), Ksc(), 0, Normal(6, 0), Orbit, 0, 0, Day);
+        Assert.IsFalse(w.Ok);
+        Assert.AreEqual(LaunchWindow.TiltedAxis, w.Refusal);
+    }
+
+    [Test]
     public void SiteAbovePlaneInclination_UsesClosestPlane_ReportsErrorAndDv()
     {
         // 30° north, plane of 20°: the best is to launch due east under the plane's northern vertex.
