@@ -19,8 +19,9 @@ namespace K2D2.Node
     /// The game models a node as a finite burn sized on the stage active right now; with a nearly
     /// empty stage still active its burn duration and predicted trajectory are garbage, and an
     /// executor that follows that model (SAS Maneuver mode, ManeuverPlanSolver) misses the target.
-    /// This controller instead re-evaluates OrbitGuidance.DeltaVToOrbit from the current orbit
-    /// every frame and steers along it until it vanishes, so staging mid-burn does not matter.
+    /// This controller instead re-evaluates its guidance (an IBurnGuidance: OrbitTargetGuidance
+    /// for a target orbit, i.e. OrbitGuidance.DeltaVToOrbit) from the current orbit every frame
+    /// and steers along it until it vanishes, so staging mid-burn does not matter.
     ///
     /// Sequence: steer toward the burn aim from the start (also while warping), warp until the
     /// alignment lead before the burn start (BurnWarp.AlignmentLead from the angle still to turn
@@ -29,6 +30,10 @@ namespace K2D2.Node
     /// the orbit). While burning the warp is managed (BurnWarp.MaxBurnRate) and the throttle is
     /// frame-aware (BurnWarp.Throttle). Refusals go through Fail(). CircularizeBurn derives from it
     /// with its own target (circular at the current radius) and start time (centered on the apsis).
+    ///
+    /// With stage_when_dry (off by default, set by the transfer pilot only) a burn whose engines
+    /// give no thrust for 0.5 s stages once (BurnStaging), unless the next stage would drop a
+    /// docking port, a parachute or the command part: then it stops with a message.
     /// </summary>
     public class TargetOrbitBurn : ExecuteController
     {
@@ -73,6 +78,10 @@ namespace K2D2.Node
         // its own auto-warp setting). False: the player's warp is only lowered when needed.
         public bool allow_warp = true;
 
+        // Stage when the engines run dry mid-burn (BurnStaging). Off: this controller never
+        // stages, as before (the Node tab, Orbit, Lift and Landing leave it off).
+        public bool stage_when_dry = false;
+
         /// <summary>Remaining Δv (m/s) under which the burn is done. Start(target, startUT,
         /// doneDeltaV) sets it for its run (default 0.2); CircularizeBurn.Start keeps the value
         /// set here (default 0.2).</summary>
@@ -82,6 +91,7 @@ namespace K2D2.Node
         public Mode mode = Mode.Warp;
 
         TargetOrbit target;
+        IBurnGuidance guidance;
         double start_UT;
 
         double burn_start_UT;
@@ -95,8 +105,6 @@ namespace K2D2.Node
         bool normal_axis_checked;
         bool frame_check_strict;
 
-        // Sign of the target radial speed, fixed at ignition (0 = from the current state).
-        int radial_sign;
         double last_burn_UT;
         double thrust_time;      // seconds of thrust while aligned since ignition
         double rising_time;      // seconds of thrust with |dv| rising, continuously
@@ -120,6 +128,7 @@ namespace K2D2.Node
         protected KSPVessel current_vessel;
         protected BurndV burn_dV = new BurndV();
         WarpTo warp = new WarpTo();
+        readonly BurnStaging staging = new BurnStaging();
 
         public TargetOrbitBurn() : this("SkySpaceAgency.TargetOrbitBurn") { }
 
@@ -129,6 +138,7 @@ namespace K2D2.Node
         }
 
         public TargetOrbit Target => target;
+        public IBurnGuidance Guidance => guidance;
 
         // Log tag, extra words after it ("AP"), and the burn's name in the UI texts.
         protected virtual string Tag => "TargetOrbitBurn";
@@ -142,6 +152,7 @@ namespace K2D2.Node
         public void Start(TargetOrbit target, double startUT, double doneDeltaV = DefaultDoneDeltaV)
         {
             this.target = target;
+            guidance = new OrbitTargetGuidance(target);
             DoneDeltaV = doneDeltaV;
             start_UT = startUT;
             if (!BeginRun())
@@ -168,6 +179,39 @@ namespace K2D2.Node
             BeginWaiting(now);
         }
 
+        /// <summary>
+        /// Burns along any guidance from startUT, with the same warp, alignment, ignition, guards
+        /// and end as Start(TargetOrbit, …). The guidance is fixed at ignition when it is an
+        /// IFixedAtIgnition. Refused without a guidance, or when it gives no answer now.
+        /// </summary>
+        public void Start(IBurnGuidance g, double startUT, double doneDeltaV = DefaultDoneDeltaV)
+        {
+            target = default;
+            guidance = g;
+            DoneDeltaV = doneDeltaV;
+            start_UT = startUT;
+            if (!BeginRun())
+                return;
+
+            if (g == null || double.IsNaN(startUT))
+            {
+                Refuse("Invalid burn guidance.");
+                return;
+            }
+
+            double now = GeneralTools.Current_UT;
+            double dv = CurrentDeltaV(now).magnitude;
+            if (double.IsNaN(dv))
+            {
+                Refuse($"Could not compute the burn ({g.Describe()}).");
+                return;
+            }
+
+            logger.LogInfo($"[{Tag}] accepted: {g.Describe()}, start in {startUT - now:n1} s, dv now {dv:n1} m/s" +
+                (stage_when_dry ? ", stages when dry" : ""));
+            BeginWaiting(now);
+        }
+
         // Resets the run. False, after a refusal, when there is no active vessel.
         protected bool BeginRun()
         {
@@ -182,7 +226,7 @@ namespace K2D2.Node
             throttle = 0;
             normal_axis_checked = false;
             frame_check_strict = false;
-            radial_sign = 0;
+            staging.Reset();
             last_burn_UT = double.NaN;
             thrust_time = 0;
             rising_time = 0;
@@ -286,13 +330,14 @@ namespace K2D2.Node
         // Called while waiting, every frame, before the start time is checked.
         protected virtual void RefreshWhileWaiting(double now) { }
 
-        protected virtual Vector3d GuidanceDeltaV(Vector3d r, Vector3d v, double mu) =>
-            OrbitGuidance.DeltaVToOrbit(r, v, mu, target, radial_sign);
+        // The Δv still to go from (r, v) at ut. NaN without a guidance.
+        protected virtual Vector3d GuidanceDeltaV(Vector3d r, Vector3d v, double ut, double mu) =>
+            guidance != null ? guidance.DeltaVToGo(r, v, ut, mu) : new Vector3d(double.NaN, double.NaN, double.NaN);
 
         Vector3d CurrentDeltaV(double now)
         {
             IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
-            return GuidanceDeltaV(orbit.GetRelativePositionAtUTZup(now), orbit.GetOrbitalVelocityAtUTZup(now),
+            return GuidanceDeltaV(orbit.GetRelativePositionAtUTZup(now), orbit.GetOrbitalVelocityAtUTZup(now), now,
                 orbit.referenceBody.gravParameter);
         }
 
@@ -325,15 +370,15 @@ namespace K2D2.Node
             burn_start_UT = now;
             logger.LogInfo($"{BurnLogTag} ignition at T{now - BurnStartUT:+0.0;-0.0;+0.0}s vs planned, {angle:n1}° off");
             ignition_dv = double.NaN;
-            // Fixed for the whole burn, so the target does not flip side when the radial speed
-            // crosses 0 mid-burn.
+            // Fixed for the whole burn (a target orbit: the sign of the radial speed, so the target
+            // does not flip side when the radial speed crosses 0 mid-burn).
             IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
             Vector3d r = orbit.GetRelativePositionAtUTZup(now);
             Vector3d v = orbit.GetOrbitalVelocityAtUTZup(now);
-            radial_sign = OrbitGuidance.RadialSign(r, v, target.Ra, target.Rp);
+            (guidance as IFixedAtIgnition)?.FixAtIgnition(r, v, now, orbit.referenceBody.gravParameter);
 
             // The frame check (first Steer from now on) may abort only a burn with a real normal part.
-            Vector3d dv = GuidanceDeltaV(r, v, orbit.referenceBody.gravParameter);
+            Vector3d dv = GuidanceDeltaV(r, v, now, orbit.referenceBody.gravParameter);
             OrbitGuidance.Split(dv, r, v, out _, out _, out double normal);
             frame_check_strict = Math.Abs(normal) > Math.Max(FrameCheckMinNormal, FrameCheckNormalShare * dv.magnitude);
             logger.LogInfo($"[{Tag}] frame check {(frame_check_strict ? "can abort" : "log only")}: " +
@@ -526,6 +571,9 @@ namespace K2D2.Node
 
             double accel = burn_dV.mass > 0 ? Thrust() / burn_dV.mass : 0;
 
+            if (stage_when_dry && aligned && StageIfDry(now, accel))
+                return;
+
             ManageBurnWarp(remaining_dv, accel, aligned);
             if (!aligned || accel <= 0)
                 set_throttle(0);
@@ -534,6 +582,28 @@ namespace K2D2.Node
                     Math.Max(1, TimeWarpTools.CurrentRate)));
 
             status_line = stalled ? StallStatus : BurningStatus(remaining_dv);
+        }
+
+        // Opt-in staging when the engines run dry (BurnStaging). True when this frame ends here:
+        // the burn failed (throttle 0, warp off), or a staging waits for the warp to stop.
+        bool StageIfDry(double now, double accel)
+        {
+            BurnStaging.Outcome outcome = staging.Update(current_vessel.VesselComponent, now, throttle, accel,
+                burn_dV.actual_dv, out string failure);
+            switch (outcome)
+            {
+                case BurnStaging.Outcome.Failed:
+                    set_throttle(0);
+                    TimeWarpTools.SetRateIndex(0, true);
+                    LogOrbit("abort (staging)", now, remaining_dv, now - burn_start_UT);
+                    Fail(failure);
+                    return true;
+                case BurnStaging.Outcome.Pending:
+                    status_line = "Engines dry: staging...";
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         // Warp while burning: capped by BurnWarp.MaxBurnRate (5 % of the remaining Δv per frame,
@@ -613,7 +683,7 @@ namespace K2D2.Node
             Vector3d v = orbit.GetOrbitalVelocityAtUTZup(now);
             double mu = orbit.referenceBody.gravParameter;
 
-            dv = GuidanceDeltaV(r, v, mu);
+            dv = GuidanceDeltaV(r, v, now, mu);
             OrbitGuidance.Split(dv, r, v, out double radial, out double horizontal, out double normal);
             if (double.IsNaN(radial) || double.IsNaN(horizontal) || double.IsNaN(normal) || dv.magnitude <= 0)
                 return false;
@@ -726,6 +796,7 @@ namespace K2D2.Node
         }
 
         protected virtual string TargetText(double bodyRadius) =>
+            guidance != null && !(guidance is OrbitTargetGuidance) ? guidance.Describe() :
             $"target ap {(target.Ra - bodyRadius) / 1000:n1} km pe {(target.Rp - bodyRadius) / 1000:n1} km " +
             $"inc {target.InclinationRad * Rad2Deg:n2}°";
 

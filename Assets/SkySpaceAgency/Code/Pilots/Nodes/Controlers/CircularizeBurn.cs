@@ -146,7 +146,7 @@ namespace K2D2.Node
 
         protected override double BurnStartUT => apsis_UT - burn_time / 2;
 
-        protected override Vector3d GuidanceDeltaV(Vector3d r, Vector3d v, double mu) =>
+        protected override Vector3d GuidanceDeltaV(Vector3d r, Vector3d v, double ut, double mu) =>
             CircularizeGuidance.DeltaVToCircular(r, v, mu);
 
         double TimeToApsis(Vector3d r, Vector3d v, double mu)
