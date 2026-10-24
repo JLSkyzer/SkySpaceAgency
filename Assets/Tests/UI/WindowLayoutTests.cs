@@ -40,4 +40,15 @@ public class WindowLayoutTests
         Assert.IsNotNull(transfer.Q<TextField>("max_trip_days"));
         Assert.IsNotNull(transfer.Q<Button>("cancel_saved"));
     }
+
+    [Test]
+    public void LiftTab_HasTheTransferGoalElements()
+    {
+        var lift = CloneWindow().Q<TabbedPage>().Query<TabPage>().ToList().Single(p => p.name == "lift");
+        Assert.IsNotNull(lift.Q<DropdownField>("goal"));
+        Assert.IsNotNull(lift.Q<DropdownField>("transfer_target"));
+        Assert.IsNotNull(lift.Q<Label>("transfer_hint"));
+        foreach (string element in new[] { "transfer_goal_group", "transfer_infos", "heading_row", "heading", "lift_infos" })
+            Assert.IsNotNull(lift.Q(element), $"the Lift tab has no element named {element}");
+    }
 }

@@ -7,6 +7,15 @@
     <K2UI.Tabs.TabPage name="lift" label="Lift" style="display: flex;">
         <ui:VisualElement name="page" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); display: flex;">
             <ui:Label tabindex="-1" text="Ascent Autopilot" display-tooltip-when-elided="true" name="Title" class="unselectedContent" style="display: flex; width: 100%; -unity-text-align: upper-center;" />
+            <!-- Goal (sub-project 4.2): Orbit is today's ascent and layout, unchanged. Prepare
+                 transfer waits on the pad for the transfer's parking-orbit plane, lifts into it and
+                 trims it; its target and plan readout are shown only for that goal (LiftUI.cs). -->
+            <ui:DropdownField label="Goal" index="-1" choices="" name="goal" tooltip="Orbit: the ascent to the Ap below. Prepare transfer: wait on the pad for the transfer's parking-orbit plane, lift into it and trim it" />
+            <ui:VisualElement name="transfer_goal_group">
+                <ui:DropdownField label="Target" index="-1" choices="" name="transfer_target" tooltip="The body of the transfer, every body grouped by parent" />
+                <ui:Label name="transfer_hint" text="" style="white-space: normal; font-size: 12px; color: rgb(180, 180, 180);" />
+                <ui:VisualElement name="transfer_infos" class="advanced-info-table" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);" />
+            </ui:VisualElement>
             <ui:Foldout text="Profile" value="false" name="profile">
                 <ui:IntegerField label="Ap Altitude" value="42" name="destination_Ap_km" style="justify-content: space-between;">
                     <ui:Label tabindex="-1" text="km" display-tooltip-when-elided="true" style="width: 28px; min-width: 10px; margin-right: 0; margin-left: 10px;" />

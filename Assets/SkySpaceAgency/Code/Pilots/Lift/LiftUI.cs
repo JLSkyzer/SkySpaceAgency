@@ -1,7 +1,11 @@
+using System;
+using System.Collections.Generic;
 using K2UI.Tabs;
 using K2UI;
 using UnityEngine.UIElements;
 using K2D2.UI;
+using K2D2.Transfer;
+using KTools;
 
 namespace K2D2.Lift
 {
@@ -24,6 +28,16 @@ namespace K2D2.Lift
 
         // Live LIFT INFO readout, same table pattern as NodeExUI's node_infos_el.
         VisualElement lift_infos_el;
+
+        // TRANSFER GOAL (sub-project 4.2): the goal and target dropdowns and the plan readout,
+        // shown only for Prepare transfer; the Orbit goal keeps today's layout.
+        static readonly string[] GoalLabels = { "Orbit", "Prepare transfer" };
+        DropdownField goal_drop, target_drop;
+        VisualElement transfer_group, transfer_infos_el, heading_row, heading_el;
+        Label transfer_hint;
+        BodySystem list_system;
+        List<BodyChoices.Entry> entries = new List<BodyChoices.Entry>();
+        float next_body_try;
 
         public override bool onInit()
         {
@@ -53,6 +67,29 @@ namespace K2D2.Lift
 
             heading_label = panel.Q<Label>("heading_label");
             var heading = panel.Q<K2Compass>("heading").Bind(settings.heading);
+            heading_el = heading;
+            heading_row = panel.Q<VisualElement>("heading_row");
+
+            goal_drop = panel.Q<DropdownField>("goal");
+            goal_drop.choices = new List<string>(GoalLabels);
+            goal_drop.SetValueWithoutNotify(GoalLabel(settings.goal.V));
+            goal_drop.RegisterValueChangedCallback(evt =>
+            {
+                int i = Array.IndexOf(GoalLabels, evt.newValue);
+                if (i >= 0)
+                    settings.goal.V = (LiftGoal)i;
+            });
+            // The target by name, as the Transfer tab keeps it (BodyChoices).
+            target_drop = panel.Q<DropdownField>("transfer_target");
+            target_drop.RegisterValueChangedCallback(evt =>
+            {
+                int i = BodyChoices.FindLabel(entries, evt.newValue);
+                if (i >= 0)
+                    settings.transfer_target.V = entries[i].Name;
+            });
+            transfer_group = panel.Q<VisualElement>("transfer_goal_group");
+            transfer_infos_el = panel.Q<VisualElement>("transfer_infos");
+            transfer_hint = panel.Q<Label>("transfer_hint");
 
             var graph = panel.Q<VisualElement>("graph");
             pilot.ascent_path.InitUI(graph);
@@ -84,7 +121,70 @@ namespace K2D2.Lift
             return true;
         }
 
-        void AddInfoRow(string label, string value)
+        static string GoalLabel(LiftGoal goal) =>
+            goal == LiftGoal.PrepareTransfer ? GoalLabels[1] : GoalLabels[0];
+
+        // A body list read from the game, retried every 2 s until there is one (as the Transfer tab).
+        void UpdateBodies()
+        {
+            if (list_system == null && UnityEngine.Time.realtimeSinceStartup >= next_body_try)
+            {
+                next_body_try = UnityEngine.Time.realtimeSinceStartup + 2;
+                try
+                {
+                    BodySystem s = GameBodySystem.Build(GeneralTools.Current_UT, out string error);
+                    if (s == null)
+                        K2D2_Plugin.logger.LogInfo($"[Lift] tab: no body list yet ({error})");
+                    else
+                    {
+                        list_system = s;
+                        entries = BodyChoices.Grouped(s);
+                        target_drop.choices = BodyChoices.Labels(entries);
+                    }
+                }
+                catch (Exception e)
+                {
+                    K2D2_Plugin.logger.LogInfo($"[Lift] tab: no body list yet ({e.GetType().Name}: {e.Message})");
+                }
+            }
+            int i = BodyChoices.FindName(entries, pilot.settings.transfer_target.V);
+            target_drop.SetValueWithoutNotify(i >= 0 ? entries[i].Label : "Choose a body");
+        }
+
+        void UpdateTransferGoal()
+        {
+            LiftSettings settings = pilot.settings;
+            bool transfer_goal = settings.goal.V == LiftGoal.PrepareTransfer;
+            goal_drop.SetValueWithoutNotify(GoalLabel(settings.goal.V));
+            transfer_group.Show(transfer_goal);
+            // The heading comes from the launch window for a transfer.
+            heading_row.Show(!transfer_goal);
+            heading_el.Show(!transfer_goal);
+            goal_drop.SetEnabled(!pilot.isRunning);
+            target_drop.SetEnabled(!pilot.isRunning);
+            if (!transfer_goal)
+                return;
+
+            UpdateBodies();
+            transfer_infos_el.Clear();
+            string target = settings.transfer_target.V;
+            var plan = pilot.transfer;
+            // The last plan, while it is the one of the target chosen.
+            if (plan != null && plan.TargetName == target)
+            {
+                transfer_hint.text = "";
+                foreach (var (label, value) in LiftGoalRules.Readout(plan, GeneralTools.Current_UT))
+                    AddInfoRow(transfer_infos_el, label, value);
+            }
+            else
+                transfer_hint.text = string.IsNullOrEmpty(target)
+                    ? "Choose the target body."
+                    : $"Start plans the parking orbit for {target} and the launch time, then waits on the pad and fires the first stage at T-0.";
+        }
+
+        void AddInfoRow(string label, string value) => AddInfoRow(lift_infos_el, label, value);
+
+        static void AddInfoRow(VisualElement table, string label, string value)
         {
             var row = new VisualElement();
             row.AddToClassList("advanced-info-row");
@@ -97,7 +197,7 @@ namespace K2D2.Lift
             value_el.AddToClassList("advanced-info-row-value");
             row.Add(value_el);
 
-            lift_infos_el.Add(row);
+            table.Add(row);
         }
 
         void UpdateLiftInfos()
@@ -127,6 +227,8 @@ namespace K2D2.Lift
             heading_label.text = $"{settings.heading.V:n1} °";
 
             final_grp.Show(false);
+
+            UpdateTransferGoal();
 
             UpdateLiftInfos();
 
