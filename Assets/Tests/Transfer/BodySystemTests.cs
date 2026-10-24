@@ -153,4 +153,19 @@ public class BodySystemTests
         // Mun: airless, terrain 7 061 m.
         Assert.That(s["Mun"].LowOrbitRadius, Is.EqualTo(200000 + 7061 + 10000));
     }
+
+    [Test]
+    public void DuplicateName_Throws()
+    {
+        var nodes = new[]
+        {
+            new BodyNode { Name = "Kerbol", Index = 0, Mu = 1.17e18, Radius = 2.6e8, Soi = double.PositiveInfinity },
+            new BodyNode { Name = "Kerbin", Index = 1, ParentIndex = 0, Mu = 3.53e12, Radius = 6e5, Soi = 8.4e7,
+                EpochPosition = new Vector3d(1.36e10, 0, 0), EpochVelocity = new Vector3d(0, 9285, 0) },
+            new BodyNode { Name = "Kerbin", Index = 2, ParentIndex = 0, Mu = 3.53e12, Radius = 6e5, Soi = 8.4e7,
+                EpochPosition = new Vector3d(-1.36e10, 0, 0), EpochVelocity = new Vector3d(0, -9285, 0) },
+        };
+        var e = Assert.Throws<ArgumentException>(() => new BodySystem(nodes));
+        StringAssert.Contains("Kerbin", e.Message);
+    }
 }

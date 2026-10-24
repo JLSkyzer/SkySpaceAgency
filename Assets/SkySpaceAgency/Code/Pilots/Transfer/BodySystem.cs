@@ -26,6 +26,10 @@ namespace K2D2.Transfer
                 var n = nodes[i];
                 if (n.Index != i)
                     throw new ArgumentException($"Body {n.Name} has index {n.Index} but sits at position {i}.");
+                if (n.Name == null || _byName.ContainsKey(n.Name))
+                    throw new ArgumentException(n.Name == null
+                        ? $"Body {i} has no name."
+                        : $"Two bodies are named {n.Name}: the name index would be ambiguous.");
                 _nodes[i] = n;
                 _byName[n.Name] = n;
             }
