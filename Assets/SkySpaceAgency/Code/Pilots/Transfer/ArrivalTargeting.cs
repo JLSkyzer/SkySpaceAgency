@@ -43,35 +43,54 @@ namespace K2D2.Transfer
             // map is stretched (early corrections), since moving B along one axis cannot shrink the other.
             public double[] Plane;
             public double BWanted;
-            public double PeriapsisRadius, InclinationDeg;
+            public double PeriapsisRadius, InclinationDeg, ArrivalUT;
             public bool Valid => Residual != null;
+            // Which residual Norm measures: Miss and Encounter norms, and among encounters the B-plane
+            // and the captured-orbit residuals, are not on one scale (see Better).
+            public int Kind;
+            public double PeriapsisError;
         }
 
         // r, v: the vessel's state relative to 'body' at 'ut'. Returns false, with a zero Δv and NaN
-        // predictions, when the target cannot be met within MaxDeltaV. Otherwise the best Δv found
-        // (converged unless the aim cannot be reached, for instance an inclination below the
-        // asymptote's declination) and the periapsis radius and inclination (°) it gives at the target.
-        // On a miss, this aims at the deepest closest approach before horizonUT, which may be another
-        // pass than the planned one: the pilot uses the overload with the planned arrival.
+        // predictions, when the target cannot be met within MaxDeltaV. True only means that a Δv is
+        // returned, one that meets the target: the best found, with the periapsis radius and
+        // inclination (°) it gives there, which the caller compares with what it wanted. On a miss,
+        // this aims at the deepest closest approach before horizonUT, and it keeps any encounter it
+        // finds, which may be another pass than the planned one: the pilot uses the overload with the
+        // planned arrival.
         public static bool Solve(BodySystem s, int body, Vector3d r, Vector3d v, double ut, int targetBody,
             double wantedPeriapsisRadius, double wantedInclinationDeg, double horizonUT,
             out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg) =>
             Solve(s, body, r, v, ut, targetBody, wantedPeriapsisRadius, wantedInclinationDeg, horizonUT, double.NaN,
-                out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg);
+                out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out _, out _);
 
-        // The same, keeping to the planned pass: on a miss, the vessel is aimed at the target's position
-        // at plannedArrivalUT (the plan's arrival, NaN for none). A trajectory that drifted onto another
-        // pass of the target, earlier or later, comes back to the planned one, whose excess speed (and
-        // so capture cost) the plan was built on. Once the SOI is met, the arrival time is free. When
-        // the planned pass cannot be met within MaxDeltaV (late in the flight, a drift is costly to
-        // undo), the nearest pass is aimed at instead, as without a planned arrival.
+        // The same, keeping to the planned pass (plannedArrivalUT: the leg's planned arrival periapsis,
+        // NaN for none). An encounter whose periapsis is more than PassTolerance from the planned one is
+        // another pass, and counts as a miss of the planned pass: the vessel is then aimed at the
+        // target's position at plannedArrivalUT, on the conic around the target's parent (ignoring that
+        // other encounter, so the aim is smooth across its SOI). A trajectory that drifted onto another
+        // pass, earlier or later, so comes back to the planned one, whose excess speed (and so capture
+        // cost) the plan was built on. Within the tolerance the arrival time is free.
+        // When the planned pass cannot be met within MaxDeltaV (late in the flight a drift is costly to
+        // undo), the nearest pass is aimed at instead, as without a planned arrival: predictedArrivalUT
+        // (the arrival periapsis) then shows it. converged: the aim was met, on the planned pass when
+        // one is given (B-plane within 100 m, under 1 km on the periapsis).
         public static bool Solve(BodySystem s, int body, Vector3d r, Vector3d v, double ut, int targetBody,
             double wantedPeriapsisRadius, double wantedInclinationDeg, double horizonUT, double plannedArrivalUT,
-            out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg)
+            out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg) =>
+            Solve(s, body, r, v, ut, targetBody, wantedPeriapsisRadius, wantedInclinationDeg, horizonUT, plannedArrivalUT,
+                out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out _, out _);
+
+        public static bool Solve(BodySystem s, int body, Vector3d r, Vector3d v, double ut, int targetBody,
+            double wantedPeriapsisRadius, double wantedInclinationDeg, double horizonUT, double plannedArrivalUT,
+            out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg,
+            out double predictedArrivalUT, out bool converged)
         {
             deltaV = Vector3d.zero;
             predictedPeriapsisRadius = double.NaN;
             predictedInclinationDeg = double.NaN;
+            predictedArrivalUT = double.NaN;
+            converged = false;
             if (s == null || targetBody < 0 || targetBody >= s.Count || !(wantedPeriapsisRadius > 0) || !(horizonUT > ut))
                 return false;
 
@@ -81,19 +100,34 @@ namespace K2D2.Transfer
                 WantedPeriapsis = wantedPeriapsisRadius, WantedInclinationDeg = wantedInclinationDeg,
                 PlannedArrivalUT = plannedArrivalUT,
             };
-            if (Run(problem, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg))
+            if (Run(problem, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out predictedArrivalUT, out converged))
                 return true;
             if (double.IsNaN(plannedArrivalUT))
                 return false;
             problem.PlannedArrivalUT = double.NaN;
-            return Run(problem, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg);
+            bool ok = Run(problem, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg, out predictedArrivalUT, out _);
+            converged = false; // not on the planned pass
+            return ok;
         }
 
-        static bool Run(Problem problem, out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg)
+        // How far (s) an arrival periapsis may be from the planned one and still be the planned pass:
+        //  - 5 % of the time left to the planned arrival: what a correction can shift the arrival by
+        //    without being a different pass (the Kerbin -> Duna drift onto another pass is 57 d, 20 %);
+        //  - at least twice the fall from the SOI entry to the periapsis: moving the periapsis on the
+        //    B-plane moves its time by up to that, so the tolerance never fights the aim;
+        //  - at most a quarter of the target's orbital period: passes on different revolutions of the
+        //    target are at least one period apart.
+        public static double PassTolerance(BodySystem s, int targetBody, double ut, double plannedArrivalUT, double fallSeconds) =>
+            Math.Min(Math.Max(0.05 * Math.Abs(plannedArrivalUT - ut), 2 * Math.Max(0, fallSeconds)), 0.25 * s.OrbitalPeriod(targetBody));
+
+        static bool Run(Problem problem, out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg,
+            out double predictedArrivalUT, out bool converged)
         {
             deltaV = Vector3d.zero;
             predictedPeriapsisRadius = double.NaN;
             predictedInclinationDeg = double.NaN;
+            predictedArrivalUT = double.NaN;
+            converged = false;
 
             var dv = Vector3d.zero;
             int branch = 0; // which of the two B-plane directions meets the inclination, chosen once
@@ -138,13 +172,20 @@ namespace K2D2.Transfer
             deltaV = dv;
             predictedPeriapsisRadius = current.PeriapsisRadius;
             predictedInclinationDeg = current.InclinationDeg;
+            predictedArrivalUT = current.ArrivalUT;
+            converged = current.Norm < BTolerance;
             return true;
         }
 
+        // An encounter (on the planned pass) beats a miss. Residuals of different kinds are compared
+        // on the periapsis error (a B-plane norm and a captured-orbit norm are not on one scale), and
+        // misses of different kinds (offset at the planned UT, closest approach) on the norm.
         static bool Better(Eval next, Eval current)
         {
             if (next.Mode != current.Mode)
                 return next.Mode == Mode.Encounter;
+            if (next.Mode == Mode.Encounter && next.Kind != current.Kind)
+                return next.PeriapsisError < current.PeriapsisError;
             return next.Norm < current.Norm;
         }
 
@@ -289,18 +330,30 @@ namespace K2D2.Transfer
             {
                 var patches = PatchedPropagator.Propagate(S, Body, R, V + dv, UT, HorizonUT, null);
                 var target = S[Target];
+                bool planned = !double.IsNaN(PlannedArrivalUT);
                 foreach (var p in patches)
                     if (p.Body == Target)
-                        return Arrival(p, target, ref branch);
-
-                foreach (var p in patches)
-                    if (p.Body == target.ParentIndex && p.StartUT <= PlannedArrivalUT && PlannedArrivalUT <= p.EndUT)
                     {
+                        if (!planned || Math.Abs(p.PeriapsisUT - PlannedArrivalUT) <= PassTolerance(S, Target, UT, PlannedArrivalUT, p.PeriapsisUT - p.StartUT))
+                            return Arrival(p, target, ref branch);
+                        break; // another pass: a miss of the planned one
+                    }
+
+                if (planned)
+                    foreach (var p in patches)
+                    {
+                        if (p.Body != target.ParentIndex || p.StartUT > PlannedArrivalUT)
+                            continue;
+                        // The planned UT is in this patch, or after it ends on entering the target: the
+                        // vessel's place on this conic then, as if that other encounter did not happen.
+                        bool covers = PlannedArrivalUT <= p.EndUT || (p.End == PatchEnd.Encounter && p.NextBody == Target);
+                        if (!covers)
+                            continue;
                         var offset = OffsetAt(p, PlannedArrivalUT);
                         return new Eval
                         {
-                            Mode = Mode.Miss, Residual = new[] { offset.x, offset.y, offset.z }, Norm = offset.magnitude,
-                            PeriapsisRadius = double.NaN, InclinationDeg = double.NaN,
+                            Mode = Mode.Miss, Kind = 3, Residual = new[] { offset.x, offset.y, offset.z }, Norm = offset.magnitude,
+                            PeriapsisRadius = double.NaN, InclinationDeg = double.NaN, ArrivalUT = double.NaN,
                         };
                     }
 
@@ -311,7 +364,7 @@ namespace K2D2.Transfer
                 if (double.IsInfinity(miss))
                     return default;
                 var r = new[] { miss - 0.25 * target.Soi };
-                return new Eval { Mode = Mode.Miss, Residual = r, Norm = Math.Abs(r[0]), PeriapsisRadius = double.NaN, InclinationDeg = double.NaN };
+                return new Eval { Mode = Mode.Miss, Kind = 1, Residual = r, Norm = Math.Abs(r[0]), PeriapsisRadius = double.NaN, InclinationDeg = double.NaN, ArrivalUT = double.NaN };
             }
 
             Eval Arrival(Patch p, BodyNode target, ref int branch)
@@ -323,10 +376,13 @@ namespace K2D2.Transfer
                     Mode = Mode.Encounter,
                     PeriapsisRadius = p.PeriapsisRadius,
                     InclinationDeg = el.InclinationRad * 180 / Math.PI,
+                    ArrivalUT = p.PeriapsisUT,
+                    PeriapsisError = Math.Abs(p.PeriapsisRadius - WantedPeriapsis),
                 };
                 if (el.IsClosed || !(el.Eccentricity > 1))
                 {
                     // Captured on arrival (a very slow approach): no asymptote, aim at the periapsis radius.
+                    eval.Kind = 0;
                     eval.Residual = new[] { p.PeriapsisRadius - WantedPeriapsis };
                     eval.Norm = Math.Abs(eval.Residual[0]);
                     return eval;
@@ -347,6 +403,7 @@ namespace K2D2.Transfer
                 var rHat = Vector3d.Cross(sHat, tHat);
                 if (double.IsNaN(WantedInclinationDeg) || sinDecl < 1e-6)
                 {
+                    eval.Kind = 1;
                     eval.Residual = new[] { bVec.magnitude - bWanted };
                     eval.Norm = Math.Abs(eval.Residual[0]);
                     eval.Plane = new[] { Vector3d.Dot(bVec, tHat), Vector3d.Dot(bVec, rHat) };
@@ -360,6 +417,7 @@ namespace K2D2.Transfer
                     branch = Vector3d.Dot(bVec, rHat) >= 0 ? 1 : -1;
                 double sinTheta = branch * Math.Sqrt(1 - cosTheta * cosTheta);
                 var error = bVec - bWanted * (cosTheta * tHat + sinTheta * rHat);
+                eval.Kind = 2;
                 eval.Residual = new[] { Vector3d.Dot(error, tHat), Vector3d.Dot(error, rHat) };
                 eval.Norm = Math.Sqrt(eval.Residual[0] * eval.Residual[0] + eval.Residual[1] * eval.Residual[1]);
                 return eval;

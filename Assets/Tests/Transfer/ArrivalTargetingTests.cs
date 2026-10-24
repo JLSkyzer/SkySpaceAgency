@@ -101,17 +101,50 @@ public class ArrivalTargetingTests
 
     double InclinationDeg(Patch p) => OrbitMath.Elements(p.StartR, p.StartV, _s[p.Body].Mu).InclinationRad / Deg;
 
-    // plannedUT NaN: the overload without a planned arrival (closest approach on a miss).
+    // The last solve's predicted arrival periapsis UT and convergence (planned overload only).
+    double _lastArrivalUT;
+    bool _lastConverged;
+
+    // plannedUT NaN: no planned arrival (closest approach on a miss).
     bool Solve(Flight f, int target, double rp, double incDeg, double horizonUT, double plannedUT,
         out Vector3d dv, out double predRp, out double predInc, string label)
     {
         var watch = Stopwatch.StartNew();
-        bool ok = double.IsNaN(plannedUT)
-            ? ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, target, rp, incDeg, horizonUT, out dv, out predRp, out predInc)
-            : ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, target, rp, incDeg, horizonUT, plannedUT, out dv, out predRp, out predInc);
+        _lastArrivalUT = double.NaN;
+        _lastConverged = false;
+        bool ok = ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, target, rp, incDeg, horizonUT, plannedUT, out dv, out predRp, out predInc,
+            out _lastArrivalUT, out _lastConverged);
         TestContext.Out.WriteLine($"{label}: ok {ok}, dv {dv.magnitude:F3} m/s, predicted Pe {predRp / 1000:F3} km (wanted {rp / 1000:F3}), "
-            + $"inclination {predInc:F3}° (wanted {incDeg:F1}), solve {watch.Elapsed.TotalMilliseconds:F0} ms");
+            + $"inclination {predInc:F3}° (wanted {incDeg:F1}), arrival {Days(_lastArrivalUT - plannedUT):F2} d from the planned one, "
+            + $"converged {_lastConverged}, solve {watch.Elapsed.TotalMilliseconds:F0} ms");
         return ok;
+    }
+
+    static double Days(double seconds) => seconds / KerbinDay;
+
+    // The capture at the arrival periapsis into an orbit of apoapsis 'wantedAp', as the pilot flies it.
+    double CaptureCost(Patch arrival, double wantedAp)
+    {
+        double mu = _s[arrival.Body].Mu;
+        KeplerPropagator.Propagate(arrival.StartR, arrival.StartV, mu, arrival.PeriapsisUT - arrival.StartUT, out var rPe, out var vPe);
+        double rp = rPe.magnitude;
+        return vPe.magnitude - Math.Sqrt(mu * (2 / rp - 2 / (rp + wantedAp)));
+    }
+
+    // The plan's tolerance for the planned pass, as the solver applies it.
+    double PassTolerance(Flight f, int target, double plannedUT, Patch arrival) =>
+        ArrivalTargeting.PassTolerance(_s, target, f.UT, plannedUT, arrival.PeriapsisUT - arrival.StartUT);
+
+    // The arrival is on the planned pass and costs what the plan says to capture.
+    void AssertPlannedPass(TransferPlan plan, Flight f, Patch arrival, double plannedUT)
+    {
+        var capture = plan.Steps.Single(st => st.Kind == StepKind.Capture);
+        double cost = CaptureCost(arrival, capture.TargetApoapsisRadius);
+        double tolerance = PassTolerance(f, _duna, plannedUT, arrival);
+        TestContext.Out.WriteLine($"  arrival periapsis {Days(arrival.PeriapsisUT - plannedUT):F2} d from the planned one (tolerance {Days(tolerance):F2} d), "
+            + $"capture {cost:F1} m/s (planned {capture.DeltaVMagnitude:F1})");
+        Assert.LessOrEqual(Math.Abs(arrival.PeriapsisUT - plannedUT), tolerance, "on the planned pass");
+        Assert.AreEqual(capture.DeltaVMagnitude, cost, 0.05 * capture.DeltaVMagnitude, "capture cost");
     }
 
     double MidCourse(TransferPlan p) => p.Steps.Where(st => st.Kind == StepKind.Correction).ElementAt(1).UT;
@@ -124,25 +157,38 @@ public class ArrivalTargetingTests
         return next != null ? next.UT : p.ArrivalUT;
     }
 
+    // A 5 m/s injection error (prograde), corrected at mid-course, on the planned pass.
     [Test]
     public void PerturbedKerbinDuna_CorrectedToPeriapsisWithin1Km()
     {
         var plan = KerbinToDuna();
         var f = Start(plan);
         FlyBurnsTo(plan, f, MidCourse(plan), injectionError: 5);
-        Assert.AreEqual(_s["Kerbol"].Index, f.Body);
         double wanted = _s[_duna].LowOrbitRadius;
+        Assert.AreEqual(_s["Kerbol"].Index, f.Body);
         var before = Arrival(f, Vector3d.zero, Horizon(plan), _duna);
         TestContext.Out.WriteLine(before == null ? "uncorrected: no Duna encounter" : $"uncorrected: Pe {before.PeriapsisRadius / 1000:F0} km");
 
         Assert.IsTrue(Solve(f, _duna, wanted, double.NaN, Horizon(plan), plan.ArrivalUT, out var dv, out double predRp, out _, "mid-course, 5 m/s error"));
+        Assert.IsTrue(_lastConverged);
         Assert.Greater(dv.magnitude, ArrivalTargeting.SkipThreshold, "a 5 m/s error is worth correcting");
+        // A prograde injection error grows about 3 times through the Oberth effect, and moves the
+        // arrival in time: keeping the planned pass costs more at mid-course than re-aiming at the
+        // nearest one, which the capture pays back (logged, for the record).
         Assert.Less(dv.magnitude, 150);
+        if (ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, _duna, wanted, double.NaN, Horizon(plan), out var nearDv, out _, out _))
+        {
+            var near = Arrival(f, nearDv, Horizon(plan), _duna);
+            TestContext.Out.WriteLine($"  nearest pass instead: {nearDv.magnitude:F1} m/s, arrival {Days(near.PeriapsisUT - plan.ArrivalUT):F2} d from the planned one, "
+                + $"capture {CaptureCost(near, plan.Steps.Single(st => st.Kind == StepKind.Capture).TargetApoapsisRadius):F1} m/s");
+        }
 
         var after = Arrival(f, dv, Horizon(plan), _duna);
         Assert.IsNotNull(after, "the corrected path meets Duna");
         Assert.AreEqual(wanted, after.PeriapsisRadius, 1000);
         Assert.AreEqual(after.PeriapsisRadius, predRp, 1e-3);
+        Assert.AreEqual(after.PeriapsisUT, _lastArrivalUT, 1e-3);
+        AssertPlannedPass(plan, f, after, plan.ArrivalUT);
     }
 
     [Test]
@@ -190,14 +236,50 @@ public class ArrivalTargetingTests
         var plan = KerbinToDuna();
         var f = Start(plan);
         FlyBurnsTo(plan, f, plan.Steps.First(st => st.Kind == StepKind.Correction).UT);
+        // Push the vessel off course, so the solve starts from a miss whatever the injection's accuracy.
+        f.V += 15 * Vector3d.Cross(f.R, f.V).normalized + 10 * f.V.normalized;
+        Assert.IsNull(Arrival(f, Vector3d.zero, Horizon(plan), _duna), "the push must cause a miss");
+
         double wanted = _s[_duna].LowOrbitRadius;
-        Assert.IsTrue(Solve(f, _duna, wanted, double.NaN, Horizon(plan), plan.ArrivalUT, out var dv, out _, out _, "first correction, planned pass"));
+        Assert.IsTrue(Solve(f, _duna, wanted, double.NaN, Horizon(plan), plan.ArrivalUT, out var dv, out _, out _, "first correction, after a miss, planned pass"));
+        Assert.IsTrue(_lastConverged);
         var after = Arrival(f, dv, Horizon(plan), _duna);
         Assert.IsNotNull(after);
         Assert.AreEqual(wanted, after.PeriapsisRadius, 1000);
-        double offDays = (after.PeriapsisUT - plan.ArrivalUT) / KerbinDay;
-        TestContext.Out.WriteLine($"arrival periapsis {offDays:F2} d from the planned one");
-        Assert.Less(Math.Abs(offDays), 5);
+        AssertPlannedPass(plan, f, after, plan.ArrivalUT);
+    }
+
+    // An encounter on another pass, earlier or later than the planned one, is not kept: the solve
+    // moves the arrival to the planned pass. The vessel is first put on the plan's pass, then the
+    // planned UT is moved 25 d either way (the Kerbin -> Duna drift seen before the SOI-exit fix was
+    // 57 d early; 40 d earlier is out of the 300 m/s reach). Duna's period (801 Kerbin days) is longer
+    // than the trip, so passes one target period apart do not exist on this leg; 25 d is 1.8 times
+    // the tolerance here (13.8 d).
+    [Test]
+    public void EncounterOnAnotherPass_BroughtBackToThePlannedPass()
+    {
+        var plan = KerbinToDuna();
+        var f = Start(plan);
+        FlyBurnsTo(plan, f, plan.Steps.First(st => st.Kind == StepKind.Correction).UT);
+        double wanted = _s[_duna].LowOrbitRadius;
+        Assert.IsTrue(Solve(f, _duna, wanted, double.NaN, Horizon(plan), plan.ArrivalUT, out var first, out _, out _, "first correction"));
+        f.V += first;
+        var onPass = Arrival(f, Vector3d.zero, Horizon(plan), _duna);
+        Assert.IsNotNull(onPass);
+
+        foreach (double shiftDays in new[] { -25.0, 25.0 })
+        {
+            double plannedUT = onPass.PeriapsisUT + shiftDays * KerbinDay;
+            Assert.Greater(Math.Abs(onPass.PeriapsisUT - plannedUT), PassTolerance(f, _duna, plannedUT, onPass), "the current encounter is another pass");
+            Assert.IsTrue(Solve(f, _duna, wanted, double.NaN, Horizon(plan) + 60 * KerbinDay, plannedUT, out var dv, out double predRp, out _,
+                $"encounter {-shiftDays:F0} d off the planned pass"));
+            Assert.IsTrue(_lastConverged, "converged on the planned pass");
+            Assert.LessOrEqual(dv.magnitude, ArrivalTargeting.MaxDeltaV);
+            var after = Arrival(f, dv, Horizon(plan) + 60 * KerbinDay, _duna);
+            Assert.IsNotNull(after);
+            Assert.AreEqual(wanted, after.PeriapsisRadius, 1000);
+            Assert.LessOrEqual(Math.Abs(after.PeriapsisUT - plannedUT), PassTolerance(f, _duna, plannedUT, after), "moved to the planned pass");
+        }
     }
 
     [Test]
@@ -209,6 +291,10 @@ public class ArrivalTargetingTests
         f.V -= 2500 * f.V.normalized; // falling sunward, far from Duna's orbit
         Assert.IsNull(Arrival(f, Vector3d.zero, Horizon(plan), _duna));
 
+        Assert.IsFalse(ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, _duna, _s[_duna].LowOrbitRadius, double.NaN, Horizon(plan),
+            out var plainDv, out double plainRp, out _), "the overload without a planned arrival");
+        Assert.AreEqual(0, plainDv.magnitude);
+        Assert.IsTrue(double.IsNaN(plainRp));
         foreach (double planned in new[] { double.NaN, plan.ArrivalUT })
         {
             Assert.IsFalse(Solve(f, _duna, _s[_duna].LowOrbitRadius, double.NaN, Horizon(plan), planned, out var dv, out double predRp, out double predInc, $"unreachable, planned {planned}"));
@@ -322,7 +408,13 @@ public class ArrivalTargetingTests
         CoastTo(f, inDuna.StartUT + 60);
         Assert.AreEqual(_duna, f.Body);
 
-        Assert.IsTrue(Solve(f, _ike, entryStep.TargetPeriapsisRadius, entryStep.TargetInclinationDeg, Horizon(plan), plan.ArrivalUT,
+        // The leg into Ike is re-planned at its start (ReplanAtLegStart): its planned times are
+        // estimates, so the solve there is made without a planned arrival. With the stale estimate, for
+        // the record:
+        Assert.IsTrue(entryStep.ReplanAtLegStart);
+        Solve(f, _ike, entryStep.TargetPeriapsisRadius, entryStep.TargetInclinationDeg, Horizon(plan), plan.ArrivalUT,
+            out _, out _, out _, "Duna SOI entry -> Ike, with the plan's estimated arrival");
+        Assert.IsTrue(Solve(f, _ike, entryStep.TargetPeriapsisRadius, entryStep.TargetInclinationDeg, Horizon(plan), double.NaN,
             out var dv, out double predRp, out _, "Duna SOI entry -> Ike"));
         var atIke = Arrival(f, dv, Horizon(plan), _ike);
         Assert.IsNotNull(atIke);
