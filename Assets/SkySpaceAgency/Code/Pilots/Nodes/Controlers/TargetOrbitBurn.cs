@@ -613,10 +613,12 @@ namespace K2D2.Node
             }
         }
 
-        // Thrust under time warp does not move the orbit in Redux 26w42c: in game on 2026-10-24,
-        // three transfer injections warped to x4 burned ~500 m/s of fuel each while the orbit
-        // stayed 100 x 100 km, and the closed loop aborted as "diverging". Until that changes,
-        // every burn is held at 1x (the player's warp included).
+        // Every burn is held at 1x (the player's warp included). On rails warp the game replaces
+        // thrust by a burn it precomputes once when the warp starts (HandleOrbitalPhysicsUnder-
+        // ThrustStart, IL): fixed direction, the stage's flow until it is empty, and steering or
+        // throttle changes ignored. Our closed loop cannot steer that. In game on 2026-10-24, three
+        // transfer injections warped to x4 right after ignition burned ~500 m/s of fuel each while
+        // the orbit stayed 100 x 100 km, and aborted as "diverging".
         public const bool WarpWhileBurning = false;
 
         // Warp while burning (off, see WarpWhileBurning): capped by BurnWarp.MaxBurnRate (5 % of
