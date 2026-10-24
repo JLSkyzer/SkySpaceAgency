@@ -81,3 +81,10 @@ From within 2 km, press "Dock only" (or use "Rendezvous + dock" from further awa
 
 ## 12. Physics warp during burns
 During a long burn (the Duna injection, for example), the mod should go to x2 and then x4. Look for `[TargetOrbitBurn] physics warp: …` lines: the vessel stays RigidBody and steers normally. The warp level the game reports should be x4. If you press rails warp by hand during the burn, the mod must bring it back to physics or to 1x. After the burn, your usual warp mode is back.
+
+## 13. Rails warp on long burns
+Use a burn of more than 2 minutes, for example on a low-thrust stage. Check:
+- `[TargetOrbitBurn] rails burn:` entry at x10 or x50, then the guard result (trajectory found, at least one patch);
+- the exit back to x4 before the end, then the closed loop finishing the burn;
+- the Δv applied during rails, planned against actual.
+If the guard fails, the mod must drop to physics warp at once without losing fuel for more than about 2 frames. A landing, reentry or rendezvous burn near the target never goes on rails.
