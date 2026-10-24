@@ -107,6 +107,9 @@ namespace K2D2.Rendezvous
         public const double DockReserve = 10;
         // The port frames may be unreadable this long (s of real time) before the docking fails.
         public const double FrameWaitSeconds = 10;
+        // A docking that fails closer than this (m), or after the guidance's last abort, first stops
+        // the relative motion (hold) for up to SettleTimeout (s of game time), then stops.
+        public const double SettleRange = 50, SettleTimeout = 60;
 
         // ------------------------------------------------------------ phases
 
@@ -350,6 +353,29 @@ namespace K2D2.Rendezvous
             }
             why = null;
             return DockOutcome.Continue;
+        }
+
+        // A docking failure: settle first (keep flying a hold, zero relative velocity) when the
+        // translation still works and the vessel is close or the guidance has given up (Aborted).
+        // Zeroing the inputs there would leave the vessel drifting into the target.
+        public static bool SettleBeforeFailing(double distance, bool aborted, bool canTranslate) =>
+            canTranslate && (aborted || (!double.IsNaN(distance) && distance < SettleRange));
+
+        // The settle ends when the relative speed is under holdSpeed, or after SettleTimeout.
+        public static bool SettleOver(double relativeSpeed, double holdSpeed, double secondsSettling, out string why)
+        {
+            if (relativeSpeed < holdSpeed)
+            {
+                why = Text($"held at {relativeSpeed:F3} m/s relative");
+                return true;
+            }
+            if (secondsSettling > SettleTimeout)
+            {
+                why = Text($"still at {relativeSpeed:F3} m/s relative after {SettleTimeout:F0} s of hold");
+                return true;
+            }
+            why = null;
+            return false;
         }
 
         // ------------------------------------------------------------ start, resume

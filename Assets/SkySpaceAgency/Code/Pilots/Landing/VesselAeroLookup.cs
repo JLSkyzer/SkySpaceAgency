@@ -4,7 +4,7 @@ using KSP.Modules;
 using KSP.Sim.impl;
 using UnityEngine;
 // L (see K2D2_Plugin.cs) lives in the K2D2 namespace, not a using - it resolves here for free
-// since K2D2.Landing nests under K2D2, same as DocksTools.cs's own unqualified L.Log calls.
+// since K2D2.Landing nests under K2D2.
 
 namespace K2D2.Landing
 {

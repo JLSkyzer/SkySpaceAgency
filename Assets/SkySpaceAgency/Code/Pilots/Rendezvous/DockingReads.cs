@@ -186,6 +186,17 @@ namespace K2D2.Rendezvous
             return null;
         }
 
+        // Whether a VesselDockedMessage is about our docking: either vessel is ours or the target
+        // (by id), or holds our docking port (by part id).
+        public static bool DockedIsOurs(string oneId, string twoId, ICollection<string> oneParts, ICollection<string> twoParts,
+            ICollection<string> watchedIds, string ourPortId)
+        {
+            if (watchedIds != null && ((oneId != null && watchedIds.Contains(oneId)) || (twoId != null && watchedIds.Contains(twoId))))
+                return true;
+            if (string.IsNullOrEmpty(ourPortId)) return false;
+            return (oneParts != null && oneParts.Contains(ourPortId)) || (twoParts != null && twoParts.Contains(ourPortId));
+        }
+
         // The other vessels grouped by body: ourBody first, then by name; inside a body, by name.
         // Our own vessel and debris are left out.
         public static List<(string body, List<VesselEntry> vessels)> GroupByBody(IEnumerable<VesselEntry> vessels, string ourBody)

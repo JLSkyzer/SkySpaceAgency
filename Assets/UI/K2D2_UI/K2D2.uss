@@ -275,34 +275,8 @@ Label {
     translate: 1px 1px;
 }
 
-/* Dock tab: Main Thrust Brake/RCS Final Approach - same plain-Button bevel treatment as Touch
-   Down above (no nested .oab-button__inner/label, no .checked state - one-shot mode-select
-   buttons, not toggles). Align Dock (a K2Toggle) and Stop/Start (already themed via the shared
-   "#run" id) didn't need this. Small margin-top since these stack in a column (button_bars) with
-   Stop/Start above them, rather than sitting side-by-side in a row like Brake/Touch Down. */
-#main_brake, #rcs_final_approach {
-    background-color: rgb(225, 227, 233);
-    background-image: none;
-    color: rgb(34, 38, 46);
-    font-size: 14px;
-    height: 32px;
-    margin-top: 4px;
-    border-width: 2px 3px 4px 2px;
-    border-color: rgb(35, 35, 42) rgb(170, 172, 180) rgb(120, 122, 130) rgb(35, 35, 42);
-    border-radius: 3px;
-}
-
-#main_brake:hover, #rcs_final_approach:hover {
-    background-color: rgb(238, 240, 245);
-}
-
-#main_brake:active, #rcs_final_approach:active {
-    background-color: rgb(210, 212, 218);
-    translate: 1px 1px;
-}
-
 /* Node tab: Circularize at AP/PE quick-create buttons - same plain-Button pixel-bevel treatment
-   as Touch Down/Main Thrust Brake above (no nested .oab-button__inner/label, no .checked state -
+   as Touch Down above (no nested .oab-button__inner/label, no .checked state -
    one-shot actions, not toggles). Sized down from the stock 32px/14px default to 22px/11px
    (border trimmed to match), since these sit above Start/Pause as a secondary, less prominent
    pair rather than a primary mode button and should read clearly smaller, not just slightly

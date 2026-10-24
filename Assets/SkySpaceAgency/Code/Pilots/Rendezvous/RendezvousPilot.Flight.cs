@@ -88,7 +88,7 @@ namespace K2D2.Rendezvous
                 Status = "The active vessel changed: rendezvous stopped. Switch back to it to resume.";
                 return;
             }
-            if (job != null)
+            if (job.Running)
                 return;
             if (Phase == RvPhase.Dock)
             {
@@ -289,7 +289,9 @@ namespace K2D2.Rendezvous
             double seconds = EstimateBurnSeconds(dv);
             double start = double.IsNaN(seconds) ? centreUT : centreUT - seconds / 2;
             burn.stage_when_dry = true;                                  // the 4.1 staging guard
-            burn.allow_warp = RendezvousFlight.CanWarp(distance);       // never within 2 km
+            // The warp before the burn (to its turn lead) only: never within 2 km. The burn itself
+            // always stays at 1x (TargetOrbitBurn, 33d1aa9).
+            burn.allow_warp = RendezvousFlight.CanWarp(distance);
             burn.Start(guidance, start);
             if (burn.failure_reason != null)
             {

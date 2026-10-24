@@ -22,7 +22,7 @@ namespace K2D2.Transfer
 
     // One job on a worker thread at a time: pure code only (the game was read before). Polled
     // from Update, its completion runs on the main thread.
-    internal sealed class PilotJob
+    public sealed class PilotJob
     {
         Task task;
         CancellationTokenSource cts;

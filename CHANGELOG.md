@@ -61,8 +61,19 @@
 
 - **Orbit tab**: tick the targets to change (Ap, Pe, inclination; unticked ones keep the current value) and press "Create maneuvers" to put every node needed on the plan at once: orbit shape at the apsides first, then the plane change at the orbital node farther from the body. Run the nodes from the Node tab as usual; after a burn, pressing "Create maneuvers" again re-plans from the actual orbit. Refuses escape trajectories, unstable current orbits, and targets with Pe below the surface, inside the atmosphere or above the Ap. Running autopilots are stopped before the plan is replaced.
 
+- **Rendezvous tab** (rendezvous and docking around the same body, sub-project 4.3, 2026-10-25; not yet flown in game). It replaces the Dock tab and its old docking assistant (Main Thrust Brake, RCS Final Approach, Align Dock).
+  - **Target**: every other vessel, grouped by body; the game's target is selected. The tab shows the distance, the relative speed and the relative inclination.
+  - **Buttons**: Rendezvous + dock, Rendezvous only, Dock only (within 2 km of the target), Stop, Resume and Cancel saved plan. Prepare only makes one game node at a time for the rendezvous burns; the docking is always flown.
+  - **Rendezvous**: a plane match when the planes differ by more than 0.05°, the cheapest intercept within 10 revolutions (Δv first) to 200 m short of the target, one correction halfway solved from the actual orbit, and a brake at 200 m. Each step is shown with its Δv and the reason for it, with the Δv per stage.
+  - **Ports**: chosen automatically (free, compatible, the least rotation of our vessel, on the side of the target facing us), or picked from two lists. Before the approach the mod controls from our port and targets the target's port. The target vessel is never acted on.
+  - **Approach**: align on the target port's axis at 50 m, hold at 50 m then at 10 m, final approach at 0.2–0.5 m/s inside the port's capture cone, roll aligned when the port needs it.
+  - **RCS**: turned on, the mapping of the translation inputs measured by a short probe, RCS put back as it was at the end. Without RCS the main engine translates (turn, short burn, turn back), with wider holds; the tab says "No RCS: docking with the main engine, less precise".
+  - **Safety**: an approach off the cone or too fast backs off to 20 m and retries once. A second abort, or a failure within 50 m, first holds position (up to 60 s) so the vessel does not drift into the target, then stops. Refused when the target spins faster than 1°/s, is out of physics range, orbits another body, or has no free compatible port.
+  - **End**: "Docked" when the game latches the ports; SAS back to Stability Assist. Saved per vessel for Resume, always planned again.
+
 ### Changed
 
+- **Throttle cut on our vessel after a vessel switch** (Transfer and Rendezvous pilots, 2026-10-25). Stopping or failing now sets the throttle (and the RCS translation) to 0 on our own vessel even when another vessel is active: the game keeps the throttle of a vessel the player switches away from, so its engine would keep firing.
 - **Transfer and rendezvous search** (2026-10-24): the search no longer considers a wrong solution. The orbit solver behind it could report, between two points of nearly the same orbit with several revolutions, an orbit that missed the aim by up to 700 km; it now finds those orbits precisely or reports none.
 - **Precision landing rewritten for bodies without atmosphere** (precision landing part 2, 2026-10-21; not yet flown in game).
   - Goal: stop within 100 m of the target for at most 20 % more Δv than a landing without target; over 20 % the landing is refused at start with the numbers.

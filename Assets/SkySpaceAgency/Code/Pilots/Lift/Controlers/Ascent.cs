@@ -72,7 +72,7 @@ namespace K2D2.Lift
         // local-horizon-style frame, so reframing a rotation captured many ticks (and positions)
         // earlier and comparing it to the current one does not produce a valid delta. Reframing and
         // using the result immediately, same tick, is the pattern used elsewhere in this codebase
-        // (TouchDown, TurnTo, DockingTurnTo) and the only one confirmed to work here.
+        // (TouchDown, TurnTo) and the only one confirmed to work here.
         //
         // GetAngularSpeed()'s reported units are not plain radians/second, so roll rate
         // (debug_roll_rate_deg_s) is derived from the same tick-to-tick angle delta instead of that

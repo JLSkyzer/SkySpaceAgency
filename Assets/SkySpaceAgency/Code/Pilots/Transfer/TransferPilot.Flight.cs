@@ -84,7 +84,7 @@ namespace K2D2.Transfer
                 Status = "The active vessel changed: transfer stopped. Switch back to it to resume.";
                 return;
             }
-            if (job != null)
+            if (job.Running)
                 return; // a solve or a leg re-plan is running
             if (!ReadLight(out int body, out var r, out var v, out double now, out VesselComponent vessel))
             {

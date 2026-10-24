@@ -12,7 +12,8 @@ namespace K2D2.Rendezvous
     // flown (never Prepare only); never stages; the target is never acted on.
     public partial class RendezvousPilot
     {
-        enum DockStage { None, RcsSettle, Probe, Approach }
+        // Settle: the docking failed close in; a hold stops the relative motion before the stop.
+        enum DockStage { None, RcsSettle, Probe, Approach, Settle }
 
         // ---------------------------------------------------------------- what the tab reads
 
@@ -42,6 +43,8 @@ namespace K2D2.Rendezvous
         double last_dock_ut = double.NaN, next_trace_ut = double.NaN, contact_since = double.NaN;
         float frames_unread_since = float.NaN;   // real time; NaN while the port frames read
         int aborts_seen;
+        string settle_reason;
+        double settle_since = double.NaN;
 
         void ResetDock()
         {
@@ -53,6 +56,8 @@ namespace K2D2.Rendezvous
             last_dock_ut = next_trace_ut = contact_since = double.NaN;
             frames_unread_since = float.NaN;
             aborts_seen = 0;
+            settle_reason = null;
+            settle_since = double.NaN;
             TranslateNote = null;
             DockDistance = DockLateral = DockClosing = double.NaN;
         }
@@ -127,7 +132,7 @@ namespace K2D2.Rendezvous
             dock_touched = true;
             DockingParts.ControlFromHere(ours, mine);
             RendezvousSnapshot.SetTarget(ours, theirs.Part.GlobalId, $"the port {theirs.Part.PartName}");
-            RendezvousSnapshot.WatchDocking();
+            RendezvousSnapshot.WatchDocking(vessel_id, target_id, mine.Info.PartId);
             var rcs = DockingParts.Thrusters(ours);
             rcs_present = rcs.Total > 0;
             if (rcs_present)
@@ -154,6 +159,7 @@ namespace K2D2.Rendezvous
                 }
                 case DockStage.Probe:
                 case DockStage.Approach:
+                case DockStage.Settle:
                     break;
                 default:
                     return;
@@ -214,16 +220,17 @@ namespace K2D2.Rendezvous
                 return;
             }
 
+            if (dock_stage == DockStage.Settle)
+            {
+                UpdateSettle(state, dt);
+                return;
+            }
+
             // Approach. The target's turn reaches Translate through state.TargetAxisRate.
             var cmd = guidance.Step(state, dt);
             translate.SetInput(state, cmd);
             translate.Update();
-
-            Vector3d a = state.TargetAxis.normalized;
-            double ax = Vector3d.Dot(state.RelPos, a);
-            DockDistance = state.RelPos.magnitude;
-            DockLateral = (state.RelPos - ax * a).magnitude;
-            DockClosing = -Vector3d.Dot(state.RelVel, a);
+            double ax = Trace(state);
             if (guidance.Phase == DockPhase.Docked)
             {
                 if (double.IsNaN(contact_since)) contact_since = state.Time;
@@ -240,7 +247,7 @@ namespace K2D2.Rendezvous
                 string spin = RendezvousSnapshot.TryRead(ours, target, out var s, out _) ? DockingReads.SpinRefusal(s.TargetOmega, state.TargetAxis) : null;
                 if (spin != null)
                 {
-                    Fail(spin);
+                    FailDocking(spin, state);
                     return;
                 }
             }
@@ -256,13 +263,71 @@ namespace K2D2.Rendezvous
                     FinishDocked(why);
                     return;
                 case DockOutcome.Failed:
-                    Fail("docking: " + why);
+                    FailDocking("docking: " + why, state);
                     return;
                 case DockOutcome.Retry:
                     logger.LogInfo($"[Docking] {why}");
                     break;
             }
             Status = $"Docking: {guidance.Phase}, {DockDistance:F1} m, lateral {DockLateral:F2} m, closing {DockClosing:F2} m/s";
+        }
+
+        // The docking readouts; returns the axial distance.
+        double Trace(DockState state)
+        {
+            Vector3d a = state.TargetAxis.normalized;
+            double ax = Vector3d.Dot(state.RelPos, a);
+            DockDistance = state.RelPos.magnitude;
+            DockLateral = (state.RelPos - ax * a).magnitude;
+            DockClosing = -Vector3d.Dot(state.RelVel, a);
+            return ax;
+        }
+
+        // A failure during the approach. Close in (or after the guidance gave up) the translation
+        // first holds position, so the vessel does not drift into the target with its inputs at 0.
+        void FailDocking(string reason, DockState state)
+        {
+            bool aborted = guidance != null && guidance.Phase == DockPhase.Aborted;
+            bool canTranslate = guidance != null && translate.Ready && translate.failure_reason == null;
+            if (!RendezvousFlight.SettleBeforeFailing(DockDistance, aborted, canTranslate))
+            {
+                Fail(reason);
+                return;
+            }
+            dock_stage = DockStage.Settle;
+            settle_reason = reason;
+            settle_since = state.Time;
+            logger.LogInfo($"[Docking] {reason}: holding position before stopping, {DockDistance:F1} m from the port, " +
+                $"relative speed {state.RelVel.magnitude:F3} m/s (at most {RendezvousFlight.SettleTimeout:F0} s)");
+        }
+
+        // The hold: the guidance's attitude, a wanted relative velocity of zero, until the relative
+        // speed is under the hold speed or the time is out; then the failure stands.
+        void UpdateSettle(DockState state, double dt)
+        {
+            var cmd = guidance.Step(state, dt);
+            cmd.WantedRelVel = Vector3d.zero;
+            translate.SetInput(state, cmd);
+            translate.Update();
+            Trace(state);
+            if (RendezvousSnapshot.DockedSeen || DockingParts.IsDocked(dock_our_port))
+            {
+                FinishDocked("the ports latched during the hold");
+                return;
+            }
+            if (translate.failure_reason != null)
+            {
+                Fail($"{settle_reason}; the hold stopped too ({translate.failure_reason})");
+                return;
+            }
+            double speed = state.RelVel.magnitude;
+            if (RendezvousFlight.SettleOver(speed, guidance.Limits.HoldSpeed, state.Time - settle_since, out string why))
+            {
+                logger.LogInfo($"[Docking] hold before stopping: {why}, {DockDistance:F1} m from the port");
+                Fail($"{settle_reason} ({why})");
+                return;
+            }
+            Status = $"Docking failed ({settle_reason}): holding, relative speed {speed:F2} m/s, {DockDistance:F1} m";
         }
 
         // The nose of our vessel, celestial Zup (the port chooser's tie-break).

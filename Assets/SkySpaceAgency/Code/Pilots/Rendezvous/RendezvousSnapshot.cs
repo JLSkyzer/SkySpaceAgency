@@ -167,12 +167,20 @@ namespace K2D2.Rendezvous
         static SubscriptionHandle dockedHandle;
         static bool subscribed;
 
-        // True from a VesselDockedMessage until Unwatch or the next WatchDocking.
+        // True from a VesselDockedMessage about our vessel or the target (DockingReads.DockedIsOurs)
+        // until Unwatch or the next WatchDocking.
         public static bool DockedSeen { get; private set; }
+        static readonly HashSet<string> watchedIds = new HashSet<string>();
+        static string watchedPortId;
 
-        public static void WatchDocking()
+        // ourId, targetId: the vessels' GUIDs; ourPortId: our docking port's part GUID.
+        public static void WatchDocking(string ourId, string targetId, string ourPortId)
         {
             DockedSeen = false;
+            watchedIds.Clear();
+            if (!string.IsNullOrEmpty(ourId)) watchedIds.Add(ourId);
+            if (!string.IsNullOrEmpty(targetId)) watchedIds.Add(targetId);
+            watchedPortId = ourPortId;
             if (subscribed || GeneralTools.Game?.Messages == null) return;
             dockedHandle = GeneralTools.Game.Messages.Subscribe<VesselDockedMessage>(OnDocked);
             subscribed = true;
@@ -188,9 +196,15 @@ namespace K2D2.Rendezvous
 
         static void OnDocked(MessageCenterMessage msg)
         {
-            DockedSeen = true;
             var m = msg as VesselDockedMessage;
-            K2D2_Plugin.logger.LogInfo($"[Docking] VesselDockedMessage: {m?.VesselOne?.Model?.Name ?? "?"} + {m?.VesselTwo?.Model?.Name ?? "?"}, " +
+            VesselComponent one = m?.VesselOne?.Model, two = m?.VesselTwo?.Model;
+            // A docking makes a new vessel: the message's vessels may already carry new ids, so our
+            // port's part counts too.
+            bool ours = DockingReads.DockedIsOurs(PilotVessel.IdOf(one), PilotVessel.IdOf(two),
+                PilotVessel.PartIds(one), PilotVessel.PartIds(two), watchedIds, watchedPortId);
+            if (ours) DockedSeen = true;
+            K2D2_Plugin.logger.LogInfo($"[Docking] VesselDockedMessage: {one?.Name ?? "?"} + {two?.Name ?? "?"}, " +
+                $"{(ours ? "ours" : "not about our vessel or the target: ignored")}, " +
                 $"active vessel {Ours?.Name ?? "none"} ({Ours?.SimulationObject?.PartOwner?.PartCount ?? 0} parts)");
         }
     }
