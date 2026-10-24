@@ -105,8 +105,8 @@ namespace K2D2.Rendezvous
         public const double TraceSeconds = 2, LatchSeconds = 20;
         // The Δv kept for the docking approach in the per-stage check (m/s).
         public const double DockReserve = 10;
-        const double ArrivalToleranceShare = 1e-6, ArrivalToleranceFloor = 1;
-        const double TieDeltaV = 1e-3;
+        // The port frames may be unreadable this long (s of real time) before the docking fails.
+        public const double FrameWaitSeconds = 10;
 
         // ------------------------------------------------------------ phases
 
@@ -206,7 +206,7 @@ namespace K2D2.Rendezvous
             Vector3d e2 = Vector3d.Cross(e3, e1);
             Vector3d To(Vector3d x) => new Vector3d(Vector3d.Dot(x, e1), Vector3d.Dot(x, e2), Vector3d.Dot(x, e3));
             Vector3d From(Vector3d x) => x.x * e1 + x.y * e2 + x.z * e3;
-            double tolerance = Math.Max(ArrivalToleranceFloor, ArrivalToleranceShare * aim.magnitude);
+            double tolerance = Math.Max(RendezvousPlanner.ArrivalToleranceFloor, RendezvousPlanner.ArrivalToleranceShare * aim.magnitude);
 
             for (int k = 0; k <= Math.Max(0, Math.Min(RendezvousPlanner.RevolutionCap, maxRevolutions)); k++)
                 for (int b = 0; b < (k == 0 ? 1 : 2); b++)
@@ -231,7 +231,7 @@ namespace K2D2.Rendezvous
                     };
                     if (double.IsNaN(s.Cost))
                         continue;
-                    if (!best.Ok || s.Cost < best.Cost - TieDeltaV)
+                    if (!best.Ok || s.Cost < best.Cost - RendezvousPlanner.TieDeltaV)
                         best = s;
                 }
             return best;
@@ -269,8 +269,11 @@ namespace K2D2.Rendezvous
                 return dock ? ArrivalOutcome.Dock : ArrivalOutcome.Done;
             }
             why = Text($"{distance:F0} m from the target at {relativeSpeed:F2} m/s (wanted under {RendezvousPlanner.CloseRange:F0} m and {ArrivalMaxSpeed:F1} m/s)");
-            return replansDone < MaxReplans ? ArrivalOutcome.Replan : ArrivalOutcome.Fail;
+            return CanReplan(replansDone) ? ArrivalOutcome.Replan : ArrivalOutcome.Fail;
         }
+
+        // An off arrival, or a correction with no solution, plans again from the actual state.
+        public static bool CanReplan(int replansDone) => replansDone < MaxReplans;
 
         // ------------------------------------------------------------ docking
 
@@ -290,6 +293,12 @@ namespace K2D2.Rendezvous
             }
             return false;
         }
+
+        // The active vessel is the docking's merged vessel: during the approach, another vessel id
+        // than ours, holding our port and a part of the target.
+        public static bool MergedByDocking(RvPhase phase, string activeId, string ourId, IEnumerable<string> activePartIds,
+            string ourPortId, ICollection<string> targetPartIds) =>
+            phase == RvPhase.Dock && activeId != null && activeId != ourId && IsDockedVessel(activePartIds, ourPortId, targetPartIds);
 
         // A vessel change while the pilot runs. During the docking approach, a merged vessel is the
         // docking (the game sends the vessel change before VesselDockedMessage). Otherwise the

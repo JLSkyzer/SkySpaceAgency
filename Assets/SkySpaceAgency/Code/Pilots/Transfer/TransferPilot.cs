@@ -46,15 +46,15 @@ namespace K2D2.Transfer
         public BodySystem System { get; private set; }
         public bool PrepareOnly { get; private set; }
         public int StepIndex { get; private set; }
-        public bool Searching => job != null && job.Kind == JobKind.Search;
+        public bool Searching => job.Running && job.Tag is JobKind kind && kind == JobKind.Search;
         public float SearchProgress => progress.Value;
         // "Resume plan to Duna (next: …)", the mismatch message, or null when the active vessel has
         // no saved plan.
         public string ResumeOffer { get; private set; }
         public bool HasSavedPlan => saved != null || saved_error != null;
-        public bool CanResume => !isRunning && job == null && saved != null && saved_check != null
+        public bool CanResume => !isRunning && !job.Running && saved != null && saved_check != null
             && saved_check.Verdict != ResumeVerdict.Mismatch;
-        public bool CanStart => !isRunning && job == null && Current != null && Current.Ok && Budget != null && Budget.Ok;
+        public bool CanStart => !isRunning && !job.Running && Current != null && Current.Ok && Budget != null && Budget.Ok;
 
         // ---------------------------------------------------------------- state
 
@@ -77,6 +77,7 @@ namespace K2D2.Transfer
             debug_mode_only = false;
             K2D2PilotsMgr.Instance.RegisterPilot("Transfer", this);
             _page = new TransferUI(this);
+            node = new PrepareOnlyNode(logger, "[Transfer]");
             burn.stage_when_dry = true;
             burn.allow_warp = true;
         }
@@ -190,7 +191,7 @@ namespace K2D2.Transfer
 
         public void CancelSearch()
         {
-            if (job == null)
+            if (!job.Running)
                 return;
             CancelJob();
             Status = "Search cancelled.";
@@ -257,7 +258,7 @@ namespace K2D2.Transfer
 
         public void Stop()
         {
-            if (job != null && !isRunning)
+            if (job.Running && !isRunning)
             {
                 CancelSearch();
                 return;
@@ -479,15 +480,6 @@ namespace K2D2.Transfer
 
         enum JobKind { Search, Solve }
 
-        sealed class Job
-        {
-            public JobKind Kind;
-            public Task Task;
-            public CancellationTokenSource Cts;
-            public Action<Task> Done;
-            public Stopwatch Watch;
-        }
-
         sealed class ProgressBox : IProgress<float>
         {
             float value;
@@ -495,87 +487,30 @@ namespace K2D2.Transfer
             public void Report(float v) => Volatile.Write(ref value, v);
         }
 
-        Job job;
+        readonly PilotJob job = new PilotJob();
         readonly ProgressBox progress = new ProgressBox();
-        double last_job_ms;
+        double last_job_ms => job.LastMs;
 
         // Only pure code runs on the worker: the snapshot was read before.
-        void RunJob<T>(JobKind kind, Func<CancellationToken, T> work, Action<Task<T>> done)
-        {
-            CancelJob();
-            var cts = new CancellationTokenSource();
-            var token = cts.Token;
-            job = new Job
-            {
-                Kind = kind,
-                Cts = cts,
-                Task = Task.Run(() => work(token), token),
-                Done = t => done((Task<T>)t),
-                Watch = Stopwatch.StartNew(),
-            };
-        }
+        void RunJob<T>(JobKind kind, Func<CancellationToken, T> work, Action<Task<T>> done) => job.Run(work, done, kind);
 
-        void PollJob()
+        void PollJob() => job.Poll(e =>
         {
-            if (job == null || !job.Task.IsCompleted)
-                return;
-            var j = job;
-            job = null;
-            last_job_ms = j.Watch.Elapsed.TotalMilliseconds;
-            try
-            {
-                j.Done(j.Task);
-            }
-            catch (Exception e)
-            {
-                logger.LogError($"[Transfer] {e}");
-                if (isRunning)
-                    Fail($"internal error ({e.GetType().Name}: {e.Message})");
-                else
-                    Status = $"Internal error: {e.GetType().Name}: {e.Message}";
-            }
-        }
+            logger.LogError($"[Transfer] {e}");
+            if (isRunning)
+                Fail($"internal error ({e.GetType().Name}: {e.Message})");
+            else
+                Status = $"Internal error: {e.GetType().Name}: {e.Message}";
+        });
 
-        void CancelJob()
-        {
-            if (job == null)
-                return;
-            job.Cts.Cancel();
-            job = null;
-        }
-
-        // Canceled and faulted told apart before reading Result (Find throws OperationCanceledException).
-        static bool JobResult<T>(Task<T> t, out T result, out string error, out bool canceled)
-        {
-            result = default;
-            error = null;
-            canceled = false;
-            if (t.IsCanceled)
-            {
-                canceled = true;
-                return false;
-            }
-            if (t.IsFaulted)
-            {
-                Exception e = t.Exception?.GetBaseException();
-                if (e is OperationCanceledException)
-                {
-                    canceled = true;
-                    return false;
-                }
-                error = e == null ? "unknown error" : $"{e.GetType().Name}: {e.Message}";
-                return false;
-            }
-            result = t.Result;
-            return true;
-        }
+        void CancelJob() => job.Cancel();
 
         void StartSearch(BodySystem system, TransferRequest q, JobKind kind, Action<TransferPlan> onPlan)
         {
             progress.Report(0);
             RunJob(kind, ct => TransferSearch.Find(system, q, ct, progress), t =>
             {
-                if (!JobResult(t, out var plan, out string error, out bool canceled))
+                if (!PilotJob.Result(t, out var plan, out string error, out bool canceled))
                 {
                     if (canceled)
                     {
@@ -608,15 +543,7 @@ namespace K2D2.Transfer
             try
             {
                 var sp = TransferFlight.ToSaved(Current, System, vessel_id, Phase, StepIndex, GeneralTools.Current_UT, PrepareOnly, burn_ignited, free_arrival_step);
-                string json = PlanStore.ToJson(sp);
-                Directory.CreateDirectory(PlansFolder);
-                string path = SavedPath(vessel_id);
-                string tmp = path + ".tmp";
-                File.WriteAllText(tmp, json);
-                if (File.Exists(path))
-                    File.Replace(tmp, path, null);
-                else
-                    File.Move(tmp, path);
+                PlanFiles.Write(SavedPath(vessel_id), PlanStore.ToJson(sp), logger, "[Transfer]");
             }
             catch (Exception e)
             {
@@ -626,27 +553,14 @@ namespace K2D2.Transfer
 
         void DeleteSaved(string id)
         {
-            if (string.IsNullOrEmpty(id))
-                return;
-            try
-            {
-                string path = SavedPath(id);
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                    logger.LogInfo($"[Transfer] saved plan deleted: {Path.GetFileName(path)}");
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning($"[Transfer] could not delete the saved plan: {e.GetType().Name}: {e.Message}");
-            }
+            if (!string.IsNullOrEmpty(id))
+                PlanFiles.Delete(SavedPath(id), logger, "[Transfer]");
         }
 
         // When a vessel with a saved plan is active in flight: PlanStore.Check, then the offer.
         void RefreshOffer()
         {
-            if (job != null)
+            if (job.Running)
                 return;
             string id = ActiveVesselId();
             if (id != checked_vessel && UnityEngine.Time.realtimeSinceStartup >= next_offer_check)
@@ -707,45 +621,13 @@ namespace K2D2.Transfer
 
         // The game's active vessel now. KSPVessel.VesselComponent is refreshed only in K2D2_Plugin.Update:
         // inside a vessel-change message it may still be the previous vessel.
-        static VesselComponent ActiveVessel()
-        {
-            try
-            {
-                return K2D2_Plugin.Instance?.current_vessel?.GetActiveSimVessel();
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
+        static VesselComponent ActiveVessel() => PilotVessel.Active();
 
-        static string IdOf(VesselComponent vessel)
-        {
-            try
-            {
-                var so = vessel?.SimulationObject;
-                return so == null ? null : so.GlobalId.Guid.ToString("D");
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
+        static string IdOf(VesselComponent vessel) => PilotVessel.IdOf(vessel);
 
-        static string ControlPartOf(VesselComponent vessel)
-        {
-            try
-            {
-                PartComponent part = vessel?.GetControlOwner();
-                return part == null ? null : $"{part.Guid}";
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
+        static string ControlPartOf(VesselComponent vessel) => PilotVessel.ControlPartOf(vessel);
 
-        internal static string ActiveVesselId() => IdOf(ActiveVessel());
+        internal static string ActiveVesselId() => PilotVessel.ActiveId();
 
         // The control part of our vessel, kept up to date while it is active.
         string control_part;

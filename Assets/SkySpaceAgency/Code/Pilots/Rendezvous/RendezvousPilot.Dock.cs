@@ -38,6 +38,7 @@ namespace K2D2.Rendezvous
         bool rcs_present;
         float rcs_settle_until;
         double last_dock_ut = double.NaN, next_trace_ut = double.NaN, contact_since = double.NaN;
+        float frames_unread_since = float.NaN;   // real time; NaN while the port frames read
         int aborts_seen;
 
         void ResetDock()
@@ -48,6 +49,7 @@ namespace K2D2.Rendezvous
             dock_target_parts = new HashSet<string>();
             dock_touched = false;
             last_dock_ut = next_trace_ut = contact_since = double.NaN;
+            frames_unread_since = float.NaN;
             aborts_seen = 0;
             TranslateNote = null;
             DockDistance = DockLateral = DockClosing = double.NaN;
@@ -165,9 +167,17 @@ namespace K2D2.Rendezvous
                     return;
                 }
                 translate.Update();   // no input this frame: it zeroes the inputs
+                if (float.IsNaN(frames_unread_since))
+                    frames_unread_since = Time.realtimeSinceStartup;
+                else if (Time.realtimeSinceStartup - frames_unread_since > RendezvousFlight.FrameWaitSeconds)
+                {
+                    Fail($"the port frames could not be read for {RendezvousFlight.FrameWaitSeconds:F0} s ({error})");
+                    return;
+                }
                 Status = "Docking: waiting for the port frames (" + error + ")";
                 return;
             }
+            frames_unread_since = float.NaN;
             double dt = double.IsNaN(last_dock_ut) ? 0 : state.Time - last_dock_ut;
             last_dock_ut = state.Time;
 
@@ -268,37 +278,63 @@ namespace K2D2.Rendezvous
             }
         }
 
-        // Translation off, SAS back to Stability Assist, RCS and the control part as they were.
+        // Translation off, SAS back to Stability Assist, RCS and the control part as they were, all on
+        // our own vessel (found by its id): after a switch the active vessel is another one, maybe
+        // the target, which is never acted on. Its SAS and inputs are left alone then.
         void StopDocking()
         {
             if (dock_stage == DockStage.None && !dock_touched)
                 return;
-            translate.Stop();
+            bool oursActive = OursIsActive();
+            if (oursActive)
+                translate.Stop();
+            else
+                logger.LogInfo("[Docking] stopped while another vessel is active: its inputs and SAS are left alone");
             if (dock_touched)
             {
-                var vessel = ActiveVessel();
-                try
-                {
-                    SASTool.setAutoPilot(AutopilotMode.StabilityAssist);
-                }
-                catch (Exception e)
-                {
-                    logger.LogInfo($"[Docking] SAS not set to Stability Assist: {e.GetType().Name}");
-                }
-                DockingParts.RestoreRcs(vessel);
-                DockingParts.RestoreControl(vessel);
+                var ours = OurVessel();
+                if (oursActive)
+                    SetStabilityAssist();
+                if (ours == null)
+                    logger.LogInfo("[Docking] our vessel is gone: RCS and control part not restored");
+                DockingParts.RestoreRcs(ours);
+                DockingParts.RestoreControl(ours);
                 RendezvousSnapshot.UnwatchDocking();
             }
             dock_touched = false;
             dock_stage = DockStage.None;
         }
 
+        void SetStabilityAssist()
+        {
+            try
+            {
+                SASTool.setAutoPilot(AutopilotMode.StabilityAssist);
+            }
+            catch (Exception e)
+            {
+                logger.LogInfo($"[Docking] SAS not set to Stability Assist: {e.GetType().Name}");
+            }
+        }
+
+        // The merged vessel is active. Our control part comes back on it; its RCS is left as it is:
+        // our old state was one vessel's, the merged vessel has the target's thrusters too.
         void FinishDocked(string why)
         {
-            var vessel = ActiveVessel();
-            logger.LogInfo($"[Docking] docked ({why}): {vessel?.Name ?? "?"}, {PartIds(vessel).Count} parts, vessel {IdOf(vessel)}" +
+            var merged = ActiveVessel();
+            logger.LogInfo($"[Docking] docked ({why}): {merged?.Name ?? "?"}, {PartIds(merged).Count} parts, vessel {IdOf(merged)}" +
                 (guidance != null ? $", {guidance.Aborts} abort(s), last trace {DockDistance:F2} m, lateral {DockLateral:F2} m, closing {DockClosing:F3} m/s" : ""));
-            StopDocking();
+            translate.Stop();
+            if (dock_touched)
+            {
+                SetStabilityAssist();
+                DockingParts.RestoreControl(merged);
+                logger.LogInfo($"[Docking] RCS left as it is on the merged vessel ({(merged == null ? "unknown" : DockingParts.RcsState(merged).ToString())})");
+                DockingParts.BeginRun();   // drops the recorded RCS state: never applied to the merged vessel
+                RendezvousSnapshot.UnwatchDocking();
+            }
+            dock_touched = false;
+            dock_stage = DockStage.None;
             DeleteSaved(vessel_id);
             Phase = RvPhase.Docked;
             isRunning = false;

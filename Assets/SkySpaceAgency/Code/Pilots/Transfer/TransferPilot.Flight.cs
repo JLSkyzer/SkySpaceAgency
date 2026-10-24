@@ -22,7 +22,8 @@ namespace K2D2.Transfer
         readonly TargetOrbitBurn burn = new TargetOrbitBurn();
         readonly WarpTo warp = new WarpTo();
         readonly BurndV burn_dv = new BurndV();
-        readonly ManeuverCreator maneuver_creator = new ManeuverCreator();
+        // Prepare only: the node made for StepIndex (built in the constructor, with the logger).
+        readonly PrepareOnlyNode node;
 
         int last_body = -1;
         bool warping;
@@ -40,8 +41,6 @@ namespace K2D2.Transfer
         bool burn_ignited;
         int solve_retries;
         double solve_burn_seconds;
-        // Prepare only: since when (real time) the engines are off; NaN while they push.
-        double engines_off_since = double.NaN;
 
         // The SOI change ahead: ours (PatchedPropagator) and the game's patch, cross-checked.
         double soi_ours = double.NaN, soi_game = double.NaN;
@@ -51,17 +50,6 @@ namespace K2D2.Transfer
         // A leg whose correction is solved without the stale planned arrival (direct descent).
         int free_arrival_step = -1;
         float next_snapshot_retry;
-
-        // Prepare only: the node made for StepIndex.
-        bool node_pending;      // being created (one FixedUpdate after the removal)
-        bool node_waiting;      // on the plan, waiting for the player
-        Guid node_id;
-        string node_name;
-        double node_dv;
-        double node_ut;
-        int node_body;
-        Vector3d node_r, node_v;
-        double node_state_ut;
 
         void ResetFlight(int body)
         {
@@ -74,12 +62,10 @@ namespace K2D2.Transfer
             soi_next_body = -1;
             soi_checked_ut = double.NaN;
             free_arrival_step = -1;
-            node_pending = node_waiting = false;
-            node_id = Guid.Empty;
+            node.Clear();
             burn_ignited = false;
             solve_retries = 0;
             solve_burn_seconds = 0;
-            engines_off_since = double.NaN;
         }
 
         void Fly()
@@ -113,9 +99,9 @@ namespace K2D2.Transfer
                 UpdateBurn(now, body);
                 return;
             }
-            if (node_pending)
+            if (node.Pending)
                 return;
-            if (node_waiting)
+            if (node.Waiting)
             {
                 UpdateNode(body, v, now);
                 return;
@@ -212,9 +198,9 @@ namespace K2D2.Transfer
             burn_ignited = false;
             solve_retries = 0;
             solve_burn_seconds = 0;
-            engines_off_since = double.NaN;
+            node.ResetEngines();
             StepIndex++;
-            node_waiting = node_pending = false;
+            node.StopWaiting();
             Save();
         }
 
@@ -512,7 +498,7 @@ namespace K2D2.Transfer
         {
             if (!isRunning)
                 return;
-            if (!JobResult(t, out var res, out string error, out bool canceled))
+            if (!PilotJob.Result(t, out var res, out string error, out bool canceled))
             {
                 if (!canceled)
                     Fail($"correction {n}: the solve failed ({error})");
@@ -667,116 +653,42 @@ namespace K2D2.Transfer
             TransferFlight.NodeComponents(dv, r, v, out double prograde, out double normal, out double radial);
             double seconds = EstimateBurnSeconds(dv.magnitude);
             double nodeUT = Math.Max(snap.UT + ManeuverCreator.MinLead, double.IsNaN(seconds) ? impulseUT : impulseUT - seconds / 2);
-            node_pending = true;
-            node_name = name;
-            node_dv = dv.magnitude;
-            node_ut = nodeUT;
-            node_body = snap.Body;
-            node_r = snap.R;
-            node_v = snap.V;
-            node_state_ut = snap.UT;
-            maneuver_creator.Update();
-            RemoveOurNode(); // the player's own nodes stay
             logger.LogInfo($"[Transfer] prepare only: node for the {name} at UT {nodeUT:F0} (impulse {impulseUT:F0}), {dv.magnitude:F1} m/s " +
                 $"(prograde {prograde:F1}, normal {normal:F1}, radial {radial:F1})");
-            K2D2_Plugin.Instance.StartCoroutine(CreateNodeNextFrame(nodeUT, prograde, normal, radial));
-        }
-
-        // A node made in the same frame as the removal is not registered (ManeuverCreator).
-        IEnumerator CreateNodeNextFrame(double ut, double prograde, double normal, double radial)
-        {
-            yield return new WaitForFixedUpdate();
-            if (!isRunning || !node_pending)
-                yield break;
-            ManeuverNodeData node = null;
-            try
-            {
-                maneuver_creator.Update();
-                node = maneuver_creator.CreateManeuverNodeAtUT(ut, prograde, normal * ManeuverCreator.GameNormalSign, radial);
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning($"[Transfer] prepare only: the node could not be made: {e.GetType().Name}: {e.Message}");
-            }
-            node_pending = false;
-            if (node == null)
-            {
-                Fail($"the game did not take the node for the {node_name}");
-                yield break;
-            }
-            node_id = node.NodeID;
-            node_waiting = true;
-            Status = $"Fly the node for the {node_name} ({node_dv:F1} m/s), then remove it: the next step is planned from the orbit reached.";
-        }
-
-        ManeuverNodeData OurNode()
-        {
-            if (node_id == Guid.Empty)
-                return null;
-            var nodes = K2D2_Plugin.Instance.current_vessel.GetManeuverNodes();
-            if (nodes != null)
-                foreach (var n in nodes)
-                    if (n != null && n.NodeID.Equals(node_id))
-                        return n;
-            return null;
-        }
-
-        void RemoveOurNode()
-        {
-            var node = OurNode();
-            if (node != null)
-            {
-                maneuver_creator.RemoveNode(node);
-                logger.LogInfo($"[Transfer] prepare only: our previous node {node_id} removed");
-            }
-            node_id = Guid.Empty;
+            node.Make(name, nodeUT, dv.magnitude, snap.Body, snap.R, snap.V, snap.UT, prograde, normal, radial,
+                () => isRunning,
+                () => Status = $"Fly the node for the {node.Name} ({node.DeltaV:F1} m/s), then remove it: the next step is planned from the orbit reached.",
+                () => Fail($"the game did not take the node for the {node.Name}"));
         }
 
         void UpdateNode(int body, Vector3d v, double now)
         {
-            bool onPlan = OurNode() != null;
-            var expected = node_v;
-            bool changed = body != node_body;
+            var expected = node.V;
+            bool changed = body != node.Body;
             if (!changed)
-                KeplerPropagator.Propagate(node_r, node_v, MuOf(node_body), now - node_state_ut, out _, out expected);
+                KeplerPropagator.Propagate(node.R, node.V, MuOf(node.Body), now - node.StateUT, out _, out expected);
             // A node left on the plan counts as flown once its time has passed and the engines are off.
-            bool thrusting = false;
-            try
-            {
-                thrusting = ActiveVessel()?.IsUnderEngineThrust() ?? false;
-            }
-            catch (Exception)
-            {
-                // Unknown: assume not thrusting.
-            }
-            double real = Time.realtimeSinceStartupAsDouble;
-            if (thrusting)
-                engines_off_since = double.NaN;
-            else if (double.IsNaN(engines_off_since))
-                engines_off_since = real;
-            double offSeconds = double.IsNaN(engines_off_since) ? 0 : real - engines_off_since;
-            var state = TransferFlight.NodeFlown(onPlan, now > node_ut, offSeconds, node_dv, changed, expected, v);
+            var state = node.Judge(changed, expected, v, now);
             switch (state)
             {
                 case NodeState.Waiting:
-                    Status = $"Fly the node for the {node_name} ({node_dv:F1} m/s, " +
-                        (node_ut > now ? $"in {StrTool.DurationToString(node_ut - now)}" : $"due {StrTool.DurationToString(now - node_ut)} ago") +
+                    Status = $"Fly the node for the {node.Name} ({node.DeltaV:F1} m/s, " +
+                        (node.UT > now ? $"in {StrTool.DurationToString(node.UT - now)}" : $"due {StrTool.DurationToString(now - node.UT)} ago") +
                         "), then remove it: the next step is planned from the orbit reached.";
                     return;
                 case NodeState.Flown:
-                    logger.LogInfo($"[Transfer] prepare only: {node_name} flown: planned {node_dv:F1} m/s, measured " +
+                    logger.LogInfo($"[Transfer] prepare only: {node.Name} flown: planned {node.DeltaV:F1} m/s, measured " +
                         (changed ? "unknown (SOI changed)" : $"{(v - expected).magnitude:F1} m/s"));
-                    node_waiting = false;
                     StepDone();
-                    UpdateSoiPrediction($"after the {node_name}");
+                    UpdateSoiPrediction($"after the {node.Name}");
                     return;
                 default:
-                    logger.LogInfo($"[Transfer] prepare only: the node for the {node_name} was removed without being flown");
-                    node_waiting = false;
+                    logger.LogInfo($"[Transfer] prepare only: the node for the {node.Name} was removed without being flown");
+                    node.StopWaiting();
                     Save();
                     isRunning = false;
                     checked_vessel = null;
-                    Status = $"The node for the {node_name} was removed without being flown. Resume makes it again.";
+                    Status = $"The node for the {node.Name} was removed without being flown. Resume makes it again.";
                     return;
             }
         }
@@ -961,23 +873,7 @@ namespace K2D2.Transfer
         }
 
         // Seconds at full thrust for dv; NaN without thrust.
-        double EstimateBurnSeconds(double dv)
-        {
-            if (!(dv > 0))
-                return 0;
-            try
-            {
-                burn_dv.Compute_Thrust();
-                double thrust = burn_dv.active_thrust;
-                if (thrust <= 0)
-                    thrust = burn_dv.full_thrust.magnitude;
-                return BurnTiming.Duration(dv, thrust, burn_dv.mass, burn_dv.active_isp);
-            }
-            catch (Exception)
-            {
-                return double.NaN;
-            }
-        }
+        double EstimateBurnSeconds(double dv) => PilotVessel.BurnSeconds(burn_dv, dv);
 
         static double OrbitPeriod(Vector3d r, Vector3d v, double mu)
         {

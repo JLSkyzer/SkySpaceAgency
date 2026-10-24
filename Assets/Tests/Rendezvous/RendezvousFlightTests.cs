@@ -226,6 +226,26 @@ public class RendezvousFlightTests
     }
 
     [Test]
+    public void MergedByDocking_NewVesselWithBothDuringTheApproachOnly()
+    {
+        var target = new HashSet<string> { "t1" };
+        var parts = new[] { "ourport", "t1" };
+        Assert.IsTrue(RendezvousFlight.MergedByDocking(RvPhase.Dock, "merged", "ours", parts, "ourport", target));
+        Assert.IsFalse(RendezvousFlight.MergedByDocking(RvPhase.Dock, "ours", "ours", parts, "ourport", target), "still our vessel");
+        Assert.IsFalse(RendezvousFlight.MergedByDocking(RvPhase.Dock, null, "ours", parts, "ourport", target), "no vessel read");
+        Assert.IsFalse(RendezvousFlight.MergedByDocking(RvPhase.Brake, "merged", "ours", parts, "ourport", target), "not docking");
+        Assert.IsFalse(RendezvousFlight.MergedByDocking(RvPhase.Dock, "target", "ours", new[] { "t1" }, "ourport", target), "switched to the target");
+    }
+
+    [Test]
+    public void CanReplan_TwiceARun()
+    {
+        Assert.IsTrue(RendezvousFlight.CanReplan(0));
+        Assert.IsTrue(RendezvousFlight.CanReplan(RendezvousFlight.MaxReplans - 1));
+        Assert.IsFalse(RendezvousFlight.CanReplan(RendezvousFlight.MaxReplans));
+    }
+
+    [Test]
     public void JudgeDock_RetriesOnceThenFails()
     {
         string why;

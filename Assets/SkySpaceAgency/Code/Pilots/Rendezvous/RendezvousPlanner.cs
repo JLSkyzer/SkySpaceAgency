@@ -51,11 +51,11 @@ namespace K2D2.Rendezvous
         const int TofSamples = 48;                        // per revolution count
         const int RefinedCandidates = 8;
         // A Lambert orbit must pass this close to the aim: a share of the aim's radius, at least 1 m.
-        const double ArrivalToleranceShare = 1e-6, ArrivalToleranceFloor = 1;
+        public const double ArrivalToleranceShare = 1e-6, ArrivalToleranceFloor = 1;
         // Above this relative inclination the target goes the other way round: refused.
         public const double RetrogradeLimitDeg = 179;
         // Intercepts within this much Δv (m/s) count as a tie: the earlier departure wins.
-        const double TieDeltaV = 1e-3;
+        public const double TieDeltaV = 1e-3;
 
         public static RvPlan Plan(Vector3d rV, Vector3d vV, Vector3d rT, Vector3d vT, double mu, double ut0,
             double bodyLowOrbitRadius, double standoff = 200, int maxRevolutions = 10, CancellationToken ct = default)

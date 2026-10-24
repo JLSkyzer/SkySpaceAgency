@@ -48,13 +48,13 @@ namespace K2D2.Rendezvous
         public bool PrepareOnly { get; private set; }
         public string Status { get; private set; } = "";
         public string TargetName { get; private set; }
-        public bool Planning => job != null;
+        public bool Planning => job.Running;
         public BudgetResult Budget { get; private set; }
         public IReadOnlyList<StageDv> Stages => stages;
         // "Resume the rendezvous with Station (was: PhasingWait)", or null.
         public string ResumeOffer { get; private set; }
         public bool HasSavedPlan => saved != null || saved_error != null;
-        public bool CanResume => !isRunning && job == null && saved != null && saved_target_ok;
+        public bool CanResume => !isRunning && !job.Running && saved != null && saved_target_ok;
 
         // ---------------------------------------------------------------- state
 
@@ -76,6 +76,7 @@ namespace K2D2.Rendezvous
             Instance = this;
             debug_mode_only = false;
             K2D2PilotsMgr.Instance.RegisterPilot("Rendezvous", this);
+            node = new PrepareOnlyNode(logger, "[Rendezvous]");
             // The tab (RendezvousUI) comes with sub-project 4.3's Task 7.
             burn.stage_when_dry = true;
         }
@@ -97,7 +98,7 @@ namespace K2D2.Rendezvous
                     CancelJob();
                     StopWarp();
                     StopDocking();
-                    node_pending = node_waiting = false;
+                    node.StopWaiting();
                 }
                 active = value;
                 base.isRunning = value;
@@ -160,7 +161,7 @@ namespace K2D2.Rendezvous
         /// </summary>
         public bool Start(RvMode mode, string targetId, bool prepareOnly, string ourPortId = null, string targetPortId = null)
         {
-            if (isRunning || job != null)
+            if (isRunning || job.Running)
             {
                 Status = "Stop the rendezvous first.";
                 return false;
@@ -230,7 +231,10 @@ namespace K2D2.Rendezvous
             if (!Start(resumed, r.TargetId, p.PrepareOnly, r.OurPortId, r.TargetPortId))
                 return;
             if (Mode != mode && RendezvousFlight.Docks(mode))
+            {
                 Mode = mode;   // keep "rendezvous + dock" in the file
+                Save();
+            }
         }
 
         /// <summary>Forgets the active vessel's saved rendezvous (and stops it).</summary>
@@ -325,7 +329,7 @@ namespace K2D2.Rendezvous
         {
             if (!isRunning)
                 return;
-            if (!JobResult(t, out var plan, out string error, out bool canceled))
+            if (!PilotJob.Result(t, out var plan, out string error, out bool canceled))
             {
                 if (!canceled)
                     Fail("the plan failed: " + error);
@@ -354,83 +358,20 @@ namespace K2D2.Rendezvous
 
         // ---------------------------------------------------------------- worker job
 
-        sealed class Job
-        {
-            public Task Task;
-            public CancellationTokenSource Cts;
-            public Action<Task> Done;
-            public Stopwatch Watch;
-        }
-
-        Job job;
-        double last_job_ms;
+        readonly PilotJob job = new PilotJob();
+        double last_job_ms => job.LastMs;
 
         // Only pure code runs on the worker: the states were read before.
-        void RunJob<T>(Func<CancellationToken, T> work, Action<Task<T>> done)
-        {
-            CancelJob();
-            var cts = new CancellationTokenSource();
-            var token = cts.Token;
-            job = new Job
-            {
-                Cts = cts,
-                Task = Task.Run(() => work(token), token),
-                Done = t => done((Task<T>)t),
-                Watch = Stopwatch.StartNew(),
-            };
-        }
+        void RunJob<T>(Func<CancellationToken, T> work, Action<Task<T>> done) => job.Run(work, done);
 
-        void PollJob()
+        void PollJob() => job.Poll(e =>
         {
-            if (job == null || !job.Task.IsCompleted)
-                return;
-            var j = job;
-            job = null;
-            last_job_ms = j.Watch.Elapsed.TotalMilliseconds;
-            try
-            {
-                j.Done(j.Task);
-            }
-            catch (Exception e)
-            {
-                logger.LogError($"[Rendezvous] {e}");
-                if (isRunning)
-                    Fail($"internal error ({e.GetType().Name}: {e.Message})");
-            }
-        }
+            logger.LogError($"[Rendezvous] {e}");
+            if (isRunning)
+                Fail($"internal error ({e.GetType().Name}: {e.Message})");
+        });
 
-        void CancelJob()
-        {
-            if (job == null)
-                return;
-            job.Cts.Cancel();
-            job = null;
-        }
-
-        static bool JobResult<T>(Task<T> t, out T result, out string error, out bool canceled)
-        {
-            result = default;
-            error = null;
-            canceled = false;
-            if (t.IsCanceled)
-            {
-                canceled = true;
-                return false;
-            }
-            if (t.IsFaulted)
-            {
-                Exception e = t.Exception?.GetBaseException();
-                if (e is OperationCanceledException)
-                {
-                    canceled = true;
-                    return false;
-                }
-                error = e == null ? "unknown error" : $"{e.GetType().Name}: {e.Message}";
-                return false;
-            }
-            result = t.Result;
-            return true;
-        }
+        void CancelJob() => job.Cancel();
 
         // ---------------------------------------------------------------- persistence
 
@@ -444,43 +385,23 @@ namespace K2D2.Rendezvous
             {
                 var sp = RendezvousFlight.ToSaved(vessel_id, body_name, target_id, TargetName, Mode, Phase,
                     GeneralTools.Current_UT, PrepareOnly, our_port_pick, target_port_pick);
-                Directory.CreateDirectory(PlansFolder);
-                string path = SavedPath(vessel_id);
-                string tmp = path + ".tmp";
-                File.WriteAllText(tmp, PlanStore.ToJson(sp));
-                if (File.Exists(path))
-                    File.Replace(tmp, path, null);
-                else
-                    File.Move(tmp, path);
+                PlanFiles.Write(SavedPath(vessel_id), PlanStore.ToJson(sp), logger, "[Rendezvous]");
             }
             catch (Exception e)
             {
-                logger.LogWarning($"[Rendezvous] could not save the run: {e.GetType().Name}: {e.Message}");
+                logger.LogWarning($"[Rendezvous] could not save the plan: {e.GetType().Name}: {e.Message}");
             }
         }
 
         void DeleteSaved(string id)
         {
-            if (string.IsNullOrEmpty(id))
-                return;
-            try
-            {
-                string path = SavedPath(id);
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                    logger.LogInfo($"[Rendezvous] saved run deleted: {Path.GetFileName(path)}");
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning($"[Rendezvous] could not delete the saved run: {e.GetType().Name}: {e.Message}");
-            }
+            if (!string.IsNullOrEmpty(id))
+                PlanFiles.Delete(SavedPath(id), logger, "[Rendezvous]");
         }
 
         void RefreshOffer()
         {
-            if (job != null)
+            if (job.Running)
                 return;
             string id = ActiveVesselId();
             if (id == checked_vessel || UnityEngine.Time.realtimeSinceStartup < next_offer_check)
@@ -526,64 +447,21 @@ namespace K2D2.Rendezvous
 
         // ---------------------------------------------------------------- vessel
 
-        // The game's active vessel now (KSPVessel.VesselComponent is refreshed only in K2D2_Plugin.Update).
-        static VesselComponent ActiveVessel()
-        {
-            try
-            {
-                return K2D2_Plugin.Instance?.current_vessel?.GetActiveSimVessel();
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
+        static VesselComponent ActiveVessel() => PilotVessel.Active();
 
-        static string IdOf(VesselComponent vessel)
-        {
-            try
-            {
-                var so = vessel?.SimulationObject;
-                return so == null ? null : so.GlobalId.Guid.ToString("D");
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
+        static string IdOf(VesselComponent vessel) => PilotVessel.IdOf(vessel);
 
-        static string ControlPartOf(VesselComponent vessel)
-        {
-            try
-            {
-                PartComponent part = vessel?.GetControlOwner();
-                return part == null ? null : $"{part.Guid}";
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
+        static string ControlPartOf(VesselComponent vessel) => PilotVessel.ControlPartOf(vessel);
 
-        static string ActiveVesselId() => IdOf(ActiveVessel());
+        static string ActiveVesselId() => PilotVessel.ActiveId();
 
-        static List<string> PartIds(VesselComponent vessel)
-        {
-            var ids = new List<string>();
-            try
-            {
-                var parts = vessel?.SimulationObject?.PartOwner?.Parts;
-                if (parts != null)
-                    foreach (PartComponent p in parts)
-                        if (p != null)
-                            ids.Add(p.GlobalId.Guid.ToString("D"));
-            }
-            catch (Exception)
-            {
-                // Unreadable: not merged.
-            }
-            return ids;
-        }
+        static List<string> PartIds(VesselComponent vessel) => PilotVessel.PartIds(vessel);
+
+        // Our vessel, found by its id even when the player switched to another one; null when it is gone.
+        VesselComponent OurVessel() => RendezvousSnapshot.FindVessel(vessel_id);
+
+        // The active vessel is ours: only then do the game's flight inputs (throttle, SAS) reach it.
+        bool OursIsActive() => vessel_id != null && ActiveVesselId() == vessel_id;
 
         string control_part;
         readonly VesselWatch vessel_watch = new VesselWatch();
@@ -594,8 +472,7 @@ namespace K2D2.Rendezvous
             var vessel = ActiveVessel();
             string now = IdOf(vessel);
             string part = ControlPartOf(vessel);
-            bool merged = Phase == RvPhase.Dock && now != vessel_id
-                && RendezvousFlight.IsDockedVessel(PartIds(vessel), dock_our_port?.Info.PartId, dock_target_parts);
+            bool merged = RendezvousFlight.MergedByDocking(Phase, now, vessel_id, PartIds(vessel), dock_our_port?.Info.PartId, dock_target_parts);
             var watch = merged ? VesselVerdict.Changed
                 : vessel_watch.Decide(now, part, vessel_id, control_part, UnityEngine.Time.realtimeSinceStartupAsDouble);
             var outcome = RendezvousFlight.OnVesselChange(Phase, merged, watch);
@@ -629,7 +506,5 @@ namespace K2D2.Rendezvous
             }
             return outcome;
         }
-
-        static string Inv(FormattableString f) => f.ToString(CultureInfo.InvariantCulture);
     }
 }

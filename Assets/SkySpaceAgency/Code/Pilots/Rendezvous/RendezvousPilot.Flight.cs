@@ -20,7 +20,8 @@ namespace K2D2.Rendezvous
         readonly TargetOrbitBurn burn = new TargetOrbitBurn();
         readonly WarpTo warp = new WarpTo();
         readonly BurndV burn_dv = new BurndV();
-        readonly ManeuverCreator maneuver_creator = new ManeuverCreator();
+        // Prepare only: the node made for StepIndex (built in the constructor, with the logger).
+        readonly PrepareOnlyNode node;
 
         bool warping;
         double warp_until = double.NaN;
@@ -33,13 +34,6 @@ namespace K2D2.Rendezvous
         double burn_ut0;
         double mu;
 
-        // Prepare only: the node made for StepIndex.
-        bool node_pending, node_waiting;
-        Guid node_id;
-        string node_name;
-        double node_dv, node_ut, node_state_ut;
-        Vector3d node_r, node_v;
-        double engines_off_since = double.NaN;
         float next_retry;
 
         void ResetFlight()
@@ -47,9 +41,7 @@ namespace K2D2.Rendezvous
             warping = false;
             warp_until = double.NaN;
             burning = false;
-            node_pending = node_waiting = false;
-            node_id = Guid.Empty;
-            engines_off_since = double.NaN;
+            node.Clear();
             ResetDock();
         }
 
@@ -108,7 +100,7 @@ namespace K2D2.Rendezvous
                 UpdateBurn();
                 return;
             }
-            if (node_pending)
+            if (node.Pending)
                 return;
             if (Current == null)
                 return; // the plan is being made
@@ -122,7 +114,7 @@ namespace K2D2.Rendezvous
                 Status = "Waiting: " + error;
                 return;
             }
-            if (node_waiting)
+            if (node.Waiting)
             {
                 UpdateNode(s);
                 return;
@@ -167,9 +159,9 @@ namespace K2D2.Rendezvous
 
         void StepDone()
         {
-            engines_off_since = double.NaN;
+            node.ResetEngines();
             StepIndex++;
-            node_waiting = node_pending = false;
+            node.StopWaiting();
             Save();
         }
 
@@ -206,7 +198,8 @@ namespace K2D2.Rendezvous
 
         void StopBurn()
         {
-            if (burning || active)
+            // The throttle and the warp are the active vessel's: leave another vessel's alone.
+            if ((burning || active) && OursIsActive())
             {
                 try
                 {
@@ -217,8 +210,9 @@ namespace K2D2.Rendezvous
                     // No vessel (scene change): nothing burns.
                 }
             }
+            bool wasBurning = burning;
             burning = false;
-            if (active && !PrepareOnly)
+            if (active && !PrepareOnly && (wasBurning || OursIsActive()))
                 TimeWarpTools.SetRateIndex(0, true);
         }
 
@@ -254,7 +248,7 @@ namespace K2D2.Rendezvous
                         logger.LogInfo($"[Rendezvous] correction: {verdict}, {why}" + (sol.Ok ? $", {sol.Revolutions} full revolution(s), brake {sol.BrakeDeltaV:F2} m/s" : ""));
                         if (verdict == CorrectionVerdict.Refuse)
                         {
-                            Fail("correction: " + why);
+                            Replan("correction: " + why);
                             return;
                         }
                         if (verdict == CorrectionVerdict.Skip)
@@ -387,16 +381,27 @@ namespace K2D2.Rendezvous
                     Status = $"Rendezvous done: {why}.";
                     return;
                 case ArrivalOutcome.Replan:
-                    replans++;
-                    logger.LogInfo($"[Rendezvous] planning again from the actual state ({replans}/{RendezvousFlight.MaxReplans})");
-                    Current = null;
-                    StepIndex = 0;
-                    StartPlan();
+                    Replan("the arrival is off: " + why);
                     return;
                 default:
                     Fail("the arrival is off after planning again: " + why);
                     return;
             }
+        }
+
+        // Plans again from the actual state, at most MaxReplans times in a run.
+        void Replan(string why)
+        {
+            if (!RendezvousFlight.CanReplan(replans))
+            {
+                Fail(why + ", after planning again " + replans + " time(s)");
+                return;
+            }
+            replans++;
+            logger.LogInfo($"[Rendezvous] {why}: planning again from the actual state ({replans}/{RendezvousFlight.MaxReplans})");
+            Current = null;
+            StepIndex = 0;
+            StartPlan();
         }
 
         // ---------------------------------------------------------------- Prepare only
@@ -407,106 +412,35 @@ namespace K2D2.Rendezvous
             TransferFlight.NodeComponents(dv, r, v, out double prograde, out double normal, out double radial);
             double seconds = EstimateBurnSeconds(dv.magnitude);
             double nodeUT = Math.Max(s.UT + ManeuverCreator.MinLead, double.IsNaN(seconds) ? impulseUT : impulseUT - seconds / 2);
-            node_pending = true;
-            node_name = name;
-            node_dv = dv.magnitude;
-            node_ut = nodeUT;
-            node_r = s.OurR;
-            node_v = s.OurV;
-            node_state_ut = s.UT;
-            maneuver_creator.Update();
-            RemoveOurNode();
             logger.LogInfo($"[Rendezvous] prepare only: node for the {name} at UT {nodeUT:F0}, {dv.magnitude:F2} m/s " +
                 $"(prograde {prograde:F2}, normal {normal:F2}, radial {radial:F2})");
-            K2D2_Plugin.Instance.StartCoroutine(CreateNodeNextFrame(nodeUT, prograde, normal, radial));
-        }
-
-        // A node made in the same frame as the removal is not registered (ManeuverCreator).
-        IEnumerator CreateNodeNextFrame(double ut, double prograde, double normal, double radial)
-        {
-            yield return new WaitForFixedUpdate();
-            if (!isRunning || !node_pending)
-                yield break;
-            ManeuverNodeData node = null;
-            try
-            {
-                maneuver_creator.Update();
-                node = maneuver_creator.CreateManeuverNodeAtUT(ut, prograde, normal * ManeuverCreator.GameNormalSign, radial);
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning($"[Rendezvous] prepare only: the node could not be made: {e.GetType().Name}: {e.Message}");
-            }
-            node_pending = false;
-            if (node == null)
-            {
-                Fail($"the game did not take the node for the {node_name}");
-                yield break;
-            }
-            node_id = node.NodeID;
-            node_waiting = true;
-            Status = $"Fly the node for the {node_name} ({node_dv:F2} m/s), then remove it: the next step is computed from the orbit reached.";
-        }
-
-        ManeuverNodeData OurNode()
-        {
-            if (node_id == Guid.Empty)
-                return null;
-            var nodes = K2D2_Plugin.Instance.current_vessel.GetManeuverNodes();
-            if (nodes != null)
-                foreach (var n in nodes)
-                    if (n != null && n.NodeID.Equals(node_id))
-                        return n;
-            return null;
-        }
-
-        void RemoveOurNode()
-        {
-            var node = OurNode();
-            if (node != null)
-                maneuver_creator.RemoveNode(node);
-            node_id = Guid.Empty;
+            node.Make(name, nodeUT, dv.magnitude, s.Body, s.OurR, s.OurV, s.UT, prograde, normal, radial,
+                () => isRunning,
+                () => Status = $"Fly the node for the {node.Name} ({node.DeltaV:F2} m/s), then remove it: the next step is computed from the orbit reached.",
+                () => Fail($"the game did not take the node for the {node.Name}"));
         }
 
         void UpdateNode(RendezvousStates s)
         {
-            bool onPlan = OurNode() != null;
-            KeplerPropagator.Propagate(node_r, node_v, mu, s.UT - node_state_ut, out _, out var expected);
-            bool thrusting = false;
-            try
-            {
-                thrusting = ActiveVessel()?.IsUnderEngineThrust() ?? false;
-            }
-            catch (Exception)
-            {
-                // Unknown: assume not thrusting.
-            }
-            double real = Time.realtimeSinceStartupAsDouble;
-            if (thrusting)
-                engines_off_since = double.NaN;
-            else if (double.IsNaN(engines_off_since))
-                engines_off_since = real;
-            double off = double.IsNaN(engines_off_since) ? 0 : real - engines_off_since;
-            switch (TransferFlight.NodeFlown(onPlan, s.UT > node_ut, off, node_dv, false, expected, s.OurV))
+            KeplerPropagator.Propagate(node.R, node.V, mu, s.UT - node.StateUT, out _, out var expected);
+            switch (node.Judge(false, expected, s.OurV, s.UT))
             {
                 case NodeState.Waiting:
-                    Status = $"Fly the node for the {node_name} ({node_dv:F2} m/s, " +
-                        (node_ut > s.UT ? $"in {StrTool.DurationToString(node_ut - s.UT)}" : $"due {StrTool.DurationToString(s.UT - node_ut)} ago") + ").";
+                    Status = $"Fly the node for the {node.Name} ({node.DeltaV:F2} m/s, " +
+                        (node.UT > s.UT ? $"in {StrTool.DurationToString(node.UT - s.UT)}" : $"due {StrTool.DurationToString(s.UT - node.UT)} ago") + ").";
                     return;
                 case NodeState.Flown:
-                    logger.LogInfo($"[Rendezvous] prepare only: {node_name} flown: planned {node_dv:F2} m/s, measured {(s.OurV - expected).magnitude:F2} m/s");
-                    node_waiting = false;
-                    var kind = Current.Steps[StepIndex].Kind;
-                    LogAfterBurn(kind);
+                    logger.LogInfo($"[Rendezvous] prepare only: {node.Name} flown: planned {node.DeltaV:F2} m/s, measured {(s.OurV - expected).magnitude:F2} m/s");
+                    LogAfterBurn(Current.Steps[StepIndex].Kind);
                     StepDone();
                     return;
                 default:
-                    logger.LogInfo($"[Rendezvous] prepare only: the node for the {node_name} was removed without being flown");
-                    node_waiting = false;
+                    logger.LogInfo($"[Rendezvous] prepare only: the node for the {node.Name} was removed without being flown");
+                    node.StopWaiting();
                     Save();
                     isRunning = false;
                     checked_vessel = null;
-                    Status = $"The node for the {node_name} was removed without being flown. Resume plans again.";
+                    Status = $"The node for the {node.Name} was removed without being flown. Resume plans again.";
                     return;
             }
         }
@@ -538,24 +472,7 @@ namespace K2D2.Rendezvous
             return system != null && i >= 0 && i < system.Count ? system[i].LowOrbitRadius : 0;
         }
 
-        // Seconds at full thrust for dv; NaN without thrust.
-        double EstimateBurnSeconds(double dv)
-        {
-            if (!(dv > 0))
-                return 0;
-            try
-            {
-                burn_dv.Compute_Thrust();
-                double thrust = burn_dv.active_thrust;
-                if (thrust <= 0)
-                    thrust = burn_dv.full_thrust.magnitude;
-                return BurnTiming.Duration(dv, thrust, burn_dv.mass, burn_dv.active_isp);
-            }
-            catch (Exception)
-            {
-                return double.NaN;
-            }
-        }
+        double EstimateBurnSeconds(double dv) => PilotVessel.BurnSeconds(burn_dv, dv);
 
         static bool Finite(Vector3d v)
         {
