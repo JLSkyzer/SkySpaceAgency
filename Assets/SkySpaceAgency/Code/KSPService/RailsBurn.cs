@@ -5,6 +5,7 @@ using KSP.Game;
 using KSP.Sim;
 using KSP.Sim.DeltaV;
 using KSP.Sim.impl;
+using KSP.Sim.Maneuver;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2.KSPService
@@ -261,6 +262,24 @@ namespace K2D2.KSPService
             catch (Exception)
             {
                 return 0;
+            }
+        }
+
+        /// <summary>
+        /// Maneuver nodes on the vessel (ManeuverPlanComponent.GetNodes), -1 when unreadable, for
+        /// the entry log. In the IL only VesselComponent touches Orbiter.PatchedNBodyOrbits, and
+        /// the mod's pilots change nodes only once the burn is finished (rails already left).
+        /// </summary>
+        public int ManeuverNodeCount()
+        {
+            try
+            {
+                var plan = vessel?.Invoke()?.SimulationObject?.FindComponent<ManeuverPlanComponent>();
+                return plan?.GetNodes()?.Count ?? 0;
+            }
+            catch (Exception)
+            {
+                return -1;
             }
         }
 

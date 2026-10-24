@@ -36,6 +36,9 @@ namespace K2D2.Landing
 
         // Warp toward the planning time and the burn (the Land tab's auto-warp setting).
         public bool allow_warp = true;
+        // Rails warp during the burns (TargetOrbitBurn.allow_rails_warp). Off: landing and reentry
+        // burns stay at physics x4 at most (the user's rule, 2026-10-25).
+        public bool allow_rails_warp = false;
 
         readonly TargetOrbitBurn orbit_burn = new TargetOrbitBurn();
         readonly CircularizeBurn circularize = new CircularizeBurn();
@@ -121,12 +124,14 @@ namespace K2D2.Landing
                 if (plan.CircularizeAtPeriapsis)
                 {
                     circularize.allow_warp = allow_warp;
+                    circularize.allow_rails_warp = allow_rails_warp;
                     circularize.Start(atApoapsis: false);
                     active = circularize;
                 }
                 else
                 {
                     orbit_burn.allow_warp = allow_warp;
+                    orbit_burn.allow_rails_warp = allow_rails_warp;
                     if (plan.DoneDeltaV > 0)
                         orbit_burn.Start(plan.Target, plan.StartUT, plan.DoneDeltaV);
                     else

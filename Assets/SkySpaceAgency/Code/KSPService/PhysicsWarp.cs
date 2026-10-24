@@ -194,6 +194,19 @@ namespace K2D2.KSPService
         }
 
         /// <summary>
+        /// A frame of the burn on rails warp (RailsBurn), where Decide must not run (it drops any
+        /// rails index): the burn still owns the warp, so ReleaseIfAbandoned leaves it (index 0,
+        /// which also ends the rails warp) when the burn stops being updated.
+        /// </summary>
+        public void KeepAlive()
+        {
+            if (!Active)
+                return;
+            owner = this;
+            owner_frame = Time.frameCount;
+        }
+
+        /// <summary>
         /// Gives the warp back: index 0 first (instant), then the mode the player had before the
         /// burn (its own toggle at 1x, otherwise off). With
         /// restorePlayerMode false the mode is only switched off. Does nothing when the warp was

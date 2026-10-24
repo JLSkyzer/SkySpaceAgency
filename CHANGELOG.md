@@ -73,8 +73,14 @@
 
 ### Changed
 
+- **Long burns speed up with the game's own burn prediction** (rails warp x10 or x50, 2026-10-25; not yet flown in game): transfer, rendezvous, Lift circularization, Node tab and Orbit tab burns. Landing and reentry burns keep physics warp, x4 at most.
+  - With more than 2 minutes of burn left, aligned within 1° at full throttle for 1 s, the mod hands the middle of the burn to the game's rails warp, which flies a burn it computes once (fixed direction, the active stage's flow). It picks x50, or x10, so that the stretch lasts at least 15 s of real time.
+  - It does so only when the ideal direction stays within 5° of that fixed one until the end of the stretch, outside the atmosphere and above the game's surface envelope and more than 2 km from a rendezvous target.
+  - Within 2 frames the mod checks that the game's burn really runs. If not, it drops back to physics warp at once and does not try rails again for that burn.
+  - It leaves rails while 15 s of burn and 10 s of the stage's fuel are still left, so the end of the burn and any staging are flown in physics warp, closed loop. One rails stretch per burn.
+  - The log shows each step (`rails burn:` lines): entry and rate, the check, the reason for leaving, and the Δv applied on rails, planned against actual.
 - **Closed-loop burns run under physics time warp, x4 at most** (2026-10-25; not yet flown in game): transfer, rendezvous, Lift circularization, Node tab, Orbit tab and the landing deorbit and correction burns.
-  - The mod switches the game's physics warp mode on at 1x, then raises the warp to x2 or x4. The vessel keeps its real physics, so steering and throttle keep working. Rails warp is never used while the engines push.
+  - The mod switches the game's physics warp mode on at 1x, then raises the warp to x2 or x4. The vessel keeps its real physics, so steering and throttle keep working. Rails warp is never used while the engines push (since then, see the rails stretch of long burns above).
   - The warp follows the existing limits (5 % of the remaining Δv per frame, at least 10 s of real time left, 1x when not aligned), with x2 at most in the last 30 s of the burn. With auto-warp off, the mod only lowers the player's warp.
   - Rails warp during a burn, physics mode lost or a vessel leaving real physics drops the warp to 1x at once. When the burn ends, stops or fails, the warp goes back to 1x and the warp mode the player had before is restored.
   - The landing descent itself stays at 1x.

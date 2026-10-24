@@ -289,9 +289,11 @@ namespace K2D2.Rendezvous
             double seconds = EstimateBurnSeconds(dv);
             double start = double.IsNaN(seconds) ? centreUT : centreUT - seconds / 2;
             burn.stage_when_dry = true;                                  // the 4.1 staging guard
-            // The warp before the burn (to its turn lead) only: never within 2 km. The burn itself
-            // always stays at 1x (TargetOrbitBurn, 33d1aa9).
+            // No warp within 2 km, neither before the burn nor during it; no rails warp either
+            // (UpdateBurn keeps near_target current while the burn runs).
             burn.allow_warp = RendezvousFlight.CanWarp(distance);
+            burn.allow_rails_warp = RendezvousFlight.CanWarp(distance);
+            burn.near_target = !RendezvousFlight.CanWarp(distance);
             burn.Start(guidance, start);
             if (burn.failure_reason != null)
             {
@@ -310,6 +312,9 @@ namespace K2D2.Rendezvous
 
         void UpdateBurn()
         {
+            // Rails warp never within 2 km of the target; an unread distance counts as near.
+            burn.near_target = !(ReadStates(out var now_states, out _)
+                && RendezvousFlight.CanWarp((now_states.TargetR - now_states.OurR).magnitude));
             burn.Update();
             Status = $"{RendezvousFlight.StepName(burn_kind)}: {burn.status_line}";
             if (burn.failure_reason != null)

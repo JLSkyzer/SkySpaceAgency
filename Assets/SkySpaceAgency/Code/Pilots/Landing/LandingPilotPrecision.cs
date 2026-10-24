@@ -328,6 +328,8 @@ namespace K2D2.Landing
             double now = GeneralTools.Current_UT;
             current_executor.setController(precision_phase);
             precision_phase.allow_warp = settings.auto_warp.V;
+            // Precision and reentry phases (both start here): never rails warp while burning.
+            precision_phase.allow_rails_warp = false;
             phase_burned_start = burn_dV.burned_dV;
             switch (m)
             {
