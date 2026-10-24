@@ -613,16 +613,23 @@ namespace K2D2.Node
             }
         }
 
-        // Warp while burning: capped by BurnWarp.MaxBurnRate (5 % of the remaining Δv per frame,
-        // at least 10 s of real time left), 1x when not aligned or under 10 s of burn left. With
-        // allow_warp the warp is raised to the cap, otherwise the player's warp is only lowered.
+        // Thrust under time warp does not move the orbit in Redux 26w42c: in game on 2026-10-24,
+        // three transfer injections warped to x4 burned ~500 m/s of fuel each while the orbit
+        // stayed 100 x 100 km, and the closed loop aborted as "diverging". Until that changes,
+        // every burn is held at 1x (the player's warp included).
+        public const bool WarpWhileBurning = false;
+
+        // Warp while burning (off, see WarpWhileBurning): capped by BurnWarp.MaxBurnRate (5 % of
+        // the remaining Δv per frame, at least 10 s of real time left), 1x when not aligned or
+        // under 10 s of burn left. With allow_warp the warp is raised to the cap, otherwise the
+        // player's warp is only lowered.
         void ManageBurnWarp(double remainingDv, double accel, bool aligned)
         {
             int current = TimeWarpTools.CurrentRateIndex;
             double frame = Time.unscaledDeltaTime;
             double burnLeft = accel > 0 ? remainingDv / accel : double.PositiveInfinity;
             double cap = 1;
-            if (aligned && accel > 0 && burnLeft >= BurnWarp.MinRealBurnTime)
+            if (WarpWhileBurning && aligned && accel > 0 && burnLeft >= BurnWarp.MinRealBurnTime)
                 cap = BurnWarp.MaxBurnRate(remainingDv, accel, frame);
             if (warp_rates == null || warp_rates.Length == 0)
                 warp_rates = WarpRates();
