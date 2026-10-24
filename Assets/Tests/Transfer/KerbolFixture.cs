@@ -48,6 +48,25 @@ public static class KerbolFixture
             A = 68500000, E = 0, IncDeg = 0.025, LanDeg = 0, ArgPeDeg = 0, MeanAnomaly = 3.14 },
     };
 
+    // EXTERNAL DATA (KSP wiki, stock values from memory, not read from Redux): Kerbin's sidereal
+    // rotation period, and the KSC launch pad's latitude and longitude. Kerbin rotates prograde,
+    // about +z in this fixture's frame.
+    public const double KerbinSiderealRotationSeconds = 21549.425;
+    public const double KscLatitudeDeg = -0.0972;
+    public const double KscLongitudeDeg = -74.5577;
+
+    // Kerbin's angular velocity, in rad/s about +z (inverse = true flips it, for the sign tests).
+    public static Vector3d KerbinAngularVelocity(bool inverse = false) =>
+        new Vector3d(0, 0, (inverse ? -1 : 1) * 2 * Math.PI / KerbinSiderealRotationSeconds);
+
+    // A body-relative point on the surface at (latDeg, lonDeg), longitude measured from +x about +z.
+    public static Vector3d SurfacePoint(double radius, double latDeg, double lonDeg)
+    {
+        const double deg = Math.PI / 180;
+        double c = Math.Cos(latDeg * deg);
+        return radius * new Vector3d(c * Math.Cos(lonDeg * deg), c * Math.Sin(lonDeg * deg), Math.Sin(latDeg * deg));
+    }
+
     public static BodySystem Build(double epochUT = 0)
     {
         var nodes = new List<BodyNode>();
