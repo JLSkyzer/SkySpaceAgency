@@ -18,11 +18,13 @@ namespace K2D2.Node
 
         double dry_since = double.NaN;
         double last_staging = double.NaN;
+        double last_call = double.NaN;
 
         public void Reset()
         {
             dry_since = double.NaN;
             last_staging = double.NaN;
+            last_call = double.NaN;
         }
 
         /// <summary>
@@ -39,12 +41,19 @@ namespace K2D2.Node
 
         /// <summary>
         /// Called every burning frame. True when the caller should stage now; it then calls Staged
-        /// once it has. Time going back (a quickload) restarts the wait.
+        /// once it has. Time going back (a quickload), or a gap of more than DryDelay since the
+        /// previous call (the burn was not updated), restarts the wait.
         /// </summary>
         public bool ShouldStage(double ut, bool dry, bool deltaVLeft)
         {
             if (!double.IsNaN(last_staging) && ut < last_staging)
                 last_staging = double.NaN;
+            // Not called for more than DryDelay (the burn's updates were held, as while the game's
+            // own auto-staging runs): the dry time before that gap says nothing about now.
+            bool gap = !double.IsNaN(last_call) && ut - last_call > DryDelay + 1e-9;
+            last_call = ut;
+            if (gap)
+                dry_since = double.NaN;
             if (!dry || !deltaVLeft)
             {
                 dry_since = double.NaN;

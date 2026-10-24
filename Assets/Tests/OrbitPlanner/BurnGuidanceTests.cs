@@ -197,6 +197,19 @@ public class BurnGuidanceTests
         Assert.IsTrue(timer.ShouldStage(101.5, true, true));
     }
 
+    // The burn not updated for 1 s (the game's auto-staging holds the pilots' updates while it
+    // stages): the dry time before the gap does not count, so the mod does not stage right after.
+    [Test]
+    public void DryTimer_GapInTheUpdates_RestartsTheWait()
+    {
+        var timer = new DryStageTimer();
+        Assert.IsFalse(timer.ShouldStage(100.0, true, true));
+        Assert.IsFalse(timer.ShouldStage(100.2, true, true));
+        Assert.IsFalse(timer.ShouldStage(101.2, true, true), "1 s without an update: the wait restarts at 101.2");
+        Assert.IsFalse(timer.ShouldStage(101.5, true, true));
+        Assert.IsTrue(timer.ShouldStage(101.7, true, true));
+    }
+
     [Test]
     public void IsDry_ThrustCommandedButNoneMeasured()
     {

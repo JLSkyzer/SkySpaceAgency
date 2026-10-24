@@ -182,10 +182,17 @@ namespace K2D2.Node
         /// <summary>
         /// Burns along any guidance from startUT, with the same warp, alignment, ignition, guards
         /// and end as Start(TargetOrbit, …). The guidance is fixed at ignition when it is an
-        /// IFixedAtIgnition. Refused without a guidance, or when it gives no answer now.
+        /// IFixedAtIgnition. Refused without a guidance, or when it gives no answer now. An
+        /// OrbitTargetGuidance goes through Start(TargetOrbit, …) (its target is validated and logged).
         /// </summary>
         public void Start(IBurnGuidance g, double startUT, double doneDeltaV = DefaultDoneDeltaV)
         {
+            // A target orbit keeps its own validation and its "target ap … pe …" log text.
+            if (g is OrbitTargetGuidance orbitTarget)
+            {
+                Start(orbitTarget.Target, startUT, doneDeltaV);
+                return;
+            }
             target = default;
             guidance = g;
             DoneDeltaV = doneDeltaV;

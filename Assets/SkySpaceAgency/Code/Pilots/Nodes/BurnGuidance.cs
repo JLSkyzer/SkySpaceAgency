@@ -61,9 +61,9 @@ namespace K2D2.Node
     /// <summary>
     /// Toward a hyperbola leaving along a given excess velocity v∞ (an SOI escape): the velocity at
     /// the current r whose outgoing asymptote is vInf (Hyperbola.VelocityForAsymptote), on the
-    /// branch closest to the current velocity, minus v. vInf must be in the Zup frame of the burn
-    /// time: that frame follows the universe's rotation state, so a vInf planned long before is
-    /// rebuilt from a fresh snapshot before the burn (Task 9 finding).
+    /// branch closest to the current velocity, minus v. vInf must be in the Zup frame the burn is
+    /// flown in. That frame is fixed for one universe load (Task 9 review) but not across reloads,
+    /// so the transfer pilot builds vInf from a fresh snapshot just before the burn.
     /// </summary>
     public sealed class AsymptoteGuidance : IBurnGuidance
     {

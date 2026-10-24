@@ -60,21 +60,21 @@ namespace K2D2.Node
                 return Outcome.Pending;
             }
 
-            GameInstance game = GameManager.Instance?.Game;
-            if (game == null || vessel == null)
-                return Outcome.None;
-            if (game.UniverseModel.Time.IsPaused)
-                return Outcome.Pending;
-            TimeWarp warp = game.ViewController?.TimeWarp;
-            if (warp != null && warp.IsWarping && !warp.IsPhysicsTimeWarp)
-            {
-                // ActivateNextStage does nothing on rails.
-                TimeWarpTools.SetRateIndex(0, true);
-                return Outcome.Pending;
-            }
-
             try
             {
+                GameInstance game = GameManager.Instance?.Game;
+                if (game == null || vessel == null)
+                    return Outcome.None;
+                if (game.UniverseModel?.Time == null || game.UniverseModel.Time.IsPaused)
+                    return Outcome.Pending;
+                TimeWarp warp = game.ViewController?.TimeWarp;
+                if (warp != null && warp.IsWarping && !warp.IsPhysicsTimeWarp)
+                {
+                    // ActivateNextStage does nothing on rails.
+                    TimeWarpTools.SetRateIndex(0, true);
+                    return Outcome.Pending;
+                }
+
                 return Stage(vessel, ut, out failure);
             }
             catch (Exception e)
