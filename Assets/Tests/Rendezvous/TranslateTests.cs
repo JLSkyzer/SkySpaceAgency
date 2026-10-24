@@ -73,6 +73,49 @@ public class TranslateTests
     }
 
     [Test]
+    public void RcsProbe_WaitsForTheTurnToSettle()
+    {
+        var f = Frame();
+        var probe = new RcsProbeSequence();
+        var vel = Vector3d.zero;
+        double t = 0;
+        for (int k = 0; k < 10000 && !probe.Done; k++)
+        {
+            double rate = t < 3 ? 2.0 : 0.1;   // °/s: still turning for 3 s
+            float[] u = probe.Step(t, vel, f, rate);
+            if (t < 3) CollectionAssert.AreEqual(new[] { 0f, 0f, 0f }, u, "no pulse while turning");
+            vel += RcsAccel(f, u) * Dt;
+            t += Dt;
+        }
+        Assert.IsTrue(probe.Mapping.Ok, probe.Mapping.Refusal);
+        Assert.IsFalse(probe.StartedUnsettled);
+        CollectionAssert.AreEqual(SimAxis, probe.Mapping.AxisOf);
+    }
+
+    [Test]
+    public void RcsProbe_FrameTurningDuringTheProbe_EachResponseInItsOwnFrame()
+    {
+        // The port frame turns 10°/s about its forward axis: 50° between X's pulse and the end.
+        // X moves the vessel along up, so read in the last frame it would be 50° off its axis.
+        var f0 = Frame();
+        var probe = new RcsProbeSequence();
+        var vel = Vector3d.zero;
+        double t = 0;
+        PortFrame f = f0;
+        for (int k = 0; k < 10000 && !probe.Done; k++)
+        {
+            double a = 10 * Deg * t;
+            f = PortFrame.From(f0.Forward, EngineSim.Rot(f0.Up, f0.Forward, a));
+            float[] u = probe.Step(t, vel, f);
+            vel += RcsAccel(f, u) * Dt;
+            t += Dt;
+        }
+        Assert.IsTrue(probe.Mapping.Ok, probe.Mapping.Refusal);
+        CollectionAssert.AreEqual(SimAxis, probe.Mapping.AxisOf);
+        CollectionAssert.AreEqual(SimSign, probe.Mapping.Sign);
+    }
+
+    [Test]
     public void RcsProbe_DeadInput_MarkedDead()
     {
         var m = Probe(Frame(), out _, zDead: true);
@@ -161,6 +204,7 @@ public class TranslateTests
         public Vector3d Vel;
         public double T;
         public double RateDeg;
+        public Vector3d Omega;   // rad/s, the last step's turn
 
         public Vector3d ThrustWorld => Port.ToWorld(ThrustLocal);
 
@@ -169,6 +213,7 @@ public class TranslateTests
             if (throttle > 0) throttle = Math.Max(throttle, MinThrottle);
             Vel += ThrustWorld * (MaxAccel * Math.Min(1, throttle) * Dt);
             RateDeg = 0;
+            Omega = Vector3d.zero;
             if (aimAxis.sqrMagnitude > 0)
             {
                 var want = PortFrame.From(aimAxis, aimRoll.sqrMagnitude > 0 ? aimRoll : Port.Up);
@@ -182,12 +227,13 @@ public class TranslateTests
                     k = k.normalized;
                     Port = PortFrame.From(Rot(Port.Forward, k, step), Rot(Port.Up, k, step));
                     RateDeg = step / Dt / Deg;
+                    Omega = k * (step / Dt);
                 }
             }
             T += Dt;
         }
 
-        static Vector3d Rot(Vector3d v, Vector3d k, double a) =>
+        public static Vector3d Rot(Vector3d v, Vector3d k, double a) =>
             v * Math.Cos(a) + Vector3d.Cross(k, v) * Math.Sin(a) + k * (Vector3d.Dot(k, v) * (1 - Math.Cos(a)));
     }
 
@@ -283,9 +329,76 @@ public class TranslateTests
 
         var limits = DockLimits.MainEngine(0.9, 0.5, 0, 5, 1.25);
         DockLimits wide = MainEngineSequence.ForDeadband(limits, seq.WorstResidual, out string note);
-        Assert.Greater(wide.ContactLateral, limits.ContactLateral);
-        Assert.LessOrEqual(wide.ContactLateral, 0.5);
+        Assert.AreEqual(limits.ContactLateral, wide.ContactLateral, "the contact gate never widens");
+        Assert.Greater(wide.HoldTolerance, limits.HoldTolerance);
+        Assert.GreaterOrEqual(wide.HoldSpeed, 3 * seq.WorstResidual - 1e-12);
         Assert.IsNotNull(note);
+        // 30 mm/s: a 10 m coast at 0.3 m/s drifts far more than the 0.25 m the port captures.
+        Assert.IsNotNull(MainEngineSequence.DeadbandRefusal(limits, seq.WorstResidual));
+    }
+
+    [Test]
+    public void ForDeadband_SmallPort_ContactGateKeptAndRefusalAtTheRightPrecision()
+    {
+        // A 0.625 m port captures within 0.125 m: a 33 s coast allows 2 × 0.125 / 33 = 7.5 mm/s.
+        var limits = DockLimits.MainEngine(0.9, 0.5, 0, 5, 0.625);
+        Assert.AreEqual(DockLimits.ContactLateralFor(0.625), limits.ContactLateral);
+        DockLimits wide = MainEngineSequence.ForDeadband(limits, 0.007, out _);
+        Assert.AreEqual(DockLimits.ContactLateralFor(0.625), wide.ContactLateral);
+        Assert.Greater(wide.HoldTolerance, limits.HoldTolerance);
+        Assert.IsNull(MainEngineSequence.DeadbandRefusal(limits, 0.007));
+        Assert.IsNotNull(MainEngineSequence.DeadbandRefusal(limits, 0.008));
+        // The assumed precision passes the strictest gate (unknown port size, 0.1 m).
+        Assert.IsNull(MainEngineSequence.DeadbandRefusal(DockLimits.MainEngine(0.9, 0.5, 0, 5), MainEngineSequence.AssumedDeadband));
+        Assert.IsNull(MainEngineSequence.DeadbandRefusal(DockLimits.Rcs(0.9, 0.5, 0, 5, 0.625), 1.0), "RCS limits are not the engine's");
+    }
+
+    // The port attitude follows a target turning at 1°/s (the most the docking accepts): our
+    // inertial rate never drops under 0.5°/s, the rate relative to the port attitude does.
+    static MainEngineSequence FlyTurningTarget(out EngineSim sim, out Vector3d wantedForward)
+    {
+        sim = new EngineSim();
+        var seq = new MainEngineSequence();
+        Vector3d f0 = sim.Port.Forward, spinAxis = sim.Port.Up;
+        Vector3d omegaTarget = spinAxis * (1.0 * Deg);
+        var wanted = 0.1 * sim.Port.Right;
+        wantedForward = f0;
+        for (int k = 0; k < (int)(200 / Dt) && seq.Failure == null; k++)
+        {
+            wantedForward = EngineSim.Rot(f0, spinAxis, 1.0 * Deg * sim.T);
+            Vector3d targetAxis = -wantedForward;
+            double rateToPort = MainEngineSequence.RelativeRateDeg(sim.Omega, targetAxis, Vector3d.Cross(omegaTarget, targetAxis));
+            EngineStep s = seq.Step(sim.T, sim.Vel, wanted, sim.ThrustWorld, sim.Port.Forward, wantedForward,
+                sim.RateDeg, sim.MaxAccel, rateToPort);
+            Vector3d aimAxis = wantedForward, aimRoll = Vector3d.zero;
+            if (s.AimBurn)
+                AttitudeAim.BurnPortAxes(sim.Port, sim.ThrustLocal, s.BurnDir, out aimAxis, out aimRoll);
+            sim.Apply(s.Throttle, aimAxis, aimRoll);
+        }
+        return seq;
+    }
+
+    [Test]
+    public void Engine_TargetTurning1DegPerSec_TurnsBackAndSettles()
+    {
+        var seq = FlyTurningTarget(out var sim, out var wantedForward);
+        Assert.IsNull(seq.Failure);
+        Assert.AreEqual(1, seq.Burns);
+        Assert.AreEqual(EnginePhase.Idle, seq.Phase);
+        Assert.Greater(Vector3d.Dot(sim.Port.Forward, wantedForward), Math.Cos(2 * Deg), "following the port attitude");
+
+        // Following the target, our inertial rate stays at 1°/s: over the 0.5°/s an inertial
+        // check needs, which is why the turn back is judged on the relative rate.
+        Assert.AreEqual(1.0, sim.RateDeg, 0.05);
+    }
+
+    [Test]
+    public void RelativeRate_FollowingTheTargetIsZero()
+    {
+        var a = new Vector3d(0, 0, 1);
+        var w = new Vector3d(0.01, 0.02, 0);   // rad/s, perpendicular to a
+        Assert.Less(MainEngineSequence.RelativeRateDeg(w, a, Vector3d.Cross(w, a)), 1e-9);
+        Assert.AreEqual(w.magnitude * 180 / Math.PI, MainEngineSequence.RelativeRateDeg(w, a, Vector3d.zero), 1e-9);
     }
 
     [Test]

@@ -88,13 +88,18 @@ namespace K2D2.Rendezvous
     // measured; a pulse at −1 of the same length cancels it (so the vessel ends at rest), and a
     // settle. Three measuring pulses in all. Then RcsMapping.FromResponses, and each input's
     // acceleration (|Δv| / time on) for the allocation's gain.
+    // It starts once our turn rate is under SettledRateDeg (or after SettleTimeout), and each
+    // response is read in the port frame of its own pulse, then expressed in the last one: a
+    // vessel still turning a little does not mix the axes.
     public class RcsProbeSequence
     {
         public const double PulseSeconds = 0.5;
         public const double SettleSeconds = 0.5;
         public const double MinResponse = 0.002;   // m/s, the velocity read's noise floor (assumed)
+        public const double SettledRateDeg = 0.5;  // °/s, the attitude is held
+        public const double SettleTimeout = 30;    // s, start anyway after this (StartedUnsettled)
 
-        enum Part { Pulse, Settle, Cancel, CancelSettle }
+        enum Part { WaitSettled, Pulse, Settle, Cancel, CancelSettle }
 
         int input;
         Part part;
@@ -102,22 +107,32 @@ namespace K2D2.Rendezvous
         double onTime;
         Vector3d before;
         readonly Vector3d[] dv = new Vector3d[3];
+        readonly Vector3d[] dvLocal = new Vector3d[3];   // each response in its own pulse's port frame
 
         public bool Done { get; private set; }
+        public bool StartedUnsettled { get; private set; }   // SettleTimeout ran out
         public RcsMapping Mapping { get; private set; }
         public double[] Accel { get; } = new double[3];
         public Vector3d[] Responses => dv;
 
         // t: now; relVel: our velocity relative to the target (its change is our Δv); frame: our
-        // port now. Returns the inputs (X, Y, Z) to apply until the next call.
-        public float[] Step(double t, Vector3d relVel, PortFrame frame)
+        // port now; angularRateDeg: our turn rate, °/s. Returns the inputs (X, Y, Z) to apply
+        // until the next call.
+        public float[] Step(double t, Vector3d relVel, PortFrame frame, double angularRateDeg = 0)
         {
             var outIn = new float[3];
             if (Done) return outIn;
-            if (double.IsNaN(partStart)) { partStart = t; before = relVel; part = Part.Pulse; }
+            if (double.IsNaN(partStart)) { partStart = t; part = Part.WaitSettled; }
             double el = t - partStart;
             switch (part)
             {
+                case Part.WaitSettled:
+                    if (!(angularRateDeg <= SettledRateDeg) && el < SettleTimeout) return outIn;
+                    StartedUnsettled = !(angularRateDeg <= SettledRateDeg);
+                    before = relVel;
+                    Next(Part.Pulse, t);
+                    outIn[input] = 1;
+                    return outIn;
                 case Part.Pulse:
                     if (el < PulseSeconds) { outIn[input] = 1; return outIn; }
                     onTime = el;
@@ -126,6 +141,7 @@ namespace K2D2.Rendezvous
                 case Part.Settle:
                     if (el < SettleSeconds) return outIn;
                     dv[input] = relVel - before;
+                    dvLocal[input] = frame.ToLocal(dv[input]);
                     Accel[input] = onTime > 0 ? dv[input].magnitude / onTime : 0;
                     Next(Part.Cancel, t);
                     outIn[input] = -1;
@@ -144,7 +160,9 @@ namespace K2D2.Rendezvous
                         return outIn;
                     }
                     Done = true;
-                    Mapping = RcsMapping.FromResponses(dv[0], dv[1], dv[2], frame.Right, frame.Up, frame.Forward, MinResponse);
+                    // Each response re-expressed in the last frame, as if all were measured there.
+                    Mapping = RcsMapping.FromResponses(frame.ToWorld(dvLocal[0]), frame.ToWorld(dvLocal[1]),
+                        frame.ToWorld(dvLocal[2]), frame.Right, frame.Up, frame.Forward, MinResponse);
                     for (int i = 0; i < 3; i++)
                         if (Mapping.Dead[i]) Accel[i] = 0;
                     return outIn;
@@ -287,7 +305,7 @@ namespace K2D2.Rendezvous
         public const double FinishTolerance = 0.25 * AssumedDeadband;
         public const double AlignDeg = 1.0;           // thrust on the burn within this to start
         public const double BurnAbortDeg = 5.0;       // off by more while burning: cut, turn again
-        public const double SettledRateDeg = 0.5;     // °/s, the turn has stopped
+        public const double SettledRateDeg = 0.5;     // °/s, the turn has stopped (relative to its aim)
         public const double TurnTimeout = 90;         // s, one turn (a half turn at 2°/s)
         public const double BurnMargin = 10;          // s over the ideal burn time before giving up
 
@@ -306,14 +324,18 @@ namespace K2D2.Rendezvous
         Vector3d burnTarget, burnDir, burnStartVel;
 
         // thrustDir: the engine's thrust now, inertial; portAxis: our port axis now; wantedForward:
-        // the port axis to turn back to (zero: none); angularRateDeg: our turn rate, °/s.
+        // the port axis to turn back to (zero: none); angularRateDeg: our turn rate, °/s, inertial
+        // (the burn direction is inertial); rateToPortDeg: our turn rate relative to the port
+        // attitude's own turn (RelativeRateDeg: it follows the target), NaN = angularRateDeg.
         public EngineStep Step(double t, Vector3d relVel, Vector3d wantedRelVel, Vector3d thrustDir,
-            Vector3d portAxis, Vector3d wantedForward, double angularRateDeg, double maxAccel)
+            Vector3d portAxis, Vector3d wantedForward, double angularRateDeg, double maxAccel,
+            double rateToPortDeg = double.NaN)
         {
             var s = new EngineStep { BurnDir = burnDir };
             if (Failure != null) return s;
             if (!(maxAccel > 0)) { Failure = "no active engine to translate with"; return s; }
             bool settled = angularRateDeg <= SettledRateDeg;
+            bool settledOnPort = (double.IsNaN(rateToPortDeg) ? angularRateDeg : rateToPortDeg) <= SettledRateDeg;
 
             switch (Phase)
             {
@@ -348,7 +370,7 @@ namespace K2D2.Rendezvous
                     }
                     return Burn(t, relVel, maxAccel, s, starting: false);
                 case EnginePhase.TurningBack:
-                    if (wantedForward.sqrMagnitude == 0 || (Angle(portAxis, wantedForward) <= 2 * AlignDeg && settled))
+                    if (wantedForward.sqrMagnitude == 0 || (Angle(portAxis, wantedForward) <= 2 * AlignDeg && settledOnPort))
                     {
                         Enter(EnginePhase.Idle, t);
                         return s;
@@ -384,6 +406,15 @@ namespace K2D2.Rendezvous
 
         void Enter(EnginePhase p, double t) { Phase = p; phaseStart = t; }
 
+        // Our turn rate relative to the port attitude we follow, °/s: our angular velocity minus
+        // the target port axis's own (a × ȧ, from DockState.TargetAxisRate). The target's spin
+        // about that axis is not in it; the docking refuses it above 1°/s.
+        public static double RelativeRateDeg(Vector3d ourOmega, Vector3d targetAxis, Vector3d targetAxisRate)
+        {
+            Vector3d a = targetAxis.sqrMagnitude > 0 ? targetAxis.normalized : Vector3d.zero;
+            return (ourOmega - Vector3d.Cross(a, targetAxisRate)).magnitude * 180 / Math.PI;
+        }
+
         static double Angle(Vector3d a, Vector3d b)
         {
             if (a.sqrMagnitude == 0 || b.sqrMagnitude == 0) return 180;
@@ -391,24 +422,38 @@ namespace K2D2.Rendezvous
             return Math.Acos(Math.Max(-1, Math.Min(1, c))) * 180 / Math.PI;
         }
 
-        // The approach was tuned for AssumedDeadband. A coarser engine leaves a larger residual
-        // velocity at the start of the final coast, so the lateral tolerance there (ContactLateral)
-        // scales with the precision reached, up to 0.5 m (ContactLateralFor's own cap; beyond it
-        // the port would not capture). Only main-engine limits change. note: null when unchanged.
+        // The approach was tuned for AssumedDeadband. A coarser engine cannot settle as finely,
+        // so the hold tolerances widen with the precision reached (HoldTolerance up to 3 ×,
+        // HoldSpeed to 3 × the deadband). The contact gate (ContactLateral, what the port
+        // captures) never widens: a coarse engine then backs off at the coast check, or is
+        // refused (DeadbandRefusal). Only main-engine limits change. note: null when unchanged.
         public static DockLimits ForDeadband(DockLimits limits, double achieved, out string note)
         {
             note = null;
             if (!limits.MainEngineMode || !(achieved > AssumedDeadband)) return limits;
             double scale = achieved / AssumedDeadband;
             var wide = limits;
-            wide.ContactLateral = Math.Min(0.5, limits.ContactLateral * scale);
             wide.HoldTolerance = limits.HoldTolerance * Math.Min(scale, 3);
             wide.HoldSpeed = Math.Max(limits.HoldSpeed, 3 * achieved);
             note = $"main-engine deadband {achieved:n4} m/s, {scale:n1} × the {AssumedDeadband:n3} m/s assumed: " +
-                $"contact tolerance {limits.ContactLateral:n2} → {wide.ContactLateral:n2} m, hold tolerance " +
-                $"{limits.HoldTolerance:n1} → {wide.HoldTolerance:n1} m, hold speed {limits.HoldSpeed:n2} → {wide.HoldSpeed:n2} m/s" +
-                (limits.ContactLateral * scale > 0.5 ? " (capped: the coast may drift off the port and back off)" : "");
+                $"hold tolerance {limits.HoldTolerance:n1} → {wide.HoldTolerance:n1} m, hold speed " +
+                $"{limits.HoldSpeed:n2} → {wide.HoldSpeed:n2} m/s, contact tolerance kept at {limits.ContactLateral:n2} m";
             return wide;
+        }
+
+        // Refuses the main engine when it is too coarse for the port. The coast (CoastDistance
+        // at FinalSpeedMin) starts only when the lateral drift it predicts at contact is within
+        // ContactLateral, i.e. a drift rate within ContactLateral / coast time. A trim lands about
+        // uniformly within ± the deadband, so past twice that rate fewer than half the trims
+        // would pass: refused. null when the engine can make it (RCS limits: always null).
+        public static string DeadbandRefusal(DockLimits limits, double achieved)
+        {
+            if (!limits.MainEngineMode || !(achieved > 0) || !(limits.FinalSpeedMin > 0)) return null;
+            double coast = DockLimits.CoastDistance / limits.FinalSpeedMin;
+            double allowed = 2 * limits.ContactLateral / coast;
+            if (achieved <= allowed) return null;
+            return $"the main engine is too coarse for this port: {achieved:n4} m/s reached, " +
+                $"{allowed:n4} m/s needed to coast {DockLimits.CoastDistance:n0} m within {limits.ContactLateral:n2} m of the axis";
         }
     }
 

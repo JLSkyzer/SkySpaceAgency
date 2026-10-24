@@ -55,9 +55,19 @@ namespace K2D2.Rendezvous
         public double AchievedDeadband =>
             Math.Max(engineProbe != null && engineProbe.Ok ? engineProbe.Residual : 0, engine?.WorstResidual ?? 0);
 
-        // The guidance limits, widened when the main engine is coarser than the approach assumes.
+        // The guidance limits: the hold tolerances widened when the main engine is coarser than
+        // the approach assumes, the contact gate never. An engine too coarse for the port is a
+        // refusal: Translate fails (failure_reason) and the limits come back unchanged.
         public DockLimits Widen(DockLimits limits)
         {
+            string refusal = MainEngineSequence.DeadbandRefusal(limits, AchievedDeadband);
+            if (refusal != null)
+            {
+                Mode = TranslateMode.Refused;
+                ModeNote = refusal;
+                Refuse();
+                return limits;
+            }
             DockLimits wide = MainEngineSequence.ForDeadband(limits, AchievedDeadband, out string note);
             if (note != null) logger.LogInfo($"[Docking] {note}");
             return wide;
@@ -80,6 +90,7 @@ namespace K2D2.Rendezvous
             ModeNote = null;
             burn_dV.Compute_Thrust();
             bool engineActive = burn_dV.active_dv > 0;
+            status_line = "Probing the thrusters...";
             if (rcsUsable)
                 stage = Stage.ProbeRcs;
             else
@@ -96,7 +107,6 @@ namespace K2D2.Rendezvous
             }
             logger.LogInfo($"[Docking] translate: probing, RCS {(rcsUsable ? "usable" : "unusable")}, " +
                 $"active engine {(engineActive ? $"{burn_dV.active_dv:n2} m/s²" : "none")}");
-            status_line = "Probing the thrusters...";
         }
 
         public void SetInput(DockState s, DockCommand c)
@@ -129,6 +139,22 @@ namespace K2D2.Rendezvous
         {
             // Stopped, refused or failed: the inputs were zeroed then, and are the player's again.
             if (current_vessel == null || stage == Stage.Idle || finished) return;
+            try
+            {
+                Tick();
+            }
+            catch (Exception e)
+            {
+                // Logged once: the controller is finished after this, and Update returns above.
+                logger.LogWarning($"[Docking] translate: {e.GetType().Name}: {e.Message}\n{e.StackTrace}");
+                stage = Stage.Idle;
+                try { Zero(); } catch (Exception) { }
+                Fail($"Translate stopped on an error: {e.GetType().Name}");
+            }
+        }
+
+        void Tick()
+        {
             bool had = fresh;
             fresh = false;
             var frame = PortFrame.From(state.OurAxis, state.OurRoll);
@@ -154,10 +180,13 @@ namespace K2D2.Rendezvous
         {
             Hold(celestial);
             current_vessel.SetThrottle(0);
-            float[] u = rcsProbe.Step(state.Time, state.RelVel, frame);
+            double rate = RendezvousSnapshot.AngularVelocity(current_vessel.VesselComponent, celestial).magnitude * 180 / Math.PI;
+            float[] u = rcsProbe.Step(state.Time, state.RelVel, frame, rate);
             SetRcs(u[0], u[1], u[2]);
             if (!rcsProbe.Done) return;
 
+            if (rcsProbe.StartedUnsettled)
+                logger.LogInfo($"[Docking] rcs probe started still turning after {RcsProbeSequence.SettleTimeout:n0} s");
             Mapping = rcsProbe.Mapping;
             rcsAccel = rcsProbe.Accel;
             logger.LogInfo($"[Docking] rcs mapping {rcsProbe.Describe()}");
@@ -233,9 +262,11 @@ namespace K2D2.Rendezvous
             if (engine != null && UsesEngine)
             {
                 Vector3d wanted = Mode == TranslateMode.MainEngine ? command.WantedRelVel : state.RelVel + rcs.Uncovered;
-                double rate = RendezvousSnapshot.AngularVelocity(current_vessel.VesselComponent, celestial).magnitude * 180 / Math.PI;
+                Vector3d omega = RendezvousSnapshot.AngularVelocity(current_vessel.VesselComponent, celestial);
+                double rate = omega.magnitude * 180 / Math.PI;
+                double rateToPort = MainEngineSequence.RelativeRateDeg(omega, state.TargetAxis, state.TargetAxisRate);
                 EngineStep step = engine.Step(state.Time, state.RelVel, wanted, frame.ToWorld(thrustLocal),
-                    frame.Forward, command.Forward, rate, maxAccel);
+                    frame.Forward, command.Forward, rate, maxAccel, rateToPort);
                 if (engine.Failure != null)
                 {
                     logger.LogInfo($"[Docking] main engine: {engine.Failure}");
