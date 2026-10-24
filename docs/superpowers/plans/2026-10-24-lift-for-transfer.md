@@ -127,7 +127,7 @@
 - Test: `Assets/Tests/Transfer/PlaneSteeringTests.cs`
 
 **Interfaces:**
-- Produces `static double PlaneSteering.HeadingCorrectionDeg(Vector3d r, Vector3d v, Vector3d targetPlaneNormal, double maxCorrectionDeg = 10)`: the heading change that turns the current velocity toward the target plane. It is proportional to the out-of-plane angle of the velocity and to the vessel's position relative to the node, and it is clamped.
+- Produces `static double PlaneSteering.HeadingCorrectionDeg(Vector3d r, Vector3d v, Vector3d targetPlaneNormal, double azimuthDeg, double orbitalSpeed, double maxCorrectionDeg = 10)` (signature changed during implementation: an angle-only law saturates at liftoff; accepted 2026-10-24): the heading change that turns the current velocity toward the target plane. It is proportional to the out-of-plane angle of the velocity and to the vessel's position relative to the node, and it is clamped.
 - Produces `static double PlaneSteering.PlaneErrorDeg(Vector3d r, Vector3d v, Vector3d targetPlaneNormal)`.
 
 **Use in game:** while the goal is not Orbit, `Ascent.cs` uses the solver's azimuth instead of `settings.heading`, plus this correction. The existing `heading_correction` (pad drift) stays off in that case (Review Focus 5). Log `[Lift] plane error {x}°` every 10 s.
