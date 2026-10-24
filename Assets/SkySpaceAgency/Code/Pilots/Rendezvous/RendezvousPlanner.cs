@@ -50,7 +50,12 @@ namespace K2D2.Rendezvous
         const int DepartureSamplesPerPeriod = 24;
         const int TofSamples = 48;                        // per revolution count
         const int RefinedCandidates = 8;
-        const double ArrivalTolerance = 1;               // m: a Lambert orbit must pass this close to the aim
+        // A Lambert orbit must pass this close to the aim: a share of the aim's radius, at least 1 m.
+        const double ArrivalToleranceShare = 1e-6, ArrivalToleranceFloor = 1;
+        // Above this relative inclination the target goes the other way round: refused.
+        public const double RetrogradeLimitDeg = 179;
+        // Intercepts within this much Δv (m/s) count as a tie: the earlier departure wins.
+        const double TieDeltaV = 1e-3;
 
         public static RvPlan Plan(Vector3d rV, Vector3d vV, Vector3d rT, Vector3d vT, double mu, double ut0,
             double bodyLowOrbitRadius, double standoff = 200, int maxRevolutions = 10, CancellationToken ct = default)
@@ -87,6 +92,8 @@ namespace K2D2.Rendezvous
             Vector3d r0 = rV, v0 = vV;
             double utStart = ut0;
             double relIncl = Angle(elV.AngularMomentum, elT.AngularMomentum);
+            if (relIncl > RetrogradeLimitDeg * Math.PI / 180)
+                return Refuse(plan, Text($"The target orbits the other way round ({relIncl * 180 / Math.PI:F1}° relative inclination): a rendezvous is not planned"));
             if (relIncl > PlaneMatchThresholdDeg * Math.PI / 180)
             {
                 var pm = PlaneMatch(rV, vV, mu, ut0, elV, elT, relIncl, out r0, out v0);
@@ -98,10 +105,12 @@ namespace K2D2.Rendezvous
             var search = new Search(r0, v0, utStart, rT, vT, ut0, mu, elT, bodyLowOrbitRadius, standoff);
             var best = search.Run(maxRevolutions, elV.Period, ct);
             if (best == null)
-                return Refuse(plan, Text($"No intercept within {maxRevolutions} revolution(s) keeps the periapsis above {bodyLowOrbitRadius / 1e3:F0} km"));
+                return Refuse(plan, Text($"No intercept within {maxRevolutions} full revolution(s) keeps the periapsis above {bodyLowOrbitRadius / 1e3:F0} km"));
 
             double arrival = best.T + best.Tof;
             bool lower = best.TransferSma < elT.SemiMajorAxis;
+            // The orbits really flown on the intercept arc: its full revolutions plus the fraction.
+            double orbits = best.Tof / (2 * Math.PI * Math.Sqrt(Math.Pow(best.TransferSma, 3) / mu));
             plan.Steps.Add(new RvStep
             {
                 Kind = best.Rev > 0 ? RvStepKind.Phasing : RvStepKind.Intercept,
@@ -109,7 +118,7 @@ namespace K2D2.Rendezvous
                 DeltaV = best.Dv1,
                 DeltaVMagnitude = best.Dv1.magnitude,
                 Explanation = best.Rev > 0
-                    ? Text($"Phasing: {best.Rev} revolution(s) on a {(lower ? "lower orbit to catch up with" : "higher orbit to fall back behind")} the target, then meet it {standoff:F0} m short of it")
+                    ? Text($"Phasing: {orbits:F1} orbits on a {(lower ? "lower orbit to catch up with" : "higher orbit to fall back behind")} the target, then meet it {standoff:F0} m short of it")
                     : Text($"Intercept: meet the target {standoff:F0} m short of it in {best.Tof / 60:F0} min"),
             });
             plan.Steps.Add(new RvStep
@@ -273,7 +282,8 @@ namespace K2D2.Rendezvous
                     }
                     var candidate = new Candidate { Rev = cell.rev, LongBranch = cell.longBranch };
                     candidate.Cost = Evaluate(x, y, cell.rev, cell.longBranch, candidate);
-                    if (!double.IsInfinity(candidate.Cost) && (best == null || candidate.Cost < best.Cost))
+                    if (!double.IsInfinity(candidate.Cost) && (best == null || candidate.Cost < best.Cost - TieDeltaV
+                        || (candidate.Cost <= best.Cost + TieDeltaV && candidate.T < best.T)))
                         best = candidate;
                 }
                 return best;
@@ -313,15 +323,28 @@ namespace K2D2.Rendezvous
                 // Lambert used to report wrong multi-revolution roots near a transfer angle of 0
                 // (fixed 2026-10-24); this check costs one propagation, about 4 % of a Lambert solve.
                 KeplerPropagator.Propagate(rd, v1, mu, tof, out var rEnd, out var v2);
-                if (!((rEnd - aim).magnitude <= ArrivalTolerance))
+                if (!((rEnd - aim).magnitude <= Math.Max(ArrivalToleranceFloor, ArrivalToleranceShare * aim.magnitude)))
                     return double.PositiveInfinity;
                 var el = OrbitMath.Elements(rd, v1, mu);
-                if (!(el.PeriapsisRadius >= low))
+                if (!(LowestRadius(rd, aim, el, rev) >= low))
                     return double.PositiveInfinity;
                 legs = (v1 - vd, va - v2, el.SemiMajorAxis);
                 double cost = legs.dv1.magnitude + legs.dv2.magnitude;
                 return double.IsNaN(cost) ? double.PositiveInfinity : cost;
             }
+        }
+
+        // The lowest radius flown from rd to rEnd: the periapsis when the arc passes through it (always
+        // with a full revolution), else the lower end of the arc.
+        public static double LowestRadius(Vector3d rd, Vector3d rEnd, OrbitElements el, int rev)
+        {
+            if (rev > 0 || el.Eccentricity < 1e-9)
+                return el.PeriapsisRadius;
+            double nu1 = OrbitMath.PlaneAngle(el.EccentricityVector, rd, el.AngularMomentum);
+            double sweep = OrbitMath.PlaneAngle(rd, rEnd, el.AngularMomentum);
+            return nu1 + sweep >= 2 * Math.PI || nu1 == 0
+                ? el.PeriapsisRadius
+                : Math.Min(rd.magnitude, rEnd.magnitude);
         }
 
         static string Text(FormattableString text) => text.ToString(CultureInfo.InvariantCulture);

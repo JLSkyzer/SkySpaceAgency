@@ -141,7 +141,8 @@ public class RendezvousPlannerTests
             Assert.That(IsFinite(s.DeltaV), Is.True, $"{s.Kind} Δv");
             Assert.That(double.IsNaN(s.UT) || double.IsInfinity(s.UT), Is.False, $"{s.Kind} UT");
         }
-        Assert.That(plan.TotalDeltaV, Is.LessThan(5));
+        double analytic = CheapestPhasing(0.3, LowOrbit, 10, out _);
+        Assert.That(plan.TotalDeltaV, Is.LessThan(analytic + 0.6), $"analytic cheapest {analytic:F2} m/s");
         TestContext.WriteLine($"phase 0.3°: Δv {plan.TotalDeltaV:F2} m/s, {plan.Revolutions} rev, "
             + $"arrival in {(plan.ArrivalUT - Ut0) / 3600:F2} h");
     }
@@ -227,6 +228,62 @@ public class RendezvousPlannerTests
         Assert.That(miss, Is.LessThanOrEqualTo(201), "distance at arrival");
         Assert.That(miss, Is.GreaterThan(150), "the stand-off is kept");
         Assert.That(speed, Is.LessThan(1), "relative speed after the brake");
+    }
+
+    [Test]
+    public void FarFrom700km_InterceptSimulated()
+    {
+        // 3,000 km and 3,400 km around Kerbin: the arrival check scales with the orbit.
+        Circular(3000e3, 0, 0, 0, out var rV, out var vV);
+        Circular(3400e3, 120, 0.5, 15, out var rT, out var vT);
+        var plan = RendezvousPlanner.Plan(rV, vV, rT, vT, Mu, Ut0, LowOrbit);
+        Assert.That(plan.Ok, Is.True, plan.Refusal);
+        AssertUtOrder(plan);
+        Fly(plan, rV, vV, out var rEnd, out var vEnd);
+        KeplerPropagator.Propagate(rT, vT, Mu, plan.ArrivalUT - Ut0, out var rTEnd, out var vTEnd);
+        double miss = (rEnd - rTEnd).magnitude;
+        TestContext.WriteLine($"3000 -> 3400 km: Δv {plan.TotalDeltaV:F2} m/s, {plan.Revolutions} rev, miss {miss:F2} m, "
+            + $"relative {(vEnd - vTEnd).magnitude:F4} m/s");
+        Assert.That(miss, Is.InRange(150, 205));
+        Assert.That((vEnd - vTEnd).magnitude, Is.LessThan(1));
+    }
+
+    [Test]
+    public void RetrogradeTarget_RefusedWithoutNaN()
+    {
+        Circular(R, 0, 0, 0, out var rV, out var vV);
+        Circular(R, 90, 180, 0, out var rT, out var vT);
+        var plan = RendezvousPlanner.Plan(rV, vV, rT, vT, Mu, Ut0, LowOrbit);
+        Assert.That(plan.Ok, Is.False);
+        Assert.That(plan.Refusal, Does.Contain("other way round"));
+        Assert.That(plan.Refusal, Does.Not.Contain("NaN"));
+    }
+
+    [Test]
+    public void PhasingExplanation_CountsTheOrbitsFlown()
+    {
+        var plan = PlanSameOrbit(30);
+        Assert.That(plan.Ok, Is.True, plan.Refusal);
+        var step = plan.Steps[0];
+        // The arc flies its full revolutions plus a fraction: "10.x orbits", never "10 revolution(s)".
+        Assert.That(step.Explanation, Does.Match(@"Phasing: \d+\.\d orbits"));
+        Assert.That(step.Explanation, Does.Not.Contain("revolution"));
+    }
+
+    [Test]
+    public void LowestRadius_OnlyCountsThePeriapsisOnTheArc()
+    {
+        // An ellipse from 700 km (just past its periapsis at 690 km) up toward apoapsis: no periapsis on the arc.
+        double rp = 690e3, ra = 900e3, a = (rp + ra) / 2, e = (ra - rp) / (ra + rp);
+        double p = a * (1 - e * e);
+        Vector3d At(double nu) => p / (1 + e * Math.Cos(nu)) * new Vector3d(Math.Cos(nu), Math.Sin(nu), 0);
+        Vector3d VelAt(double nu) => Math.Sqrt(Mu / p) * new Vector3d(-Math.Sin(nu), e + Math.Cos(nu), 0);
+        var el = OrbitMath.Elements(At(0.3), VelAt(0.3), Mu);
+        Assert.That(RendezvousPlanner.LowestRadius(At(0.3), At(2.0), el, 0), Is.EqualTo(At(0.3).magnitude).Within(1));
+        // Through the periapsis (from before it to after it): the periapsis counts.
+        Assert.That(RendezvousPlanner.LowestRadius(At(-0.5), At(0.5), el, 0), Is.EqualTo(rp).Within(1));
+        // A full revolution always passes it.
+        Assert.That(RendezvousPlanner.LowestRadius(At(0.3), At(2.0), el, 1), Is.EqualTo(rp).Within(1));
     }
 
     [Test]
