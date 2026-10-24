@@ -62,6 +62,34 @@ public class RcsProbeTests
     }
 
     [Test]
+    public void Probe_DeadAxis_JudgedAgainstStrongest()
+    {
+        Frame(out var right, out var up, out var fwd);
+        // Y gives 0.015 m/s, well above the 0.001 noise floor but 7.5 % of the others: dead.
+        var m = RcsMapping.FromResponses(0.2 * right, 0.015 * fwd, 0.2 * up, right, up, fwd, 0.001);
+        Assert.IsTrue(m.Ok, m.Refusal);
+        CollectionAssert.AreEqual(new[] { false, true, false }, m.Dead);
+        // At 15 % of the others it is alive.
+        var alive = RcsMapping.FromResponses(0.2 * right, 0.03 * fwd, 0.2 * up, right, up, fwd, 0.001);
+        CollectionAssert.AreEqual(new[] { false, false, false }, alive.Dead);
+        Assert.AreEqual(Forward, alive.AxisOf[1]);
+    }
+
+    [Test]
+    public void Probe_NoDominantAxis_Refused()
+    {
+        Frame(out var right, out var up, out var fwd);
+        // Z moves the vessel diagonally, 71 % along right and 71 % along up.
+        var m = RcsMapping.FromResponses(0.2 * fwd, 0.2 * up, 0.2 * right + 0.2 * up, right, up, fwd, 0.02);
+        Assert.IsFalse(m.Ok);
+        StringAssert.Contains("Z", m.Refusal);
+        StringAssert.Contains("no single axis", m.Refusal);
+        // 85 % along one axis is enough.
+        var ok = RcsMapping.FromResponses(0.2 * fwd, 0.2 * up, 0.2 * right + 0.124 * fwd, right, up, fwd, 0.02);
+        Assert.IsTrue(ok.Ok, ok.Refusal);
+    }
+
+    [Test]
     public void Probe_TwoInputsSameAxis_Refused()
     {
         Frame(out var right, out var up, out var fwd);

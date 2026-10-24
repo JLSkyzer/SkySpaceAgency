@@ -11,9 +11,11 @@ public class DockingGuidanceTests
     const double Deg = Math.PI / 180;
     const double FwdDot = 0.995;   // ~5.7°
     const double MaxRvel = 0.5;
+    const double NoRoll = float.MinValue;   // as Data_DockingNode says "no roll requirement"
+    const double PortSize = 1.25;          // ContactLateral 0.25 m
 
-    static DockLimits Rcs(double radius = 3) => DockLimits.Rcs(FwdDot, MaxRvel, 0, radius);
-    static DockLimits Main(double radius = 3) => DockLimits.MainEngine(0.98, MaxRvel, 0, radius);
+    static DockLimits Rcs(double radius = 3) => DockLimits.Rcs(FwdDot, MaxRvel, NoRoll, radius, PortSize);
+    static DockLimits Main(double radius = 3) => DockLimits.MainEngine(0.98, MaxRvel, NoRoll, radius, PortSize);
 
     class Trace
     {
@@ -81,7 +83,7 @@ public class DockingGuidanceTests
     static void AssertCaptured(Trace tr, DockLimits l, double fwdDot)
     {
         Assert.IsTrue(tr.Docked, $"not docked: {tr.Last} at {tr.LastAxial:F1} m, lateral {tr.LastLateral:F1} m, {tr.Reason}");
-        Assert.LessOrEqual(tr.ContactLateral, l.LateralMargin);
+        Assert.LessOrEqual(tr.ContactLateral, l.ContactLateral);
         Assert.LessOrEqual(tr.ContactClosing, MaxRvel);
         Assert.Greater(tr.ContactClosing, 0.05);
         Assert.GreaterOrEqual(tr.ContactFwdDot, fwdDot);
@@ -246,10 +248,10 @@ public class DockingGuidanceTests
         var free = new DockingGuidance(Rcs()).Step(s, 0.1);
         Assert.AreEqual(0, free.Up.magnitude, 1e-12);
         Assert.AreEqual(-1, Vector3d.Dot(free.Forward, a), 1e-12);
-        var keyed = new DockingGuidance(DockLimits.Rcs(FwdDot, MaxRvel, 0.9, 3)).Step(s, 0.1);
+        var keyed = new DockingGuidance(DockLimits.Rcs(FwdDot, MaxRvel, 0.9, 3, PortSize)).Step(s, 0.1);
         Assert.AreEqual(1, Vector3d.Dot(keyed.Up, roll), 1e-12);
         // Roll not matched: the hold at 50 m does not end.
-        var g = new DockingGuidance(DockLimits.Rcs(FwdDot, MaxRvel, 0.9, 3));
+        var g = new DockingGuidance(DockLimits.Rcs(FwdDot, MaxRvel, 0.9, 3, PortSize));
         s.OurRoll = new Vector3d(1, 0, 0);
         DockCommand c = default;
         for (int i = 0; i < 1000; i++) c = g.Step(s, 0.1);
@@ -257,6 +259,139 @@ public class DockingGuidanceTests
         s.OurRoll = roll;
         for (int i = 0; i < 100; i++) c = g.Step(s, 0.1);
         Assert.AreEqual(DockPhase.Approach10, c.Phase);
+    }
+
+    [Test]
+    public void FastFinal_SlowsBeforeGate()
+    {
+        // At 5 m, a push of 0.25 m/s toward the port: 0.63 m/s, under the far limit (0.675) but
+        // over CaptureMaxRvel. With the thrust available, it slows down before the 2 m gate.
+        var sim = new DockSim { OurAxis = new Vector3d(0, 0, -1) };
+        sim.Pos = sim.Face + new Vector3d(0, 0, 50);
+        var g = new DockingGuidance(Rcs());
+        bool kicked = false;
+        double maxClosingInGate = 0;
+        var tr = Fly(sim, g, 3000, (s, c) =>
+        {
+            s.Truth(out double ax, out _, out double closing);
+            if (!kicked && c.Phase == DockPhase.Final && ax < 5)
+            {
+                s.PendingKick = -0.25 * s.Axis;
+                kicked = true;
+            }
+            if (c.Phase == DockPhase.Final && ax <= DockLimits.GateDistance)
+                maxClosingInGate = Math.Max(maxClosingInGate, closing);
+        });
+        Assert.IsTrue(kicked);
+        AssertCaptured(tr, g.Limits, FwdDot);
+        Assert.AreEqual(0, g.Aborts, g.LastAbortReason);
+        Assert.LessOrEqual(maxClosingInGate, MaxRvel);
+    }
+
+    [Test]
+    public void FastFinal_CannotBrake_AbortsAtGate()
+    {
+        // The same push, and the thrust then fails: it cannot slow down. The guidance aborts at the
+        // 2 m gate, before the ports touch. The thrust comes back for the backoff.
+        var sim = new DockSim { OurAxis = new Vector3d(0, 0, -1) };
+        sim.Pos = sim.Face + new Vector3d(0, 0, 50);
+        var g = new DockingGuidance(Rcs());
+        bool kicked = false;
+        double abortAt = double.NaN;
+        var tr = Fly(sim, g, 4000, (s, c) =>
+        {
+            s.Truth(out double ax, out _, out _);
+            if (!kicked && c.Phase == DockPhase.Final && ax < 5)
+            {
+                s.PendingKick = -0.25 * s.Axis;
+                s.AccelLimit = 0;
+                kicked = true;
+            }
+            if (c.Phase == DockPhase.Backoff && double.IsNaN(abortAt))
+            {
+                abortAt = ax;
+                s.AccelLimit = 0.2;
+            }
+        });
+        Assert.AreEqual(1, g.Aborts);
+        StringAssert.Contains("closing", g.LastAbortReason);
+        Assert.Greater(abortAt, DockLimits.GateDistance - 0.1);
+        Assert.LessOrEqual(abortAt, DockLimits.GateDistance);
+        AssertCaptured(tr, g.Limits, FwdDot);
+    }
+
+    [Test]
+    public void MainEngine_CoastWithLateralDrift_BacksOff()
+    {
+        // Just before the coast starts (10 m), a sideways drift of 15 mm/s: 0.5 m off the axis by
+        // contact, over the 0.25 m allowed. The coast must not start: it backs off and retries.
+        var sim = new DockSim { MainEngine = true, OurAxis = new Vector3d(0, 0, -1) };
+        sim.Pos = sim.Face + new Vector3d(0, 0, 100);
+        var g = new DockingGuidance(Main());
+        bool kicked = false;
+        double minAxial = double.PositiveInfinity;
+        var tr = Fly(sim, g, 8000, (s, c) =>
+        {
+            s.Truth(out double ax, out _, out _);
+            if (!kicked && c.Phase == DockPhase.Final && ax < 10.3)
+            {
+                s.PendingKick = new Vector3d(0.015, 0, 0);
+                kicked = true;
+            }
+            if (g.Aborts == 0) minAxial = Math.Min(minAxial, ax);
+        });
+        Assert.IsTrue(kicked);
+        Assert.AreEqual(1, g.Aborts, g.LastAbortReason);
+        StringAssert.Contains("drift", g.LastAbortReason);
+        Assert.IsTrue(tr.Phases.Contains(DockPhase.Backoff));
+        Assert.Greater(minAxial, 9, "the coast went on");
+        AssertCaptured(tr, g.Limits, 0.98);
+    }
+
+    [Test]
+    public void Hold_Unreachable_TimesOut()
+    {
+        // A roll requirement the vessel never meets (it reports no roll): the hold at 50 m never
+        // ends. After 120 s it counts as an abort and retries from the far hold; the second time
+        // the docking stops.
+        var sim = new DockSim { OurAxis = new Vector3d(0, 0, -1) };
+        sim.Pos = sim.Face + new Vector3d(0, 0, 50);
+        var g = new DockingGuidance(DockLimits.Rcs(FwdDot, MaxRvel, 0.9, 3, PortSize));
+        var tr = Fly(sim, g, 2000);
+        Assert.IsTrue(tr.Aborted);
+        Assert.AreEqual(2, g.Aborts);
+        Assert.IsTrue(g.AbortNeeded(out string reason));
+        StringAssert.Contains("did not settle in 120 s", reason);
+        StringAssert.Contains("not aligned", reason);
+        Assert.Greater(sim.T, 240);
+        Assert.Less(sim.T, 300);
+        Assert.IsFalse(tr.Phases.Contains(DockPhase.Approach10));
+    }
+
+    [Test]
+    public void HoldPointInsideKeepOut_Refused()
+    {
+        // A target 45 m in radius whose port is 3 m from its centre (a port deep inside a large
+        // station): the 50 m hold point is 53 m from the centre, inside the 55 m keep-out sphere.
+        var sim = new DockSim { PortOffset = 3, OurAxis = new Vector3d(0, 0, -1) };
+        sim.Pos = sim.Face + new Vector3d(0, 0, 150);
+        var g = new DockingGuidance(Rcs(45));
+        var tr = Fly(sim, g, 100);
+        Assert.IsTrue(tr.Aborted);
+        Assert.IsTrue(g.AbortNeeded(out string reason));
+        StringAssert.Contains("keep-out", reason);
+        Assert.Less(tr.Steps, 3);
+    }
+
+    [Test]
+    public void UnreadableState_NoCommand()
+    {
+        var g = new DockingGuidance(Rcs());
+        var bad = g.Step(new DockState { RelPos = new Vector3d(double.NaN, 0, 0), TargetAxis = new Vector3d(0, 0, 1) }, 0.1);
+        Assert.IsFalse(bad.Valid);
+        Assert.AreEqual(DockPhase.Align, bad.Phase);
+        var good = g.Step(new DockState { RelPos = new Vector3d(0, 0, 60), TargetAxis = new Vector3d(0, 0, 1), TargetCenter = new Vector3d(0, 0, -3) }, 0.1);
+        Assert.IsTrue(good.Valid);
     }
 
     [Test]
@@ -272,7 +407,7 @@ public class DockingGuidanceTests
         };
         Vector3d Pick(double scale) => rnd.Next(4) == 0 ? special[rnd.Next(special.Length)] : V(scale);
 
-        foreach (var limits in new[] { Rcs(), Main(), DockLimits.Rcs(0.99, 0.3, 0.9, 0), default })
+        foreach (var limits in new[] { Rcs(), Main(), DockLimits.Rcs(0.99, 0.3, 0.9, 0, 0), default })
         {
             var g = new DockingGuidance(limits);
             for (int i = 0; i < 5000; i++)

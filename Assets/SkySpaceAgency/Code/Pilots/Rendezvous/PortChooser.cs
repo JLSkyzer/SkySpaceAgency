@@ -13,8 +13,10 @@ namespace K2D2.Rendezvous
         public bool Free;        // Data_DockingNode.CurrentState == Ready
         public bool Gendered;
         public bool Female;      // meaningful only when Gendered
+        // Not used by the chooser: the port face, for DockState.RelPos and TargetCenter.
         public Vector3d Position;
         public Vector3d Axis;    // the port's outward axis
+        // Not used by the chooser: the port's size, m, for DockLimits' portSize (ContactLateral).
         public double Size;
     }
 

@@ -6,7 +6,8 @@ using KSP.Sim;
 // - Our vessel is a point at its port face: a double integrator (x'' = a).
 //   - RCS: a stand-in for the translation controller, a = (wanted - v) / Tau, clamped to
 //     |a| <= AccelLimit (the thrust limit), applied every step.
-//   - Main engine: pulsed burns. When the velocity error exceeds Deadband, the vessel turns for
+//   - Main engine: pulsed burns. When the velocity error exceeds Deadband (5 mm/s: assumed
+//     reachable by Task 5's controller, not measured), the vessel turns for
 //     TurnSeconds (no thrust, its port axis pointed off the target axis), burns at MainAccel along
 //     the error captured at the start of the turn until that velocity is reached, then turns back
 //     for TurnSeconds (no thrust). The guidance sees the misaligned port axis meanwhile.
@@ -32,7 +33,7 @@ public class DockSim
     public Vector3d Axis0 = new Vector3d(0, 0, 1);
 
     public bool MainEngine;
-    public double Deadband = 0.1;
+    public double Deadband = 0.005;   // the smallest velocity change the main engine is asked for (assumed)
     public double TurnSeconds = 6;
     public double MainAccel = 1.0;
 

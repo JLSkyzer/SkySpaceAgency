@@ -70,6 +70,19 @@ public class PortChooserTests
     }
 
     [Test]
+    public void Ports_TieBrokenByOurForward()
+    {
+        // Two of our ports need the same 30° turn to the target's port; the one closer to our
+        // forward (+z) wins, whatever the list order.
+        double c = Math.Cos(30 * Math.PI / 180), s = Math.Sin(30 * Math.PI / 180);
+        var side = Port("o-side", new Vector3d(-c, s, 0));    // 90° from forward
+        var nose = Port("o-nose", new Vector3d(-c, 0, s));    // 60° from forward
+        var theirs = new List<PortInfo> { Port("t", FromTargetToUs) };
+        Assert.AreEqual("o-nose", PortChooser.Choose(new List<PortInfo> { side, nose }, theirs, OurForward, FromTargetToUs).ours.PartId);
+        Assert.AreEqual("o-nose", PortChooser.Choose(new List<PortInfo> { nose, side }, theirs, OurForward, FromTargetToUs).ours.PartId);
+    }
+
+    [Test]
     public void Ports_GenderedPairing()
     {
         var theirs = new List<PortInfo> { Port("t-f", FromTargetToUs, "clamp", gendered: true, female: true) };
