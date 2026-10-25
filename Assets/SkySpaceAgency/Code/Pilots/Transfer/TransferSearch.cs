@@ -258,7 +258,7 @@ namespace K2D2.Transfer
                 if (To == Ancestor)
                     return ToAncestor();
                 if (From == Ancestor)
-                    return ToDescendant();
+                    return CheaperWithExisting(ToDescendant());
                 return Porkchop();
             }
 

@@ -44,6 +44,11 @@ namespace K2D2.Transfer
         // there. Children the conic cannot reach and the patch start are not counted. ClosestBody is
         // -1 (distance +inf, UT NaN) when there is none. On an encounter, the entered child is not
         // reported unless it had an earlier minimum in this patch.
+        // A child whose SOI the patch starts inside (given in the parent's frame), -1 for none: the
+        // vessel is within our SOI radius of it while the game still has it around the parent. Such a
+        // child is only entered after the vessel has left it once.
+        public int StartInsideBody = -1;
+
         public int ClosestBody = -1;
         public double ClosestDistance = double.PositiveInfinity;
         public double ClosestUT = double.NaN;
@@ -348,6 +353,8 @@ namespace K2D2.Transfer
             {
                 ChildDistance(s, children[i], r0, v0, ut0, out lastDistance[i], out prevRate[i]);
                 armed[i] = lastDistance[i] >= s[children[i]].Soi;
+                if (!armed[i] && patch.StartInsideBody < 0)
+                    patch.StartInsideBody = children[i];
             }
 
             double bestRatio = double.PositiveInfinity;

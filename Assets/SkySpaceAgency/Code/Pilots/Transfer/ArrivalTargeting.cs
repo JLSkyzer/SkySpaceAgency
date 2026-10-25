@@ -77,6 +77,17 @@ namespace K2D2.Transfer
             double wantedPeriapsisRadius, double wantedInclinationDeg, double horizonUT, double plannedArrivalUT,
             double captureApoapsisRadius,
             out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg,
+            out double predictedArrivalUT, out double predictedCaptureDeltaV, out bool converged) =>
+            Solve(s, body, r, v, ut, targetBody, wantedPeriapsisRadius, wantedInclinationDeg, horizonUT, plannedArrivalUT,
+                captureApoapsisRadius, MaxDeltaV, out deltaV, out predictedPeriapsisRadius, out predictedInclinationDeg,
+                out predictedArrivalUT, out predictedCaptureDeltaV, out converged);
+
+        // The same within maxDeltaV (m/s) instead of MaxDeltaV: the pilot's budget when it corrects the
+        // path the vessel already has (a resume after a failed correction, a plan from the parent).
+        public static bool Solve(BodySystem s, int body, Vector3d r, Vector3d v, double ut, int targetBody,
+            double wantedPeriapsisRadius, double wantedInclinationDeg, double horizonUT, double plannedArrivalUT,
+            double captureApoapsisRadius, double maxDeltaV,
+            out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg,
             out double predictedArrivalUT, out double predictedCaptureDeltaV, out bool converged)
         {
             deltaV = Vector3d.zero;
@@ -89,7 +100,7 @@ namespace K2D2.Transfer
             {
                 S = s, Body = body, R = r, V = v, UT = ut, Target = targetBody, HorizonUT = horizonUT,
                 WantedPeriapsis = wantedPeriapsisRadius, WantedInclinationDeg = wantedInclinationDeg,
-                PlannedArrivalUT = plannedArrivalUT,
+                PlannedArrivalUT = plannedArrivalUT, MaxDv = maxDeltaV > 0 ? maxDeltaV : MaxDeltaV,
             };
             double mu = s[targetBody].Mu;
             bool found = false;
@@ -238,8 +249,8 @@ namespace K2D2.Transfer
                 for (int k = 0; k <= MaxHalvings && !improved; k++, step = 0.5 * step)
                 {
                     var trial = dv + step;
-                    if (trial.magnitude > MaxDeltaV)
-                        trial = trial * (MaxDeltaV / trial.magnitude);
+                    if (trial.magnitude > problem.MaxDv)
+                        trial = trial * (problem.MaxDv / trial.magnitude);
                     int trialBranch = branch;
                     var next = problem.Evaluate(trial, ref trialBranch);
                     if (!next.Valid || !Better(next, current))
@@ -406,6 +417,7 @@ namespace K2D2.Transfer
             public int Body, Target;
             public Vector3d R, V;
             public double UT, HorizonUT, WantedPeriapsis, WantedInclinationDeg, PlannedArrivalUT;
+            public double MaxDv = MaxDeltaV;
 
             // The residual for the trajectory flown with 'dv': on an encounter, the B-plane error (the
             // impact parameter alone, or the whole vector when an inclination is wanted); on a miss, the
