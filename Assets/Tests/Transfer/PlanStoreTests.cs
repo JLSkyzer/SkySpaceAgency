@@ -411,7 +411,8 @@ public class PlanStoreTests
         KeplerPropagator.Propagate(r, v, _s["Kerbin"].Mu, 2000, out r, out v);
         var c = PlanStore.Check(p, _s, B("Kerbin"), r, v, InjectionUT + 2000);
         Assert.AreEqual(ResumeVerdict.Resume, c.Verdict, c.Reason);
-        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(p, c));
+        // Step 2 is a correction: after its failure the existing path is corrected first (2026-10-25).
+        Assert.AreEqual(ResumeAction.CorrectExisting, TransferFlight.DecideResume(p, c));
     }
 
     [Test]

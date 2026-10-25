@@ -11,6 +11,7 @@ using K2D2.Node;
 using K2D2.OrbitPlanning;
 using KSP.Sim;
 using KSP.Sim.impl;
+using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
@@ -298,6 +299,14 @@ namespace K2D2.Transfer
                 case ResumeAction.Refuse:
                     Status = TransferFlight.ResumeOffer(saved, check, snap.UT, StrTool.DurationToString);
                     return;
+                case ResumeAction.CorrectExisting:
+                    if (TransferFlight.RemapBodies(resumed, snap.System))
+                    {
+                        CorrectExistingPath(resumed, snap);
+                        return;
+                    }
+                    logger.LogInfo("[Transfer] resume: the body indices cannot be mapped by name: planned again");
+                    goto case ResumeAction.Replan;
                 case ResumeAction.Replan:
                 {
                     var q = resumed.Plan.Request != null ? CopyRequest(resumed.Plan.Request) : new TransferRequest();
@@ -332,6 +341,87 @@ namespace K2D2.Transfer
                     return;
                 }
             }
+        }
+
+        // Resume after a failed correction: correct the path the vessel has within the plan's
+        // correction allowance (or 10 % of what it still needs), from the actual state; if that fails,
+        // offer a new transfer with both costs. A solve that failed before is never repeated.
+        void CorrectExistingPath(SavedPlan resumed, Snapshot snap)
+        {
+            var plan = resumed.Plan;
+            int i = resumed.StepIndex;
+            var step = plan.Steps[i];
+            Current = plan;
+            StepIndex = i;
+            PrepareOnly = resumed.PrepareOnly;
+            Phase = TransferPhase.Failed;
+            free_arrival_step = resumed.FreeArrivalStep;
+            failed_solve_key = resumed.FailedSolveKey;
+            int target = step.TargetBody;
+            if (target < 0 || double.IsNaN(step.TargetPeriapsisRadius))
+            {
+                Begin(plan, i, resumed.PrepareOnly, snap, "resume");
+                return;
+            }
+            string name = snap.System[target].Name;
+            double budget = TransferFlight.CorrectionBudget(plan, i);
+            double mu = snap.System[snap.Body].Mu;
+            double burnUT = snap.UT + TransferFlight.BurnLead(0);
+            KeplerPropagator.Propagate(snap.R, snap.V, mu, burnUT - snap.UT, out var rb, out var vb);
+            string key = TransferFlight.SolveKey(i, burnUT, vb.magnitude, budget);
+            if (key == resumed.FailedSolveKey)
+            {
+                logger.LogInfo($"[Transfer] resume after a failed correction: the same solve failed before ({key}): not repeated");
+                OfferNewTransfer($"Correcting the current path to {name} failed before", name, budget, double.NaN);
+                return;
+            }
+            double planned = free_arrival_step == i ? double.NaN : TransferFlight.LegArrivalUT(plan, i);
+            double legArrival = TransferFlight.LegArrivalUT(plan, i);
+            double horizon = Math.Max(Math.Max(plan.ArrivalUT, legArrival) + 0.25 * Math.Max(0, plan.TripSeconds), burnUT + 3600);
+            double captureAp = TransferFlight.CaptureApoapsis(plan, i);
+            double wanted = step.TargetPeriapsisRadius, inc = step.TargetInclinationDeg;
+            logger.LogInfo($"[Transfer] resume after a failed correction: correcting the current path to {name} within {budget:F0} m/s " +
+                $"(the plan's correction allowance {plan.ReserveDeltaV:F0} m/s, or {TransferFlight.ExistingCorrectionShare * 100:F0} % of what it still needs), planned and nearest passes");
+            Status = $"Correcting the current path to {name} (up to {budget:F0} m/s)...";
+            var s = snap.System;
+            int body = snap.Body;
+            RunJob(JobKind.Solve, ct =>
+            {
+                var res = new SolveResult();
+                res.Ok = ArrivalTargeting.Solve(s, body, rb, vb, burnUT, target, wanted, inc, horizon, planned, captureAp, budget,
+                    out res.DeltaV, out res.Pe, out res.Inc, out res.ArrivalUT, out res.CaptureDv, out res.Converged);
+                return res;
+            }, t =>
+            {
+                bool ok = PilotJob.Result(t, out var res, out string error, out bool canceled) && res.Ok;
+                double floor = s[target].LowOrbitRadius - 10_000;
+                if (ok && TransferFlight.JudgeCorrection(res.DeltaV.magnitude, res.Converged, res.Pe, wanted, double.NaN, floor, out _) == CorrectionVerdict.Refuse)
+                    ok = false;
+                logger.LogInfo($"[Transfer] correcting the current path: {(ok ? $"{res.DeltaV.magnitude:F1} m/s, periapsis {(res.Pe - s[target].Radius) / 1000:F1} km, converged {res.Converged}" : canceled ? "cancelled" : $"not possible within {budget:F0} m/s{(error != null ? $" ({error})" : "")}")}");
+                if (canceled)
+                    return;
+                if (!ok)
+                {
+                    failed_solve_key = key;
+                    Save();
+                    OfferNewTransfer($"Correcting the current path to {name} is not possible within {budget:F0} m/s", name, budget, double.NaN);
+                    return;
+                }
+                if (!TakeSnapshot(out var now, out string err, out _))
+                {
+                    Status = "Cannot resume: " + err;
+                    return;
+                }
+                Adopt(now);
+                Budget = TransferFlight.RemainingBudget(plan, i, stages);
+                if (!Budget.Ok)
+                {
+                    Status = Budget.Refusal;
+                    return;
+                }
+                Begin(plan, i, resumed.PrepareOnly, now, "resume (correcting the current path)");
+                free_arrival_step = resumed.FreeArrivalStep;
+            });
         }
 
         /// <summary>Forgets the active vessel's saved plan (and stops the transfer).</summary>
@@ -542,7 +632,7 @@ namespace K2D2.Transfer
                 return;
             try
             {
-                var sp = TransferFlight.ToSaved(Current, System, vessel_id, Phase, StepIndex, GeneralTools.Current_UT, PrepareOnly, burn_ignited, free_arrival_step);
+                var sp = TransferFlight.ToSaved(Current, System, vessel_id, Phase, StepIndex, GeneralTools.Current_UT, PrepareOnly, burn_ignited, free_arrival_step, failed_solve_key);
                 PlanFiles.Write(SavedPath(vessel_id), PlanStore.ToJson(sp), logger, "[Transfer]");
             }
             catch (Exception e)

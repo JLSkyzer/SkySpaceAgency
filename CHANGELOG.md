@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Transfer fixes after the first in-game Kerbin → Duna flight** (2026-10-25; not yet flown again).
+  - **A late SOI change never sends the warp past a real encounter.** After the predicted time, the pilot keeps coasting while the distance to the body still closes in, waits at the lowest warp step once the vessel is inside the body's SOI radius but the game has not switched yet, and gives up only once the closest approach has passed outside the SOI ("the Duna encounter passed outside its SOI …"). Exits work the same way.
+  - **A failed correction no longer loops on Resume.** Resume first corrects the path the vessel already has, within the plan's correction allowance or 10 % of the Δv it still needs, whichever is larger. When that fails it plans a new transfer and shows both costs; nothing starts until the player presses Start. The same failed solve is never tried twice.
+  - **Plan from an orbit that already meets the target** (for example a Kerbol orbit that nearly meets Duna): the plan also costs a correction of that encounter and picks it when it is cheaper than a new transfer, showing the other cost.
+  - **Clearer messages**: "Correction 1: no burn under 300 m/s (the mod's safety limit for one correction) reaches Duna from here; planning again from the current orbit."
+  - **Diagnostics in the log** for the early Kerbin exit seen in game: the orbit (managed and the game's ECS data) and the world distance at every SOI change, after every burn and at every switch between physics and rails; the distance to the awaited body every 10 s; and "state mismatch after the burn" when the orbit and the physical vessel disagree.
+
 - **Transfer tab** (transfer to a body, sub-project 4.1, 2026-10-24; not yet flown in game). From an orbit around any body, plan and fly the cheapest transfer to any other body: a moon, the parent, a sibling, another planet or a moon of another planet.
   - **Inputs**: the target body (list grouped by parent), the arrival (Encounter, or Orbit, default low circular, with Pe, Ap and inclination changeable), Prepare only, a maximum trip duration. Use gravity assist is shown but not available yet.
   - **Plan**: the departure date and the wait, the trip and arrival dates, each step with its Δv and the reason for any non-obvious burn (plane change first, lowering the orbit first, a departure that also turns the plane), the total with its reserve (2 %, at least 10 m/s), and the Δv per stage. A stage the mod will not drop by itself is flagged. Refused with a message when the vessel's stages cannot cover it, including the capture.

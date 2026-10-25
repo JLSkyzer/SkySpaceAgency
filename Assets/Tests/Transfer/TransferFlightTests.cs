@@ -194,6 +194,86 @@ public class TransferFlightTests
         Assert.IsFalse(TransferFlight.InOrbit(r, new Vector3d(0, 1.41 * vc, 0), mu, soi), "closed, but its apoapsis is beyond the SOI");
     }
 
+    // ---------------------------------------------------------------- 2026-10-25 fixes
+
+    // A failed correction never loops: the resume corrects the existing path first (the Replan verdict
+    // included), and only a failed correction leads there.
+    [Test]
+    public void DecideResume_FailedCorrection_CorrectsTheExistingPath()
+    {
+        var plan = HandPlan();
+        Assert.AreEqual(ResumeAction.CorrectExisting, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 2), ResumeCheck.Resume()));
+        Assert.AreEqual(ResumeAction.CorrectExisting, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 2), ResumeCheck.Replan("burned by hand")));
+        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.Coast, 2), ResumeCheck.Resume()), "not failed");
+        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 5), ResumeCheck.Resume()), "a failed capture");
+        Assert.AreEqual(ResumeAction.Refuse, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 2), ResumeCheck.Mismatch("another body")));
+    }
+
+    [Test]
+    public void CorrectionBudget_AllowanceOrTenPercent()
+    {
+        var plan = HandPlan(); // reserve 34, capture 600 left after the corrections
+        Assert.AreEqual(Math.Max(34, 0.1 * (600 + 34)), TransferFlight.CorrectionBudget(plan, 2), 1e-9);
+        plan.ReserveDeltaV = 90;
+        Assert.AreEqual(90, TransferFlight.CorrectionBudget(plan, 2), 1e-9, "the allowance when larger");
+    }
+
+    [Test]
+    public void SolveKey_SameSolveSameKey()
+    {
+        string a = TransferFlight.SolveKey(2, 359_000_936, 9123.44, 300);
+        Assert.AreEqual(a, TransferFlight.SolveKey(2, 359_000_950, 9123.41, 300), "same minute, same speed to 0.1 m/s");
+        Assert.AreNotEqual(a, TransferFlight.SolveKey(2, 359_001_300, 9123.44, 300), "later");
+        Assert.AreNotEqual(a, TransferFlight.SolveKey(2, 359_000_936, 9123.44, 58), "another budget");
+        Assert.AreNotEqual(a, TransferFlight.SolveKey(3, 359_000_936, 9123.44, 300));
+    }
+
+    [Test]
+    public void Messages_SayWhatItMeansAndWhatComesNext()
+    {
+        string m = TransferFlight.CorrectionFailed(1, "Duna", 300);
+        StringAssert.Contains("no burn under 300 m/s", m);
+        StringAssert.Contains("safety limit for one correction", m);
+        StringAssert.Contains("planning again from the current orbit", m);
+        string o = TransferFlight.ReplanOptions("Duna", 58, double.NaN, 813);
+        StringAssert.Contains("not possible within 58 m/s", o);
+        StringAssert.Contains("a new transfer costs 813 m/s", o);
+        StringAssert.Contains("Press Start", o);
+    }
+
+    // The SOI change that comes late: wait while the distance still closes in, wait for the game
+    // once across our SOI radius, give up only once the closest approach has passed outside.
+    [Test]
+    public void SoiWait_NeverWarpsAwayFromARealEncounter()
+    {
+        const double soi = 47_921_949;
+        Assert.AreEqual(SoiWaitAction.WaitGameSwitch, TransferFlight.SoiWait(true, soi - 1e6, -800, soi, out _), "inside our radius, game not switched");
+        Assert.AreEqual(SoiWaitAction.WaitGameSwitch, TransferFlight.SoiWait(true, soi - 1e6, +800, soi, out _), "inside, even moving away: the game decides");
+        Assert.AreEqual(SoiWaitAction.Coast, TransferFlight.SoiWait(true, soi + 100_000, -800, soi, out _), "close: 1x");
+        Assert.AreEqual(SoiWaitAction.Warp, TransferFlight.SoiWait(true, soi + 1e8, -800, soi, out double w));
+        Assert.AreEqual(0.5 * 1e8 / 800, w, 1e-6, "half the time to the SOI, then look again");
+        Assert.AreEqual(SoiWaitAction.Missed, TransferFlight.SoiWait(true, soi + 1e6, +50, soi, out _), "closest approach passed outside");
+
+        const double kerbin = 84_159_286;
+        Assert.AreEqual(SoiWaitAction.WaitGameSwitch, TransferFlight.SoiWait(false, kerbin + 1000, 900, kerbin, out _));
+        Assert.AreEqual(SoiWaitAction.Coast, TransferFlight.SoiWait(false, kerbin - 100_000, 900, kerbin, out _));
+        Assert.AreEqual(SoiWaitAction.Warp, TransferFlight.SoiWait(false, 54e6, 900, kerbin, out _));
+        Assert.AreEqual(SoiWaitAction.Missed, TransferFlight.SoiWait(false, 54e6, -10, kerbin, out _), "falling back: no exit");
+    }
+
+    [Test]
+    public void StateChecks_MismatchAndJump()
+    {
+        Assert.IsFalse(TransferFlight.StateMismatch(500, 70e6));
+        Assert.IsTrue(TransferFlight.StateMismatch(30e6, 54e6), "the 2026-10-25 exit: 30 Mm apart");
+        Assert.IsFalse(TransferFlight.StateMismatch(5000, 1.36e10), "1e-4 of the radius at Kerbol scale");
+        double mu = 3.5316e12, r = 700_000;
+        double e0 = -mu / (2 * r);
+        Assert.IsFalse(TransferFlight.OrbitJumped(e0, e0 * (1 + 1e-6), 0.001, 0.001, mu, r));
+        Assert.IsTrue(TransferFlight.OrbitJumped(e0, e0 * 0.9, 0.001, 0.001, mu, r));
+        Assert.IsTrue(TransferFlight.OrbitJumped(e0, e0, 0.001, 0.01, mu, r));
+    }
+
     [Test]
     public void BurnPhase_EveryKind()
     {
@@ -541,7 +621,8 @@ public class TransferFlightTests
             "a correction is solved again from the actual state");
         Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.Capture, 5), resume),
             "the capture aims at its orbit from the actual state");
-        Assert.AreEqual(ResumeAction.Continue, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 3), resume));
+        Assert.AreEqual(ResumeAction.CorrectExisting, TransferFlight.DecideResume(Saved(plan, TransferPhase.Failed, 3), resume),
+            "a failed correction is not tried again as it was");
         Assert.AreEqual(ResumeAction.Replan, TransferFlight.DecideResume(Saved(plan, TransferPhase.Coast, 3), ResumeCheck.Replan("burned by hand")));
         Assert.AreEqual(ResumeAction.Refuse, TransferFlight.DecideResume(Saved(plan, TransferPhase.Coast, 3), ResumeCheck.Mismatch("another body")));
 
@@ -614,6 +695,18 @@ public class TransferFlightTests
         plan.Steps[5].UT = 980_000; // the capture of leg 0, before the next leg's first step
         plan.Steps.Add(new PlanStep { Kind = StepKind.Injection, Body = _duna, UT = 1_100_000, LegIndex = 1 });
         Assert.AreEqual(980_000, TransferFlight.LegArrivalUT(plan, 2));
+    }
+
+    [Test]
+    public void FailedSolveKey_SavedAndOptional()
+    {
+        var sp = TransferFlight.ToSaved(HandPlan(), _s, "id", TransferPhase.Failed, 2, 500, false, failedSolveKey: "2|1|2|300");
+        Assert.IsTrue(PlanStore.TryFromJson(PlanStore.ToJson(sp), out var back, out string error), error);
+        Assert.AreEqual("2|1|2|300", back.FailedSolveKey);
+        var o = Newtonsoft.Json.Linq.JObject.Parse(PlanStore.ToJson(sp));
+        o.Remove("failedSolveKey");
+        Assert.IsTrue(PlanStore.TryFromJson(o.ToString(), out back, out error), error);
+        Assert.IsNull(back.FailedSolveKey);
     }
 
     [Test]

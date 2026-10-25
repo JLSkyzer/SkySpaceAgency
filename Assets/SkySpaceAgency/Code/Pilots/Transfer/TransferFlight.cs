@@ -43,7 +43,18 @@ namespace K2D2.Transfer
 
     public enum CorrectionVerdict { Fly, Skip, Refuse }
 
-    public enum ResumeAction { Continue, Replan, Refuse }
+    // CorrectExisting: a correction failed; first correct the path the vessel has (a wider budget),
+    // and plan a new transfer only when that fails.
+    public enum ResumeAction { Continue, Replan, Refuse, CorrectExisting }
+
+    // Waiting for an SOI change after its predicted time (TransferFlight.SoiWait).
+    public enum SoiWaitAction
+    {
+        Coast,          // at 1x: the change is near, or the distance still closes in
+        Warp,           // far from it but closing in: warp for WarpSeconds, then look again
+        WaitGameSwitch, // already across our SOI radius, the game has not switched yet: wait for it
+        Missed,         // the closest approach passed outside the SOI (entry), or the vessel falls back (exit)
+    }
 
     public enum NodeState { Waiting, Flown, RemovedUnflown }
 
@@ -545,6 +556,82 @@ namespace K2D2.Transfer
             return bodyChanged || measured > NodeFlownSpeed ? NodeState.Flown : NodeState.RemovedUnflown;
         }
 
+        // ---------------------------------------------------------------- correcting the path the vessel has
+
+        // The budget for correcting the existing path after a failed correction: the plan's correction
+        // allowance (its reserve) or 10 % of the Δv the plan still needs (steps left and reserve),
+        // whichever is larger.
+        public const double ExistingCorrectionShare = 0.10;
+
+        public static double CorrectionBudget(TransferPlan plan, int from)
+        {
+            double left = plan.ReserveDeltaV;
+            for (int i = Math.Max(0, from); i < plan.Steps.Count; i++)
+                left += Math.Max(0, plan.Steps[i].DeltaVMagnitude);
+            return Math.Max(plan.ReserveDeltaV, ExistingCorrectionShare * left);
+        }
+
+        // What identifies a solve: the step, the time (to the minute), the speed (to 0.1 m/s) and the
+        // budget. A failed solve is never repeated with the same key.
+        public static string SolveKey(int stepIndex, double ut, double speed, double budget) =>
+            FormattableString.Invariant($"{stepIndex}|{Math.Round(ut / 60)}|{Math.Round(speed * 10)}|{Math.Round(budget)}");
+
+        // "Correction 1: no burn under 300 m/s (the mod's limit for one correction) reaches Duna from
+        // here; planning again from the current orbit."
+        public static string CorrectionFailed(int n, string target, double limit) =>
+            FormattableString.Invariant($"Correction {n}: no burn under {limit:F0} m/s (the mod's safety limit for one correction) reaches {target} from here; planning again from the current orbit");
+
+        // The two options, before a new transfer is flown.
+        public static string ReplanOptions(string target, double budget, double correction, double fresh)
+        {
+            string a = double.IsNaN(correction)
+                ? FormattableString.Invariant($"correcting the current path to {target} is not possible within {budget:F0} m/s")
+                : FormattableString.Invariant($"correcting the current path to {target} costs {correction:F0} m/s");
+            string b = double.IsNaN(fresh)
+                ? "no new transfer was found"
+                : FormattableString.Invariant($"a new transfer costs {fresh:F0} m/s");
+            return $"Options: {a}; {b}. Press Start to fly the new transfer.";
+        }
+
+        // ---------------------------------------------------------------- SOI changes that come late
+
+        // The predicted SOI change has not come. entry: entering 'body' (distance and rate to its
+        // centre), else leaving it (distance and rate from its centre). The pilot keeps waiting while
+        // the distance still moves the right way, and gives up only once it moves the wrong way
+        // outside the SOI (an entry whose closest approach passed) or inside it (an exit falling back).
+        // Across our SOI radius but not switched by the game: wait for the game.
+        public const double SoiWaitCoastSeconds = 600;
+
+        public static SoiWaitAction SoiWait(bool entry, double distance, double rate, double soi, out double warpSeconds)
+        {
+            warpSeconds = 0;
+            if (double.IsNaN(distance) || double.IsNaN(rate))
+                return SoiWaitAction.Coast;
+            bool across = entry ? distance < soi : distance > soi;
+            if (across)
+                return SoiWaitAction.WaitGameSwitch;
+            bool rightWay = entry ? rate < 0 : rate > 0;
+            if (!rightWay)
+                return SoiWaitAction.Missed;
+            double toGo = Math.Abs(distance - soi) / Math.Max(Math.Abs(rate), 1e-9);
+            if (toGo > SoiWaitCoastSeconds)
+            {
+                warpSeconds = 0.5 * toGo;
+                return SoiWaitAction.Warp;
+            }
+            return SoiWaitAction.Coast;
+        }
+
+        // A burn left the orbit away from the physical state: the position the orbit gives and the one
+        // the game's world gives differ by more than the larger of 1 km and 1e-4 of the radius.
+        public static bool StateMismatch(double positionDifference, double radius) =>
+            positionDifference > Math.Max(1000, 1e-4 * Math.Abs(radius));
+
+        // The orbit changed between two reads with no burn between them (for example at the switch to
+        // rails after a burn): the energy moved by more than 1e-4 of mu/r, or the eccentricity by 1e-4.
+        public static bool OrbitJumped(double energyBefore, double energyAfter, double eBefore, double eAfter, double mu, double radius) =>
+            Math.Abs(energyAfter - energyBefore) > 1e-4 * mu / Math.Max(radius, 1) || Math.Abs(eAfter - eBefore) > 1e-4;
+
         // The capture holds: a closed orbit inside the body's SOI.
         public static bool InOrbit(Vector3d r, Vector3d v, double mu, double soi)
         {
@@ -566,6 +653,14 @@ namespace K2D2.Transfer
         {
             if (saved?.Plan == null || check == null || check.Verdict == ResumeVerdict.Mismatch)
                 return ResumeAction.Refuse;
+            // A correction that failed is not tried again as it was (that only repeats the failure):
+            // the path the vessel has is corrected with a wider budget, else a new transfer is offered.
+            if (saved.Phase == TransferPhase.Failed && saved.StepIndex < saved.Plan.Steps.Count)
+            {
+                var step = saved.Plan.Steps[saved.StepIndex];
+                if (step.Kind == StepKind.Correction && !(step.DeltaV.sqrMagnitude > 0))
+                    return ResumeAction.CorrectExisting;
+            }
             if (check.Verdict == ResumeVerdict.Replan)
                 return ResumeAction.Replan;
             // The saved vectors are in the Zup frame of the session that saved them, which may not be
@@ -637,7 +732,7 @@ namespace K2D2.Transfer
 
         // The plan as saved for the vessel (a GUID in "D" format). Null strings are stored empty.
         public static SavedPlan ToSaved(TransferPlan plan, BodySystem s, string vesselId, TransferPhase phase, int stepIndex,
-            double ut, bool prepareOnly, bool burnStarted = false, int freeArrivalStep = -1)
+            double ut, bool prepareOnly, bool burnStarted = false, int freeArrivalStep = -1, string failedSolveKey = null)
         {
             if (plan == null) throw new ArgumentNullException(nameof(plan));
             if (s == null) throw new ArgumentNullException(nameof(s));
@@ -655,6 +750,7 @@ namespace K2D2.Transfer
                 PrepareOnly = prepareOnly,
                 BurnStarted = burnStarted,
                 FreeArrivalStep = freeArrivalStep,
+                FailedSolveKey = failedSolveKey,
                 FromBodyName = q != null && q.FromBody >= 0 && q.FromBody < s.Count ? s[q.FromBody].Name : "",
                 ToBodyName = q != null && q.ToBody >= 0 && q.ToBody < s.Count ? s[q.ToBody].Name : "",
                 BodyNames = Enumerable.Range(0, s.Count).Select(i => s[i].Name ?? "").ToList(),

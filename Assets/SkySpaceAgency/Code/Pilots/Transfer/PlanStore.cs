@@ -30,6 +30,9 @@ namespace K2D2.Transfer
         // A direct descent's entry correction (a step index) is solved without the stale planned
         // arrival. -1: none. Optional in the file (-1).
         public int FreeArrivalStep = -1;
+        // The last solve that failed (TransferFlight.SolveKey), so that a resume never repeats it.
+        // Optional in the file (null).
+        public string FailedSolveKey;
 
         // Bodies are kept by name: a body index may change between sessions (a planet pack added).
         public string FromBodyName, ToBodyName;
@@ -98,6 +101,7 @@ namespace K2D2.Transfer
                 ["prepareOnly"] = p.PrepareOnly,
                 ["burnStarted"] = p.BurnStarted,
                 ["freeArrivalStep"] = p.FreeArrivalStep,
+                ["failedSolveKey"] = p.FailedSolveKey,
                 ["fromBody"] = p.FromBodyName,
                 ["toBody"] = p.ToBodyName,
                 ["bodyNames"] = new JArray((p.BodyNames ?? new List<string>()).Cast<object>().ToArray()),
@@ -217,6 +221,7 @@ namespace K2D2.Transfer
                     PrepareOnly = Bool(o, "prepareOnly"),
                     BurnStarted = o.ContainsKey("burnStarted") && Bool(o, "burnStarted"),
                     FreeArrivalStep = o.ContainsKey("freeArrivalStep") ? Int(o, "freeArrivalStep") : -1,
+                    FailedSolveKey = o.ContainsKey("failedSolveKey") ? Str(o, "failedSolveKey", allowNull: true) : null,
                     FromBodyName = Str(o, "fromBody", allowNull: false),
                     ToBodyName = Str(o, "toBody", allowNull: false),
                     BodyNames = Arr(o, "bodyNames").Select((t, i) => StrValue(t, $"bodyNames[{i}]")).ToList(),

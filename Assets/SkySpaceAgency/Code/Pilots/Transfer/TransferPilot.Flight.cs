@@ -26,6 +26,20 @@ namespace K2D2.Transfer
         readonly PrepareOnlyNode node;
 
         int last_body = -1;
+
+        // The SOI change we expect (from the last prediction, or the child we are already inside):
+        // after its UT the late-SOI rule (TransferFlight.SoiWait) decides, never a blind re-predict.
+        int soi_expect_body = -1;
+        bool soi_expect_entry;
+        double soi_expect_ut = double.NaN;
+        SoiWaitAction? late_state;
+        float next_distance_log;
+
+        // Diagnostics: the vessel's physics mode, and the orbit read when the last burn ended.
+        PhysicsMode? last_physics;
+        double burn_end_ut = double.NaN, burn_end_energy = double.NaN, burn_end_e = double.NaN;
+        // The last correction that failed (TransferFlight.SolveKey), saved so a resume never repeats it.
+        string failed_solve_key;
         bool warping;
         double warp_until = double.NaN;
         bool soi_wait_logged;
@@ -61,6 +75,11 @@ namespace K2D2.Transfer
             soi_ours = soi_game = double.NaN;
             soi_next_body = -1;
             soi_checked_ut = double.NaN;
+            soi_expect_body = -1;
+            soi_expect_ut = double.NaN;
+            late_state = null;
+            last_physics = null;
+            burn_end_ut = double.NaN;
             free_arrival_step = -1;
             node.Clear();
             burn_ignited = false;
@@ -93,6 +112,7 @@ namespace K2D2.Transfer
             }
             if (body != last_body)
                 OnSoiChange(last_body, body, now);
+            WatchPhysics(vessel, now);
 
             if (burning)
             {
@@ -118,9 +138,12 @@ namespace K2D2.Transfer
                 }
             }
 
-            // Re-check a predicted SOI change that has not come.
-            if (!double.IsNaN(soi_ours) && now > soi_ours + 10 && !(now < soi_checked_ut + 30))
-                UpdateSoiPrediction("the predicted SOI change has not come");
+            // A predicted SOI change that has not come: the late-SOI rule, never a blind re-predict.
+            if (soi_expect_body >= 0 && !double.IsNaN(soi_expect_ut) && now > soi_expect_ut + 5)
+            {
+                LateSoi(vessel, body, r, v, now);
+                return;
+            }
 
             double lead = StepIndex < plan.Steps.Count ? TransferFlight.BurnLead(EstimateBurnSeconds(plan.Steps[StepIndex].DeltaVMagnitude)) : 0;
             int final = plan.Request?.ToBody ?? -1;
@@ -159,6 +182,7 @@ namespace K2D2.Transfer
                     SoiMissed(d, now);
                     return;
                 case FlightAction.WaitSoi:
+                    LogSoiDistance(vessel, body, r, now, soi_expect_body >= 0 ? soi_expect_body : final);
                     if (!soi_wait_logged)
                     {
                         soi_wait_logged = true;
@@ -445,6 +469,7 @@ namespace K2D2.Transfer
                 actual = $"{(v - vCoast).magnitude:F1} m/s";
             }
             logger.LogInfo($"[Transfer] {burn_name} done: planned {burn_planned_dv:F1} m/s, actual {actual}");
+            AfterBurnChecks();
             bool capture = Current.Steps[StepIndex].Kind == StepKind.Capture;
             StepDone();
             UpdateSoiPrediction($"after the {burn_name}");
@@ -513,7 +538,10 @@ namespace K2D2.Transfer
             double R = target.Radius;
             if (!res.Ok)
             {
-                Fail($"correction {n}: no correction meets {target.Name} within {ArrivalTargeting.MaxDeltaV:F0} m/s");
+                failed_solve_key = TransferFlight.SolveKey(i, burnUT, vb.magnitude, ArrivalTargeting.MaxDeltaV);
+                string msg = TransferFlight.CorrectionFailed(n, target.Name, ArrivalTargeting.MaxDeltaV);
+                Fail(msg);
+                OfferNewTransfer(msg, target.Name, ArrivalTargeting.MaxDeltaV, double.NaN);
                 return;
             }
             double dv = res.DeltaV.magnitude;
@@ -543,7 +571,10 @@ namespace K2D2.Transfer
             var verdict = TransferFlight.JudgeCorrection(dv, res.Converged, res.Pe, step.TargetPeriapsisRadius, res.Without, floor, out string why);
             if (verdict == CorrectionVerdict.Refuse)
             {
-                Fail($"correction {n}: {why}");
+                failed_solve_key = TransferFlight.SolveKey(i, burnUT, vb.magnitude, ArrivalTargeting.MaxDeltaV);
+                string msg = $"Correction {n}: {why}; planning again from the current orbit";
+                Fail(msg);
+                OfferNewTransfer(msg, target.Name, ArrivalTargeting.MaxDeltaV, double.NaN);
                 return;
             }
 
@@ -729,7 +760,22 @@ namespace K2D2.Transfer
                 {
                     soi_ours = p.EndUT;
                     soi_next_body = p.NextBody;
+                    soi_expect_body = p.End == PatchEnd.Encounter ? p.NextBody : body;
+                    soi_expect_entry = p.End == PatchEnd.Encounter;
+                    soi_expect_ut = p.EndUT;
                 }
+                else if (patches.Count > 0 && patches[0].StartInsideBody >= 0)
+                {
+                    // Within our SOI radius of a child, the game still around its parent: an explicit
+                    // state, waited out by the late-SOI rule.
+                    int inside = patches[0].StartInsideBody;
+                    soi_expect_body = inside;
+                    soi_expect_entry = true;
+                    soi_expect_ut = now - 6;
+                    logger.LogInfo($"[Transfer] inside our SOI radius of {System[inside].Name}, the game has not switched: waiting for its own change " +
+                        $"({TransferDiagnostics.Distances(vessel, bodies, System, body, r, now, inside)})");
+                }
+                // No change found: a change still expected stays expected (the late-SOI rule decides).
             }
             catch (Exception e)
             {
@@ -763,7 +809,11 @@ namespace K2D2.Transfer
             logger.LogInfo($"[Transfer] SOI change {name(from)} -> {name(to)} at UT {now:F0}: predicted ours {soi_ours:F0} " +
                 $"({(double.IsNaN(soi_ours) ? "none" : (now - soi_ours).ToString("+0.0;-0.0") + " s")}), " +
                 $"game patch {soi_game:F0} ({(double.IsNaN(soi_game) ? "none" : (now - soi_game).ToString("+0.0;-0.0") + " s")})");
+            LogState($"SOI change {name(from)} -> {name(to)}", from, to);
             last_body = to;
+            soi_expect_body = -1;
+            soi_expect_ut = double.NaN;
+            late_state = null;
             StopWarp();
             UpdateSoiPrediction("after the SOI change");
             // On entering the capture's SOI, the capture goes to the periapsis really ahead.
@@ -777,6 +827,192 @@ namespace K2D2.Transfer
                 plan.Steps[StepIndex].UT = peUT;
             }
             Save();
+        }
+
+        // ---------------------------------------------------------------- late SOI changes
+
+        // The expected SOI change has not come at its time: keep coasting while the distance moves the
+        // right way, wait for the game once across our SOI radius, give up only once it moves the wrong
+        // way (TransferFlight.SoiWait).
+        void LateSoi(VesselComponent vessel, int body, Vector3d r, Vector3d v, double now)
+        {
+            int x = soi_expect_body;
+            bool entry = soi_expect_entry;
+            double distance, rate;
+            if (entry)
+            {
+                distance = TransferDiagnostics.OurDistance(System, body, r, x, now, out var rel);
+                var path = System.PathToRoot(body);
+                int root = path[path.Count - 1];
+                System.StateRelativeTo(body, root, now, out _, out var vb);
+                System.StateRelativeTo(x, root, now, out _, out var vx);
+                var relV = vb + v - vx;
+                rate = distance > 0 ? Vector3d.Dot(rel, relV) / distance : 0;
+            }
+            else
+            {
+                distance = r.magnitude;
+                rate = distance > 0 ? Vector3d.Dot(r, v) / distance : 0;
+            }
+            double soi = System[x].Soi;
+            var action = TransferFlight.SoiWait(entry, distance, rate, soi, out double warpSeconds);
+            string what = $"{(entry ? "entry into" : "exit from")} {System[x].Name}";
+            if (late_state != action)
+            {
+                late_state = action;
+                logger.LogInfo($"[Transfer] late SOI {what}: {action}, distance {distance:F0} m (SOI {soi:F0} m), rate {rate:F1} m/s; " +
+                    TransferDiagnostics.Distances(vessel, bodies, System, body, r, now, x));
+            }
+            LogSoiDistance(vessel, body, r, now, x);
+            switch (action)
+            {
+                case SoiWaitAction.Missed:
+                {
+                    int final = Current.Request?.ToBody ?? -1;
+                    bool planned = x == final || Current.Steps.Any(st => st.Body == x || st.TargetBody == x);
+                    if (!planned)
+                    {
+                        // An unplanned body the path only grazed: nothing to wait for.
+                        logger.LogInfo($"[Transfer] late SOI {what}: an unplanned body, not entered after all");
+                        soi_expect_body = -1;
+                        soi_expect_ut = double.NaN;
+                        late_state = null;
+                        return;
+                    }
+                    if (entry)
+                        Fail($"the {System[x].Name} encounter passed outside its SOI (closest about {(distance - System[x].Radius) / 1000:F0} km altitude, SOI {soi / 1000:F0} km)",
+                            captureFailed: x == final);
+                    else
+                        Fail($"the vessel turns back toward {System[x].Name} at {distance / 1000:F0} km: the planned SOI exit did not happen");
+                    return;
+                }
+                case SoiWaitAction.WaitGameSwitch:
+                    // Crossing an SOI takes hours at 1x: the lowest rails warp step, where the game
+                    // still checks the SOI every frame (OrbitDriverJob), never more.
+                    if (!PrepareOnly && TimeWarpTools.CurrentRateIndex != 1)
+                    {
+                        TimeWarpTools.SetRateIndex(1, false);
+                        warping = true;
+                        warp_until = double.NaN;
+                    }
+                    Status = entry ? $"Inside our SOI radius of {System[x].Name}: waiting for the game to switch."
+                        : $"Past our SOI radius of {System[x].Name}: waiting for the game to switch.";
+                    return;
+                case SoiWaitAction.Warp:
+                    if (PrepareOnly)
+                        Status = $"SOI {what} late: {(Math.Abs(distance - soi)) / 1000:F0} km to go at {Math.Abs(rate):F0} m/s.";
+                    else
+                        Coast(now + warpSeconds, now);
+                    return;
+                default:
+                    StopWarp();
+                    Status = $"SOI {what} late: {(Math.Abs(distance - soi)) / 1000:F0} km to go at {Math.Abs(rate):F0} m/s.";
+                    return;
+            }
+        }
+
+        // Every 10 s of real time while an SOI change is awaited: the distance, game and ours.
+        void LogSoiDistance(VesselComponent vessel, int body, Vector3d r, double now, int target)
+        {
+            if (target < 0 || Time.realtimeSinceStartup < next_distance_log)
+                return;
+            next_distance_log = Time.realtimeSinceStartup + 10;
+            logger.LogInfo($"[Transfer] waiting for an SOI change at UT {now:F0}: " +
+                TransferDiagnostics.Distances(vessel, bodies, System, body, r, now, target, body));
+        }
+
+        // ---------------------------------------------------------------- state diagnostics
+
+        // The orbit (managed and ECS) and the distances to two bodies, world and ours.
+        void LogState(string when, int bodyA, int bodyB)
+        {
+            if (!ReadLight(out int body, out var r, out _, out double now, out VesselComponent vessel))
+                return;
+            string orbit = TransferDiagnostics.Orbit(vessel, now, out _, out _, out _);
+            TransferDiagnostics.WorldVsOrbit(vessel, now, out string world);
+            logger.LogInfo($"[Transfer] state at {when}, UT {now:F1}: {orbit}; {world}; " +
+                TransferDiagnostics.Distances(vessel, bodies, System, body, r, now, bodyA, bodyB));
+        }
+
+        // After a burn: the orbit, and the world position against the orbit's (F).
+        void AfterBurnChecks()
+        {
+            if (!ReadLight(out int body, out var r, out _, out double now, out VesselComponent vessel))
+                return;
+            string orbit = TransferDiagnostics.Orbit(vessel, now, out burn_end_energy, out burn_end_e, out double radius);
+            burn_end_ut = now;
+            double diff = TransferDiagnostics.WorldVsOrbit(vessel, now, out string world);
+            logger.LogInfo($"[Transfer] state after the {burn_name}: {orbit}; {world}");
+            if (TransferFlight.StateMismatch(diff, radius))
+                logger.LogWarning($"[Transfer] state mismatch after the burn: the orbit puts the vessel {diff:F0} m from where the game's world has it ({world}). See the [TargetOrbitBurn] physics warp lines for the warp it used.");
+        }
+
+        // Every RigidBody <-> rails switch of our vessel: the orbit before and after. A jump after a
+        // burn is the state mismatch the 2026-10-25 test suggests: logged prominently, predictions redone.
+        void WatchPhysics(VesselComponent vessel, double now)
+        {
+            PhysicsMode mode;
+            try
+            {
+                mode = vessel.Physics;
+            }
+            catch (Exception)
+            {
+                return;
+            }
+            if (last_physics == mode)
+                return;
+            bool first = last_physics == null;
+            var previous = last_physics;
+            last_physics = mode;
+            if (first)
+                return;
+            string orbit = TransferDiagnostics.Orbit(vessel, now, out double energy, out double e, out double radius);
+            double diff = TransferDiagnostics.WorldVsOrbit(vessel, now, out string world);
+            logger.LogInfo($"[Transfer] physics mode {previous} -> {mode} at UT {now:F1}: {orbit}; {world}");
+            bool afterBurn = !double.IsNaN(burn_end_ut) && now - burn_end_ut < 3600;
+            double mu = vessel.Orbit?.referenceBody?.gravParameter ?? double.NaN;
+            if (afterBurn && TransferFlight.OrbitJumped(burn_end_energy, energy, burn_end_e, e, mu, radius))
+            {
+                logger.LogWarning($"[Transfer] state mismatch after the burn: the orbit changed at the switch {previous} -> {mode}, " +
+                    $"energy {burn_end_energy:F3} -> {energy:F3}, e {burn_end_e:F6} -> {e:F6}, {now - burn_end_ut:F0} s after the burn");
+                UpdateSoiPrediction("after the orbit changed at the physics switch");
+            }
+            else if (TransferFlight.StateMismatch(diff, radius))
+                logger.LogWarning($"[Transfer] state mismatch at the switch {previous} -> {mode}: {world}");
+            if (afterBurn && mode != PhysicsMode.RigidBody)
+                burn_end_ut = double.NaN; // one switch to rails per burn is checked
+        }
+
+        // ---------------------------------------------------------------- a new transfer offered
+
+        // After a correction that cannot be made: plans a new transfer from the current orbit and shows
+        // both options. Never starts it: the player presses Start.
+        void OfferNewTransfer(string why, string target, double budget, double correctionCost)
+        {
+            var plan = Current;
+            if (plan?.Request == null || !TakeSnapshot(out var snap, out string error, out _))
+            {
+                Status = why + ". Plan again from the Transfer tab.";
+                return;
+            }
+            Adopt(snap);
+            var q = CopyRequest(plan.Request);
+            q.FromBody = snap.Body;
+            q.R0 = snap.R;
+            q.V0 = snap.V;
+            q.UT0 = snap.UT;
+            var system = snap.System;
+            var oldStages = snap.Stages;
+            logger.LogInfo($"[Transfer] {why}: searching a new transfer to {target} from the current orbit");
+            StartSearch(system, q, JobKind.Search, fresh =>
+            {
+                OnPlanned(fresh, system, oldStages, resume: null);
+                double cost = fresh.Ok ? fresh.TotalDeltaV : double.NaN;
+                Status = $"{why}. {TransferFlight.ReplanOptions(target, budget, correctionCost, cost)}";
+                logger.LogInfo($"[Transfer] options: correction {(double.IsNaN(correctionCost) ? $"not possible within {budget:F0} m/s" : $"{correctionCost:F0} m/s")}, " +
+                    $"new transfer {(double.IsNaN(cost) ? "none" : $"{cost:F0} m/s ({fresh.CaseName})")}");
+            });
         }
 
         // ---------------------------------------------------------------- the end, failures
@@ -819,6 +1055,15 @@ namespace K2D2.Transfer
             var plan = Current;
             int final = plan.Request?.ToBody ?? -1;
             string name = d.MissedBody >= 0 && d.MissedBody < System.Count ? System[d.MissedBody].Name : "the next body";
+            if (d.MissedBody >= 0 && d.MissedBody < System.Count && soi_expect_body != d.MissedBody)
+            {
+                // Late by the plan, but the distance decides (TransferFlight.SoiWait).
+                soi_expect_body = d.MissedBody;
+                soi_expect_entry = !d.MissedExit;
+                soi_expect_ut = now - 6;
+                logger.LogInfo($"[Transfer] the planned SOI {(d.MissedExit ? "exit from" : "entry into")} {name} is late{By(d.WarpUntilUT)}: the distance decides now");
+                return;
+            }
             if (!d.MissedExit && d.MissedBody == final)
                 Fail($"the {name} SOI was not reached{By(d.WarpUntilUT)}", captureFailed: true);
             else
