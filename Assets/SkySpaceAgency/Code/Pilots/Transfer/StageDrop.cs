@@ -16,6 +16,8 @@ namespace K2D2.Transfer
         public bool IsControl;        // the vessel's control owner (VesselComponent.GetControlOwner)
         public bool IsCommand;        // a command part (Data_Command), the control owner included
         public bool IsDockingPort;
+        // Landing legs (LandingGear.IsLeg). Only the landing pilot fills it: a transfer burn may drop legs.
+        public bool IsLandingLeg;
     }
 
     public struct StageDropResult
@@ -113,6 +115,7 @@ namespace K2D2.Transfer
                 HasDockingPort = dropped.Any(p => p.IsDockingPort) || fired.Any(p => p.IsDockingPort),
                 HasParachute = dropped.Any(p => p.Part.IsParachute) || fired.Any(p => p.Part.IsParachute),
                 HasCommandPart = dropped.Any(p => p.IsCommand),
+                HasLandingLeg = dropped.Any(p => p.IsLandingLeg),
             };
             bool may = StagingGuard.MayDrop(flags, out string reason);
             return new StageDropResult

@@ -12,6 +12,8 @@ namespace K2D2.Transfer
         public double DeltaVVac;   // m/s
         // What firing this stage drops.
         public bool HasDockingPort, HasParachute, HasCommandPart;
+        // Set by the landing pilot only (StageDrop with DropPart.IsLandingLeg).
+        public bool HasLandingLeg;
     }
 
     public class BudgetResult

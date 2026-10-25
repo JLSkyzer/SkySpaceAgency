@@ -8,7 +8,7 @@ public class StageDropTests
 {
     // A part of the test vessel: id, parent, the stage that activates it, and its kind.
     static DropPart Part(string id, string parent, int stage = -1, bool decoupler = false, string detachesFrom = null,
-        bool control = false, bool command = false, bool chute = false, bool port = false) =>
+        bool control = false, bool command = false, bool chute = false, bool port = false, bool leg = false) =>
         new DropPart
         {
             Part = new CapsulePart { Id = id, ParentId = parent, IsDecoupler = decoupler, DetachesFromId = detachesFrom, IsParachute = chute, MassT = 1 },
@@ -17,6 +17,7 @@ public class StageDropTests
             IsControl = control,
             IsCommand = command || control,
             IsDockingPort = port,
+            IsLandingLeg = leg,
         };
 
     // pod (control) - chute - dec2 (stage 1, separates from tank2) - tank2 - engine2 (stage 1)
@@ -133,6 +134,25 @@ public class StageDropTests
         StageDropResult r = StageDrop.Decide(TwoStageRocket(), 2);
         CollectionAssert.DoesNotContain(r.DroppedIds, "dec1");
         CollectionAssert.Contains(r.KeptIds, "dec1");
+    }
+
+    [Test]
+    public void DroppedLandingLeg_Refused_KeptLegIgnored()
+    {
+        // Legs on the booster: the landing stage would land without them.
+        var parts = TwoStageRocket();
+        parts.Add(Part("leg1", "tank1", leg: true));
+        StageDropResult r = StageDrop.Decide(parts, 2);
+        Assert.IsFalse(r.MayStage);
+        Assert.IsTrue(r.Flags.HasLandingLeg);
+        Assert.AreEqual("landing legs", r.Reason);
+
+        // Legs on the lander stay: the drop is allowed.
+        parts = TwoStageRocket();
+        parts.Add(Part("leg2", "tank2", leg: true));
+        r = StageDrop.Decide(parts, 2);
+        Assert.IsTrue(r.MayStage, r.Reason);
+        Assert.IsFalse(r.Flags.HasLandingLeg);
     }
 
     [Test]

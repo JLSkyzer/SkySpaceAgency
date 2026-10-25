@@ -3,7 +3,8 @@ using System.Collections.Generic;
 namespace K2D2.Transfer
 {
     // The mod drops an empty stage during a burn, but never one that would drop a docking port, a
-    // parachute or the command part: the player stages those by hand.
+    // parachute or the command part (nor, when the landing pilot drops a lower stage, landing
+    // legs): the player stages those by hand.
     public static class StagingGuard
     {
         // reason completes "the next stage would drop {reason}"; null when the stage may be dropped.
@@ -13,6 +14,7 @@ namespace K2D2.Transfer
             if (stage.HasDockingPort) kept.Add("a docking port");
             if (stage.HasParachute) kept.Add("a parachute");
             if (stage.HasCommandPart) kept.Add("the command part");
+            if (stage.HasLandingLeg) kept.Add("landing legs");
 
             if (kept.Count == 0)
             {
