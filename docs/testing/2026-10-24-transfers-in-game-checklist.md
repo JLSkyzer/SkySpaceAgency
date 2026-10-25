@@ -88,3 +88,12 @@ Use a burn of more than 2 minutes, for example on a low-thrust stage. Check:
 - the exit back to x4 before the end, then the closed loop finishing the burn;
 - the Δv applied during rails, planned against actual.
 If the guard fails, the mod must drop to physics warp at once without losing fuel for more than about 2 frames. A landing, reentry or rendezvous burn near the target never goes on rails.
+
+## 14. After the 2026-10-25 fixes (Duna transfer)
+- Leave Node tab → ADVANCED → "Warp during burns" on **Off** for the first flight. Fly Kerbin → Duna on one plan.
+- Read these lines in the log:
+  - `state after the …` and `state mismatch after the burn`;
+  - `physics mode RigidBody -> …`;
+  - `late SOI entry into …` and `inside our SOI radius of …`;
+  - `resume after a failed correction …` and `options: …`.
+- Then try one flight with "Physics (x4)". If the trajectory jumps only with physics warp, the mismatch lines will show it.
