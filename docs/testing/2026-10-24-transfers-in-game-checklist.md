@@ -97,3 +97,10 @@ If the guard fails, the mod must drop to physics warp at once without losing fue
   - `late SOI entry into …` and `inside our SOI radius of …`;
   - `resume after a failed correction …` and `options: …`.
 - Then try one flight with "Physics (x4)". If the trajectory jumps only with physics warp, the mismatch lines will show it.
+
+## 15. Landing with a chosen stage (Land tab → "Land with stage …")
+- Use a booster under the lander, with fuel left. Choose the lander stage and start a landing on an airless body or Duna, in Propulsive mode.
+- The log shows `[Landing] stage plan: …` (drop height), and `auto-staging suspended`.
+- The drop happens when the booster is dry or at the drop height: `cutting the throttle first`, then `stage drop: … fired / done`, then `the new stage pushes`.
+- The lander must never fall onto the dropped booster. No `ALARM` line should appear.
+- Also try precision landing on the Mun with two stages (`stage plan: precision: …`).
