@@ -92,6 +92,8 @@ namespace K2D2.Node
         // burn (RailsBurnPolicy, RailsBurn). False for landing and reentry burns (PrecisionPhase):
         // they stay at physics x4 at most.
         public bool allow_rails_warp = true;
+        // The player's burn time warp mode for this burn (BurnWarpSettings, read at ignition).
+        BurnWarpMode burn_warp_mode = BurnWarpMode.Off;
         // Within 2 km of a rendezvous target, set every frame by the Rendezvous pilot: never rails.
         public bool near_target = false;
 
@@ -409,6 +411,9 @@ namespace K2D2.Node
             // The warp is managed frame by frame from now on (ManageBurnWarp).
             mode = Mode.Burn;
             burn_start_UT = now;
+            // The player's burn warp mode, read once per burn (Node tab, ADVANCED).
+            burn_warp_mode = BurnWarpSettings.mode.V;
+            logger.LogInfo($"{BurnLogTag} burn warp mode: {BurnWarpModes.Describe(burn_warp_mode)}");
             logger.LogInfo($"{BurnLogTag} ignition at T{now - BurnStartUT:+0.0;-0.0;+0.0}s vs planned, {angle:n1}° off");
             ignition_dv = double.NaN;
             // Fixed for the whole burn (a target orbit: the sign of the radial speed, so the target
@@ -678,7 +683,7 @@ namespace K2D2.Node
 
         // Rails warp needs the warp itself allowed (allow_warp, the auto-warp setting) and the
         // burn's own flag (off for landing and reentry).
-        bool RailsAllowed => allow_warp && allow_rails_warp;
+        bool RailsAllowed => allow_warp && allow_rails_warp && BurnWarpModes.AllowsRails(burn_warp_mode);
 
         // Off rails, once the physics warp is managed: asks RailsBurnPolicy, enters rails when it
         // says so. The aim drift (a path integration) is computed only when every cheaper
@@ -977,6 +982,15 @@ namespace K2D2.Node
         // to the cap, otherwise the player's warp is only lowered.
         void ManageBurnWarp(double remainingDv, double accel, bool aligned)
         {
+            if (!BurnWarpModes.AllowsPhysics(burn_warp_mode))
+            {
+                // Off: 1x while the engines push, whatever warp is set (lowered at once).
+                if (physics_warp.Active)
+                    physics_warp.Leave(true);
+                if (TimeWarpTools.CurrentRateIndex != 0)
+                    TimeWarpTools.SetRateIndex(0, true);
+                return;
+            }
             double frame = Time.unscaledDeltaTime;
             double burnLeft = accel > 0 ? remainingDv / accel : double.PositiveInfinity;
             double cap = 1;

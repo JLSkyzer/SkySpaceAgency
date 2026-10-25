@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Warp during burns** (Node tab → ADVANCED → // WARP, saved in `skyspaceagency_settings.json`; 2026-10-25). One setting for every closed-loop burn (Node, Orbit, Lift, Land, Transfer, Rendezvous):
+  - **Off (1x)**, the default: no physics or rails warp while the engines push, as before physics warp was added. The trajectory of the first in-game Kerbin → Duna flight jumped after physics-warped burns followed by rails warp, so the faster modes are now opt-in.
+  - **Physics (x4)**: the game's physics warp during the burn.
+  - **Physics + rails**: physics warp, and rails warp (x10, x50) for the long middle of a burn.
+  - The warp before a burn (waiting for the window) does not change. Each burn logs its mode ("burn warp mode: …").
+
 - **Transfer fixes after the first in-game Kerbin → Duna flight** (2026-10-25; not yet flown again).
   - **A late SOI change never sends the warp past a real encounter.** After the predicted time, the pilot keeps coasting while the distance to the body still closes in, waits at the lowest warp step once the vessel is inside the body's SOI radius but the game has not switched yet, and gives up only once the closest approach has passed outside the SOI ("the Duna encounter passed outside its SOI …"). Exits work the same way.
   - **A failed correction no longer loops on Resume.** Resume first corrects the path the vessel already has, within the plan's correction allowance or 10 % of the Δv it still needs, whichever is larger. When that fails it plans a new transfer and shows both costs; nothing starts until the player presses Start. The same failed solve is never tried twice.

@@ -32,6 +32,8 @@ namespace K2D2.Node
 
             warp_settings.Q<K2Slider>("warp_speed").Bind(WarpToSettings.warp_speed);
             warp_settings.Q<IntegerField>("warp_safe_duration").Bind(WarpToSettings.warp_safe_duration);
+            // Warp during burns (every closed-loop burn reads it at ignition).
+            root.Q<InlineEnum>("burn_warp_mode")?.Bind(BurnWarpSettings.mode, BurnWarpModes.Labels);
 
             // Burn
             root.Q<K2Slider>("burn_adjust").Bind(BurnManeuverSettings.burn_adjust);

@@ -82,6 +82,10 @@
                 <ui:VisualElement name="Warp">
                     <ui:Label text="// WARP" class="k2-section-header" />
                     <K2UI.K2Toggle label="Auto Warp" name="auto_warp" tooltip="Warp time before burn" />
+                    <!-- Burn time warp mode (BurnWarpSettings.mode), shared by every closed-loop burn:
+                         Off (1x, default), Physics (up to x4), Physics + rails for long burns. -->
+                    <ui:Label text="Warp during burns" tooltip="Time warp while the engines push (all tabs). Off: 1x, the default." />
+                    <K2UI.InlineEnum name="burn_warp_mode" labels="Off (1x);Physics (x4);Physics + rails" />
                     <ui:VisualElement name="warp_settings" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
                         <K2UI.K2Slider label-on-top="true" min-max-label="Safe-Quick" print-value="true" min="0" value="1" max="7" name="warp_speed" label="Warp Speed" />
                         <ui:IntegerField label="Before Burn (s)" value="42" is-delayed="true" name="warp_safe_duration" tooltip="Nb seconds in x1 before next phase (min:5)" />
