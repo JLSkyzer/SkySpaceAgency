@@ -38,6 +38,7 @@ namespace K2D2.Landing
         string last_stage_log;
         float next_stage_log_time = 0;
         bool stage_number_warned = false;
+        string last_plan_error;
 
         // A staged braking is under way (or being checked at start).
         internal bool StagedBraking => staged_drops_left > 0 && !parachute_mode;
@@ -63,6 +64,7 @@ namespace K2D2.Landing
             drops_done = 0;
             last_stage_log = null;
             stage_number_warned = false;
+            last_plan_error = null;
             stage_drop?.Reset();
         }
 
@@ -225,7 +227,12 @@ namespace K2D2.Landing
             stage_plan = plan;
             stage_plan_valid = true;
             stage_drop_height = isRunning && !double.IsNaN(stage_drop_height) ? Math.Max(stage_drop_height, plan.DropHeight) : plan.DropHeight;
-            stage_message = isRunning && !plan.Ok ? plan.Error : stage_message;
+            // A plan that no longer works is shown while running, and cleared once it works again.
+            if (isRunning && !plan.Ok)
+                stage_message = plan.Error;
+            else if (stage_message == last_plan_error)
+                stage_message = "";
+            last_plan_error = plan.Ok ? null : plan.Error;
             LogStage($"[Landing] stage plan: {plan.Describe()} | run drop height {stage_drop_height:n0} m, {staged_drops_left} drop(s) left, " +
                 $"start in {plan.Brake.StartUT - now:n1}s", force: false);
         }
