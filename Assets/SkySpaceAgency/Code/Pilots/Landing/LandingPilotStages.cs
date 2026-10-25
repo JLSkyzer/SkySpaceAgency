@@ -38,7 +38,16 @@ namespace K2D2.Landing
         string last_stage_log;
         float next_stage_log_time = 0;
         bool stage_number_warned = false;
-        string last_plan_error;
+        bool drops_stopped = false;
+        // The game's staging at the start: the drops left count activations from it.
+        int staged_choice = 0;
+        int staging_count_start = 0;
+        bool staging_last_active_start = true;
+        // The plan does not work any more (shown as an error in the status line).
+        internal bool stage_plan_alarm = false;
+
+        // Auto-staging (StagingPilot) is suspended while a landing with a chosen stage runs.
+        internal bool SuspendsAutoStaging => isRunning && staged_landing_stage >= 0 && (StagedBraking || (stage_drop?.Busy ?? false));
 
         // A staged braking is under way (or being checked at start).
         internal bool StagedBraking => staged_drops_left > 0 && !parachute_mode;
@@ -64,7 +73,9 @@ namespace K2D2.Landing
             drops_done = 0;
             last_stage_log = null;
             stage_number_warned = false;
-            last_plan_error = null;
+            stage_plan_alarm = false;
+            drops_stopped = false;
+            staged_choice = 0;
             stage_drop?.Reset();
         }
 
@@ -144,8 +155,17 @@ namespace K2D2.Landing
             }
             BrakeStage landing = stages[stages.Length - 1];
             landing_accel = landing.MassT > 0 ? landing.ThrustKN / landing.MassT : 0;
+            StagingComponent staging = vessel.SimulationObject?.Staging;
+            if (staging == null)
+            {
+                last_error = "The vessel's staging is not available.";
+                return false;
+            }
             staged_drops_left = landing_stage_choice;
+            staged_choice = landing_stage_choice;
             staged_landing_stage = list[landing_stage_choice].Stage;
+            staging_count_start = staging.StageCount;
+            staging_last_active_start = staging_count_start > 0 && staging.AvailableStages[staging_count_start - 1].IsActive;
             return true;
         }
 
@@ -197,42 +217,75 @@ namespace K2D2.Landing
             return LandingStages.Build(list, staged_drops_left, burn_dV.mass, burn_dV.active_thrust, burn_dV.active_isp, out error);
         }
 
-        // The landing stage's place in the game's list gives the drops left. When the list does
-        // not hold it any more, the count of drops done is kept (logged once).
+        // The drops left come from the game's staging: the activations made since the start
+        // (LandingStages.ActivationsDone), whoever made them. The Δv list is only cross-checked:
+        // its landing stage should be at the index of the drops left (logged once otherwise).
         void SyncDropsLeft(List<LandingStageData> list)
         {
-            int index = list.FindIndex(s => s.Stage == staged_landing_stage);
-            if (index < 0)
+            if (drops_stopped)
             {
-                if (!stage_number_warned)
-                {
-                    stage_number_warned = true;
-                    logger.LogWarning($"[Landing] stage plan: game stage {staged_landing_stage} is not in the Δv list any more " +
-                        $"({DescribeStages(list)}): counting the drops instead ({staged_drops_left} left)");
-                }
+                staged_drops_left = 0;
                 return;
             }
-            if (index != staged_drops_left)
+            StagingComponent staging = current_vessel.VesselComponent?.SimulationObject?.Staging;
+            if (staging == null)
+                return;
+            int count = staging.StageCount;
+            bool lastActive = count > 0 && staging.AvailableStages[count - 1].IsActive;
+            int done = LandingStages.ActivationsDone(staging_count_start, staging_last_active_start, count, lastActive);
+            int left = Math.Max(0, staged_choice - done);
+            if (left != staged_drops_left)
             {
-                logger.LogInfo($"[Landing] stage plan: the landing stage is now stage {index + 1} of the list ({staged_drops_left} drop(s) were left)");
-                staged_drops_left = index;
-                if (index == 0)
-                    logger.LogInfo("[Landing] stage plan: the landing stage is active");
+                logger.LogInfo($"[Landing] stage plan: {done} activation(s) since the start ({staging_count_start} -> {count} stage(s)): " +
+                    $"{left} drop(s) left (were {staged_drops_left})" + (left == 0 ? "; the landing stage is active" : ""));
+                staged_drops_left = left;
+            }
+            if (list != null && !stage_number_warned)
+            {
+                int index = list.FindIndex(s => s.Stage == staged_landing_stage);
+                if (index != staged_drops_left)
+                {
+                    stage_number_warned = true;
+                    logger.LogWarning($"[Landing] stage plan: the Δv list puts game stage {staged_landing_stage} at index {index}, " +
+                        $"the staging says {staged_drops_left} drop(s) left ({DescribeStages(list)}); the staging is followed");
+                }
             }
         }
 
-        // The plan's result, kept for the drops and the UI. During a run the drop height only goes up.
+        // The plan's result, kept for the drops and the UI. During a run the drop height only goes
+        // up. A plan that no longer works mid-run is an alarm (status line and log); the pilot
+        // then drops the lower stages now when the landing stage alone can still finish from
+        // here, else brakes now when it is still waiting.
         void UseStagePlan(StagePlan plan, double now)
         {
             stage_plan = plan;
             stage_plan_valid = true;
             stage_drop_height = isRunning && !double.IsNaN(stage_drop_height) ? Math.Max(stage_drop_height, plan.DropHeight) : plan.DropHeight;
-            // A plan that no longer works is shown while running, and cleared once it works again.
             if (isRunning && !plan.Ok)
-                stage_message = plan.Error;
-            else if (stage_message == last_plan_error)
+            {
+                string reaction = "";
+                if (plan.DropNowFeasible && staged_drops_left > 0 && !stage_drop.Busy)
+                {
+                    stage_drop_height = Math.Max(stage_drop_height, altitude + 1);
+                    reaction = " The lower stage is dropped now.";
+                }
+                else if (mode == Mode.Pause || mode == Mode.QuickWarp || mode == Mode.RotationWarp || mode == Mode.Waiting)
+                {
+                    reaction = " Braking now.";
+                    setMode(Mode.Brake);
+                }
+                string message = "Staged landing no longer works: " + plan.Error + reaction;
+                if (!stage_plan_alarm || message != stage_message)
+                    logger.LogWarning($"[Landing] stage plan: ALARM: {message} | {plan.Describe()}");
+                stage_message = message;
+                stage_plan_alarm = true;
+            }
+            else if (stage_plan_alarm)
+            {
+                logger.LogInfo($"[Landing] stage plan: works again: {plan.Describe()}");
                 stage_message = "";
-            last_plan_error = plan.Ok ? null : plan.Error;
+                stage_plan_alarm = false;
+            }
             LogStage($"[Landing] stage plan: {plan.Describe()} | run drop height {stage_drop_height:n0} m, {staged_drops_left} drop(s) left, " +
                 $"start in {plan.Brake.StartUT - now:n1}s", force: false);
         }
@@ -250,18 +303,29 @@ namespace K2D2.Landing
             logger.LogInfo(line);
         }
 
-        // Every frame of a running staged landing: drop the lower stage when dry or at the drop height.
+        // Stops the drops for the rest of the run (the landing goes on with the current stage).
+        void StopDrops(string message)
+        {
+            stage_message = message;
+            stage_plan_alarm = true;
+            drops_stopped = true;
+            staged_drops_left = 0;
+        }
+
+        // Every frame of a running staged landing: drop the lower stage when dry or at the drop
+        // height, then check that the next stage pushes (LandingStageDrop).
         void UpdateStageDrops()
         {
-            if (!StagedBraking || !isRunning)
+            if (!isRunning || staged_landing_stage < 0 || !(StagedBraking || stage_drop.Busy))
                 return;
             bool descent = mode == Mode.Pause || mode == Mode.QuickWarp || mode == Mode.RotationWarp
                 || mode == Mode.Waiting || mode == Mode.Brake || mode == Mode.TouchDown;
-            if (!descent)
+            if (!descent && !stage_drop.Busy)
                 return;
 
             VesselComponent vessel = current_vessel.VesselComponent;
             double ut = GeneralTools.Current_UT;
+            SyncDropsLeft(null);
             double dropHeight = double.IsNaN(stage_drop_height)
                 ? StagedBrakePlan.Floor(PlayerDropHeight, PrecisionActive ? settings.start_touchdown_altitude.V : BrakeSimulator.SafeAltitude)
                 : stage_drop_height;
@@ -269,31 +333,34 @@ namespace K2D2.Landing
             LandingStageDrop.Outcome outcome;
             try
             {
-                outcome = stage_drop.Update(vessel, ut, altitude, speed, dropHeight,
+                outcome = stage_drop.Update(vessel, ut, staged_drops_left > 0, altitude, speed, dropHeight,
                     current_vessel.GetThrottle(), burn_dV.active_dv, burn_dV.actual_dv);
             }
             catch (Exception e)
             {
                 logger.LogWarning($"[Landing] stage drop failed: {e.GetType().Name}: {e.Message}");
-                stage_message = $"Lower stage not dropped ({e.GetType().Name}): landing on the current stage. Stage manually if needed.";
-                staged_drops_left = 0;
+                stage_drop.Reset();
+                StopDrops($"Lower stage not dropped ({e.GetType().Name}): landing on the current stage. Stage manually if needed.");
                 return;
             }
 
             switch (outcome)
             {
                 case LandingStageDrop.Outcome.Dropped:
-                    staged_drops_left--;
                     drops_done++;
+                    SyncDropsLeft(null);
                     LogDropAgainstPlan(ut);
-                    if (staged_drops_left == 0)
-                        logger.LogInfo("[Landing] stage plan: the landing stage is active");
                     // Plan again at once with the new stage.
                     next_brake_sim_time = 0;
                     break;
+                case LandingStageDrop.Outcome.Activated:
+                    SyncDropsLeft(null);
+                    break;
                 case LandingStageDrop.Outcome.Failed:
-                    stage_message = $"Lower stage not dropped: {stage_drop.LastFailure}. Landing on the current stage: stage manually if needed.";
-                    staged_drops_left = 0;
+                    StopDrops($"Lower stage not dropped: {stage_drop.LastFailure}. Landing on the current stage: stage manually if needed.");
+                    break;
+                case LandingStageDrop.Outcome.Abort:
+                    StopWithError("Staged landing stopped: " + stage_drop.LastFailure + ".");
                     break;
             }
         }
@@ -321,8 +388,8 @@ namespace K2D2.Landing
             start_stage_plan = new StagePlan
             {
                 Ok = true,
-                SafeDropHeight = double.NaN,
-                DropHeight = vehicle.DropHeight,
+                DropHeight = stop.DropHeight,
+                SafeDropHeight = stop.SafeDropHeight,
                 Brake = new BrakeResult
                 {
                     Status = BrakeStatus.Ok, StartUT = stop.BrakeStartUT, DeltaVNeeded = stop.BrakeDeltaV,
@@ -336,7 +403,8 @@ namespace K2D2.Landing
                 LandingDeltaVAvailable = landing.DeltaV,
             };
             start_stage_plan_valid = true;
-            stage_drop_height = vehicle.DropHeight;
+            // The flight drops at the drop height the prediction used (safe height included).
+            stage_drop_height = double.IsNaN(stop.DropHeight) || stop.DropHeight <= 0 ? vehicle.DropHeight : stop.DropHeight;
             logger.LogInfo($"[Landing] stage plan: precision: stage 1 pays {plan.BeforeBrakeDeltaV:n0} of {vehicle.Stages[0].DeltaV:n0} m/s " +
                 $"before the brake; predicted brake {start_stage_plan.Describe()}; landing stage needs {plan.LandingStageDeltaV:n0} m/s " +
                 $"(brake part, terminal and lateral reserves) of {landing.DeltaV:n0} m/s");

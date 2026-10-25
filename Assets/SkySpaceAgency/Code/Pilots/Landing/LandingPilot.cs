@@ -807,12 +807,27 @@ namespace K2D2.Landing
 
             // Staged: the TWR check is the landing stage's, and the Δv check is the plan's (per stage).
             bool staged = StagedBraking;
-            if (staged && brake.HasValue && stage_plan_valid && !stage_plan.Ok)
+            if (staged && !(brake.HasValue && stage_plan_valid))
+            {
+                // No staged plan without a collision course: nothing to check the stages against.
+                logger.LogInfo("[Landing] start check: staged landing refused: no collision course to plan the drops on");
+                last_error = $"Not on a collision course yet: deorbit first, then start the landing with stage {staged_choice + 1}.";
+                ClearStagedRun();
+                return false;
+            }
+            if (staged && !stage_plan.Ok)
             {
                 logger.LogInfo($"[Landing] start check: staged plan refused: {stage_plan.Describe()}");
                 last_error = stage_plan.Error;
                 ClearStagedRun();
                 return false;
+            }
+            if (staged && stage_plan.DropHeight >= altitude)
+            {
+                // Already at or under the drop height: the lower stage leaves at once.
+                stage_message = $"Lower stage dropped at once: the drop height ({stage_plan.DropHeight / 1000:0.0} km) " +
+                    $"is above the current altitude ({altitude / 1000:0.0} km).";
+                logger.LogInfo($"[Landing] start check: {stage_message}");
             }
             var check = LandingFeasibility.Check(landing_accel, surface_gravity, brake, staged ? double.PositiveInfinity : dv_remaining);
             logger.LogInfo($"[Landing] start check: ok={check.Ok} accel {landing_accel:n2} m/s²{(staged ? " (landing stage)" : "")}, surface g {surface_gravity:n2}, " +
@@ -1097,6 +1112,11 @@ namespace K2D2.Landing
 
             // call the sub controllers
             base.Update();
+
+            // A stage drop holds the throttle at 0 over the controller's (LandingStageDrop): the
+            // lower stage leaves without pushing, as the simulation's gap.
+            if (stage_drop.HoldsThrottle)
+                current_vessel.SetThrottle(0);
 
             // A phase that cannot do its job (a refused plan or burn) stops the landing instead of
             // falling through to the next phase, except a precision burn: once the vessel may be

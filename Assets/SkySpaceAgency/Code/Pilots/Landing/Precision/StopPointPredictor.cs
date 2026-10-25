@@ -20,7 +20,8 @@ namespace K2D2.Landing.Precision
         // stage last; null = one stage from ThrustKN, MassT and Isp. ThrustKN, MassT and Isp stay
         // the active stage's: the burns before the brake fly on it.
         public BrakeStage[] Stages;
-        public double DropHeight;   // BrakeInput.DropHeight (StagedBrakePlan.Floor)
+        // The lowest drop height (StagedBrakePlan.Floor): StagedBrakePlan raises it to the safe height.
+        public double DropHeight;
 
         public bool Staged => Stages != null && Stages.Length > 1;
 
@@ -98,6 +99,9 @@ namespace K2D2.Landing.Precision
         // landing stage spends in it (0 when the brake ends before the landing stage pushes).
         public List<BrakeDrop> Drops;
         public double LandingStageDeltaV;
+        // Staged vehicle only: the drop height the plan used (m above the terrain) and its safe
+        // height (NaN when not limiting); the flight keeps the same drop height.
+        public double DropHeight, SafeDropHeight;
     }
 
     // Where a powered descent really stops: coast (after the optional impulse) to the terrain
@@ -174,7 +178,16 @@ namespace K2D2.Landing.Precision
                 Stages = vehicle.Staged ? vehicle.Stages : null,
                 DropHeight = vehicle.Staged ? vehicle.DropHeight : 0,
             };
-            BrakeResult brake = BrakeSimulator.FindStart(input);
+            // Staged: StagedBrakePlan picks the drop height (Vehicle.DropHeight is its floor) and the start.
+            StagePlan staged = default;
+            BrakeResult brake;
+            if (vehicle.Staged)
+            {
+                staged = StagedBrakePlan.Plan(new StagePlanInput { Brake = input, PlayerDropHeight = vehicle.DropHeight });
+                brake = staged.Brake;
+            }
+            else
+                brake = BrakeSimulator.FindStart(input);
 
             double stopUT = brake.StartUT + brake.BurnDuration;
             Vector3d stopNow = SurfaceGeometry.AtTime(brake.StopPosition, body.Omega, -(stopUT - ut));
@@ -201,6 +214,19 @@ namespace K2D2.Landing.Precision
                 prediction.Reason = "Too late: braking now stops below the safe altitude";
             else if (brake.Status == BrakeStatus.Impossible)
                 prediction.Reason = "Cannot stop before the ground!";
+            // Staged: the same plan as the flight (StagedBrakePlan: safe drop height, 20 % margin of
+            // the landing stage at the drop state); a refused plan is no landing.
+            if (vehicle.Staged)
+            {
+                prediction.DropHeight = staged.DropHeight;
+                prediction.SafeDropHeight = staged.SafeDropHeight;
+                if (!staged.Ok && brake.Status != BrakeStatus.Impossible)
+                {
+                    prediction.Ok = false;
+                    prediction.BelowHandOver = false;
+                    prediction.Reason = staged.Error;
+                }
+            }
             return prediction;
         }
 

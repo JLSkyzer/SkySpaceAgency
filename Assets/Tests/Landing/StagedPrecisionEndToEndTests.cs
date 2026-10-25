@@ -56,13 +56,13 @@ public class StagedPrecisionEndToEndTests
     }
 
     // The brake flown from (r, v) at ut with the vehicle's stages.
-    static Gate Brake(Vector3d r, Vector3d v, double ut, Vehicle vehicle)
+    static Gate Brake(Vector3d r, Vector3d v, double ut, Vehicle vehicle, double dropHeight)
     {
         var input = new BrakeInput
         {
             Position = r, Velocity = v, UT = ut, Mu = Mu, BodyRadius = R, AngularVelocity = Omega,
             ThrustKN = vehicle.ThrustKN, MassT = vehicle.MassT, Isp = vehicle.Isp, TerrainHeight = p => 0,
-            Stages = vehicle.Stages, DropHeight = vehicle.DropHeight,
+            Stages = vehicle.Stages, DropHeight = dropHeight,
         };
         BrakeSample end = default;
         BrakeRun run = BrakeSimulator.Simulate(input, ut, s => end = s);
@@ -89,18 +89,18 @@ public class StagedPrecisionEndToEndTests
         velocity = new Vector3d(Vector3d.Dot(vs, eastV), Vector3d.Dot(vs, northV), Vector3d.Dot(vs, rh));
     }
 
-    static void AssertDrop(BrakeRun run, Vehicle vehicle, bool expectDry, string log)
+    static void AssertDrop(BrakeRun run, double dropHeight, bool expectDry, string log)
     {
         Assert.AreEqual(1, run.Drops.Count, log);
         Assert.AreEqual(1, run.FinalStageIndex, log);
         BrakeDrop d = run.Drops[0];
         Assert.AreEqual(expectDry, d.Dry, log);
         if (d.Dry)
-            Assert.That(d.Altitude, Is.GreaterThanOrEqualTo(vehicle.DropHeight), log);
+            Assert.That(d.Altitude, Is.GreaterThanOrEqualTo(dropHeight), log);
         else
         {
-            Assert.That(d.Altitude, Is.LessThanOrEqualTo(vehicle.DropHeight), log);
-            Assert.That(d.Altitude, Is.GreaterThan(vehicle.DropHeight - Math.Abs(d.SurfaceSpeed) * BrakeSimulator.Step - 1), log);
+            Assert.That(d.Altitude, Is.LessThanOrEqualTo(dropHeight), log);
+            Assert.That(d.Altitude, Is.GreaterThan(dropHeight - Math.Abs(d.SurfaceSpeed) * BrakeSimulator.Step - 1), log);
         }
     }
 
@@ -163,13 +163,15 @@ public class StagedPrecisionEndToEndTests
 
         // The brake: booster first, dropped, the lander stops at the hand-over.
         KeplerPropagator.Propagate(r1, v1, Mu, after.BrakeStartUT - t1, out Vector3d rs, out Vector3d vs);
-        Gate gate = Brake(rs, vs, after.BrakeStartUT, braking);
+        // Flown with the drop height of the prediction, as the flight keeps it.
+        Assert.That(after.DropHeight, Is.GreaterThanOrEqualTo(braking.DropHeight), log.ToString());
+        Gate gate = Brake(rs, vs, after.BrakeStartUT, braking, after.DropHeight);
         BrakeDrop drop = gate.Run.Drops.Count > 0 ? gate.Run.Drops[0] : default;
         log.AppendLine($"brake: stopped {gate.Run.Stopped} at {gate.R.magnitude - R:F0} m, Δv {gate.Run.DeltaV:F0} (predicted {after.BrakeDeltaV:F0}), " +
             $"lander {gate.Run.FinalStageDeltaV:F0} m/s; drop {(drop.Dry ? "dry" : "forced")} at {drop.Altitude:F0} m, {drop.SurfaceSpeed:F0} m/s " +
-            $"(drop height {braking.DropHeight:F0} m)");
+            $"(drop height {after.DropHeight:F0} m, safe {after.SafeDropHeight:F0} m)");
         Assert.IsTrue(gate.Run.Stopped, log.ToString());
-        AssertDrop(gate.Run, braking, expectDry, log.ToString());
+        AssertDrop(gate.Run, after.DropHeight, expectDry, log.ToString());
         Assert.That(gate.R.magnitude - R, Is.InRange(StartTouchdownAltitude, StartTouchdownAltitude + 100), log.ToString());
 
         // Terminal guidance on the lander.
@@ -184,7 +186,7 @@ public class StagedPrecisionEndToEndTests
         vbd = vbd + baseline.DeltaV;
         Vehicle noTargetBraking = noTarget.AfterImpulse(baseline.DeltaV.magnitude);
         KeplerPropagator.Propagate(rbd, vbd, Mu, baseline.Stop.BrakeStartUT - baseline.BurnUT, out Vector3d rbs, out Vector3d vbs);
-        Gate gateB = Brake(rbs, vbs, baseline.Stop.BrakeStartUT, noTargetBraking);
+        Gate gateB = Brake(rbs, vbs, baseline.Stop.BrakeStartUT, noTargetBraking, baseline.Stop.DropHeight);
         Assert.IsTrue(gateB.Run.Stopped, log.ToString());
         Local(gateB, gateB.R.normalized, out Vector3d offsetB, out Vector3d velocityB);
         double maxAccelB = noTargetBraking.Stages[1].ThrustKN / gateB.Mass;

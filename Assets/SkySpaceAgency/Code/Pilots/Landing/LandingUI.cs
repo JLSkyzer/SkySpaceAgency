@@ -1003,8 +1003,14 @@ namespace K2D2.Landing
                 if (pilot.current_executor != null && !string.IsNullOrEmpty(pilot.current_executor.status_line))
                     status_bar.Console(pilot.current_executor.status_line);
 
+                // A staged plan that no longer works, or stopped drops, replace the status line.
                 if (!string.IsNullOrEmpty(pilot.stage_message))
-                    status_bar.Console(pilot.stage_message);
+                {
+                    if (pilot.stage_plan_alarm)
+                        status_bar.Error(pilot.stage_message);
+                    else
+                        status_bar.Console(pilot.stage_message);
+                }
                 if (!string.IsNullOrEmpty(pilot.last_warning))
                     status_bar.Console(pilot.last_warning);
                 if (pilot.PrecisionActive)

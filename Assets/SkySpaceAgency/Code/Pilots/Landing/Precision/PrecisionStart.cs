@@ -228,9 +228,10 @@ namespace K2D2.Landing.Precision
             {
                 BrakeStage[] stages = input.Vehicle.Stages;
                 plan.BeforeBrakeDeltaV = plan.PreparationDeltaV + planeChange + plan.Deorbit.DeltaV.magnitude + plan.CorrectionReserve;
-                if (plan.BeforeBrakeDeltaV > stages[0].DeltaV)
+                // LandingFeasibility.DeltaVMargin (10 %) over these burns: they are flown, not simulated.
+                if (LandingFeasibility.DeltaVMargin * plan.BeforeBrakeDeltaV > stages[0].DeltaV)
                     return Refuse(plan, string.Format(CultureInfo.InvariantCulture,
-                        "Stage 1 has {0:0} m/s for the {1:0} m/s of burns before the braking (orbit preparation, plane change, deorbit, correction): choose another landing stage.",
+                        "Stage 1 has {0:0} m/s for the {1:0} m/s (+10 %) of burns before the braking (orbit preparation, plane change, deorbit, correction): choose another landing stage.",
                         stages[0].DeltaV, plan.BeforeBrakeDeltaV));
                 BrakeStage landing = stages[stages.Length - 1];
                 plan.LandingStageDeltaV = plan.Deorbit.Stop.LandingStageDeltaV + plan.TerminalReserve + plan.LateralReserve;

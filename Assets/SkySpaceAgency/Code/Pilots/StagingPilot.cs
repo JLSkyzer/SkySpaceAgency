@@ -47,6 +47,7 @@ namespace K2D2.Controller
         public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.StagingController");
 
         public bool is_staging = false;
+        bool suspended_logged = false;
 
         double end_time = -1;
         double current_time = -1;
@@ -191,6 +192,21 @@ namespace K2D2.Controller
                 return false;
             }
            
+            // A landing with a chosen stage drops its stages itself (LandingStageDrop): a second
+            // staging here could drop the landing stage.
+            bool suspended = Landing.LandingPilot.Instance != null && Landing.LandingPilot.Instance.SuspendsAutoStaging;
+            if (suspended != suspended_logged)
+            {
+                suspended_logged = suspended;
+                logger.LogInfo(suspended ? "[Staging] auto-staging suspended: a landing with a chosen stage is running"
+                                         : "[Staging] auto-staging resumed");
+            }
+            if (suspended)
+            {
+                is_staging = false;
+                return false;
+            }
+
             if (is_staging)
             {
                 // check time

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 
@@ -92,6 +93,19 @@ namespace K2D2.Landing.Braking
             if (!int.TryParse(label.Substring(6, end - 6), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n))
                 return -1;
             return n >= 1 && n <= firingOrder.Count ? n - 1 : -1;
+        }
+
+        /// <summary>
+        /// Activations made since a start where the game's staging had startCount stages, its
+        /// last one active or not. StagingComponent.ActivateNextStage (IL, see Jettison) removes
+        /// the last stage when it is active, and only makes it active otherwise.
+        /// </summary>
+        public static int ActivationsDone(int startCount, bool startLastActive, int count, bool lastActive)
+        {
+            int done = startCount - count;
+            if (!startLastActive && (lastActive || count < startCount))
+                done++;
+            return Math.Max(0, done);
         }
 
         /// <summary>

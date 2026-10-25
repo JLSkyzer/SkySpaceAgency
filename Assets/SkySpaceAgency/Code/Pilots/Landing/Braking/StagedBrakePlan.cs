@@ -33,6 +33,8 @@ namespace K2D2.Landing.Braking
         public double LandingDeltaVNeeded; // m/s the landing stage spends in the plan
         public double LandingDeltaVAvailable;
         public int Simulations;            // simulated burns, for the log
+        // Refused plans only: dropping every lower stage now still lets the landing stage finish.
+        public bool DropNowFeasible;
 
         public string Describe()
         {
@@ -147,6 +149,14 @@ namespace K2D2.Landing.Braking
             else if (plan.LandingStageReached && DeltaVMargin * plan.LandingDeltaVNeeded > available)
                 plan.Error = CannotBrakeMessage(position, plan.SpeedAtDrop, available);
             plan.Ok = plan.Error == null;
+            // A refused plan: could the landing stage alone still finish if every lower stage left
+            // now (from the input state, braking at once after the gaps)? The pilot then drops now.
+            if (!plan.Ok)
+            {
+                var now = new BrakeSample { UT = input.Brake.UT, Position = input.Brake.Position, Velocity = input.Brake.Velocity, StageIndex = 0 };
+                plan.DropNowFeasible = LandingStageCan(free, now, last, available, out _);
+                plan.Simulations++;
+            }
             return plan;
         }
 
@@ -157,6 +167,13 @@ namespace K2D2.Landing.Braking
             string.Format(CultureInfo.InvariantCulture,
                 "Stage {0} alone cannot stop {1:0} m above the ground after the drop: its thrust is too low.", position, handOver);
 
+        // The hand-over height of the safe-height check is the brake's own stop height
+        // (BrakeInput.StopHeight): BrakeSimulator.SafeAltitude (50 m) for the plain landing,
+        // start_touchdown_altitude for the precision landing, whose brake stops there. Not
+        // start_touchdown_altitude for the plain landing: its latest-start brake stops at 50 m by
+        // design, so from the planned drop the landing stage always stops near 50 m; asking it to
+        // stop at start_touchdown_altitude instead makes every round raise the drop height again,
+        // without end.
         static double StopHeightOf(BrakeInput input) => input.StopHeight > 0 ? input.StopHeight : BrakeSimulator.SafeAltitude;
 
         /// <summary>

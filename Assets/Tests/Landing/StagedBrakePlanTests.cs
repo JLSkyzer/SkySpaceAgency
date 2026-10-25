@@ -186,6 +186,27 @@ public class StagedBrakePlanTests
     }
 
     [Test]
+    public void ActivationsDone_FromTheGameStaging()
+    {
+        // In flight the last stage is active: each activation removes it.
+        Assert.AreEqual(0, LandingStages.ActivationsDone(4, true, 4, true));
+        Assert.AreEqual(1, LandingStages.ActivationsDone(4, true, 3, true));
+        Assert.AreEqual(2, LandingStages.ActivationsDone(4, true, 2, true));
+        // Never staged: the first activation only makes the last stage active.
+        Assert.AreEqual(0, LandingStages.ActivationsDone(4, false, 4, false));
+        Assert.AreEqual(1, LandingStages.ActivationsDone(4, false, 4, true));
+        Assert.AreEqual(2, LandingStages.ActivationsDone(4, false, 3, true));
+    }
+
+    [Test]
+    public void RefusedPlan_SaysWhetherDroppingNowStillWorks()
+    {
+        StagePlan hopeless = StagedBrakePlan.Plan(PlanInput(StagedBrakeTests.TwoStages(150, landerDv: 100)));
+        Assert.IsFalse(hopeless.Ok);
+        Assert.IsFalse(hopeless.DropNowFeasible);
+    }
+
+    [Test]
     public void ParseDropHeight()
     {
         Assert.AreEqual(0, LandingStages.ParseDropHeight(""));
