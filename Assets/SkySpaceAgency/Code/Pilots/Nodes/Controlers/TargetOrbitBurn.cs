@@ -134,6 +134,16 @@ namespace K2D2.Node
         double last_angle_real;
         int last_warp_index;     // warp index at the previous angle sample
         bool warp_stopped;       // the warp was stopped at WarpEndUT
+        // Aligning before warping to the burn (BurnAlignPolicy): turning at 1x toward the burn
+        // direction at its start, which stage (1, or 2 shortly before a long wait's burn), since when
+        // (real s), where the warp goes, and whether the ignition waits for the 2° alignment.
+        bool prealigning;
+        int prealign_stage;
+        double prealign_start_real;
+        double warp_target_UT = double.NaN;
+        bool second_prealign_pending;
+        bool realign_before_ignition;
+        double prev_align_angle = double.NaN, prev_align_real;
         bool late_logged;
         // Physics time warp while burning (ManageBurnWarp), left on every end path.
         readonly PhysicsWarp physics_warp;
@@ -285,6 +295,12 @@ namespace K2D2.Node
             last_angle_real = 0;
             last_warp_index = -1;
             warp_stopped = false;
+            prealigning = false;
+            prealign_stage = 0;
+            warp_target_UT = double.NaN;
+            second_prealign_pending = false;
+            realign_before_ignition = false;
+            prev_align_angle = double.NaN;
             late_logged = false;
 
             current_vessel = K2D2_Plugin.Instance.current_vessel;
@@ -315,10 +331,137 @@ namespace K2D2.Node
             logger.LogInfo($"{BurnLogTag} lead {align_lead:n1} s for " +
                 $"{(double.IsNaN(last_angle) ? "an unknown angle" : $"{last_angle:n1}°")} at {turn_rate:n1}°/s (default), " +
                 $"warp ends in {WarpEndUT - now:n1} s");
+            // Never warp toward a burn before the vessel points where the burn will push: on rails it
+            // cannot turn (BurnAlignPolicy).
             if (allow_warp && now < WarpEndUT)
-                warp.Start_Ut(WarpEndUT);
+                StartPreAlign(now, 1);
             else
                 StartAligning(now);
+        }
+
+        // 1x, then turn toward the burn direction as it will be at the burn start.
+        void StartPreAlign(double now, int stage)
+        {
+            mode = Mode.Warp;
+            prealigning = true;
+            prealign_stage = stage;
+            prealign_start_real = Time.realtimeSinceStartupAsDouble;
+            prev_align_angle = double.NaN;
+            TimeWarpTools.SetRateIndex(0, true);
+            logger.LogInfo($"{BurnLogTag} pre-aligning{(stage == 2 ? " again" : "")} at 1x before warping: burn in {BurnStartUT - now:n1} s");
+        }
+
+        // How fast the vessel turns (°/s): its angular velocity, else the angle's change per real second.
+        double TurnRateNow()
+        {
+            double real = Time.realtimeSinceStartupAsDouble;
+            double fromAngle = double.NaN;
+            if (!double.IsNaN(prev_align_angle) && real > prev_align_real)
+                fromAngle = Math.Abs(angle - prev_align_angle) / (real - prev_align_real);
+            prev_align_angle = angle;
+            prev_align_real = real;
+            try
+            {
+                double w = current_vessel.GetAngularSpeed().vector.magnitude * Rad2Deg;
+                if (!double.IsNaN(w))
+                    return w;
+            }
+            catch (Exception)
+            {
+                // No vehicle data this frame.
+            }
+            return double.IsNaN(fromAngle) ? double.PositiveInfinity : fromAngle;
+        }
+
+        // One pre-alignment frame: aligned (2°, 0.5°/s) -> warp to the burn; out of time -> align at
+        // 1x; too long -> fail.
+        void UpdatePreAlign(double now, bool steering)
+        {
+            if (TimeWarpTools.CurrentRateIndex != 0)
+                TimeWarpTools.SetRateIndex(0, true);
+            double rate = TurnRateNow();
+            double elapsed = Time.realtimeSinceStartupAsDouble - prealign_start_real;
+            double tail = BurnAlignPolicy.WarpTail(EstimateBurnTime(CurrentDeltaV(now).magnitude));
+            double finalTarget = BurnStartUT - tail;
+            if (steering && BurnAlignPolicy.Aligned(angle, rate))
+            {
+                prealigning = false;
+                logger.LogInfo($"{BurnLogTag} pre-aligned: {angle:n1}° off, rate {rate:n2}°/s (stage {prealign_stage}, {elapsed:n0} s)");
+                double target = finalTarget;
+                if (prealign_stage == 1)
+                {
+                    double period = OrbitPeriodNow(now), turn = FrameTurnDeg(now);
+                    double second = BurnAlignPolicy.SecondPreAlignUT(BurnStartUT, align_lead);
+                    if (BurnAlignPolicy.SecondPreAlign(BurnStartUT - now, period, turn) && second > now + 1)
+                    {
+                        second_prealign_pending = true;
+                        target = second;
+                        logger.LogInfo($"{BurnLogTag} long wait ({BurnStartUT - now:n0} s, period {period:n0} s, frame turns {turn:n1}°): " +
+                            $"pre-aligning again at UT {second:n0}");
+                    }
+                }
+                else
+                    target = now; // the second stage: the last part at 1x
+                if (allow_warp && target > now + 1)
+                {
+                    warp_target_UT = target;
+                    warp.Start_Ut(target);
+                    logger.LogInfo($"{BurnLogTag} warping to the burn at UT {target:n0} ({BurnStartUT - target:n0} s before it; rails only once the engines are quiet)");
+                }
+                else
+                    StartAligning(now);
+                return;
+            }
+            if (now >= finalTarget)
+            {
+                prealigning = false;
+                logger.LogInfo($"{BurnLogTag} not pre-aligned before the burn ({angle:n1}° off, {rate:n2}°/s): aligning at 1x, no warp");
+                StartAligning(now);
+                return;
+            }
+            double timeout = BurnAlignPolicy.TimeoutSeconds(align_lead);
+            if (elapsed > timeout)
+            {
+                set_throttle(0);
+                logger.LogWarning($"{BurnLogTag} pre-alignment timed out after {elapsed:n0} s (limit {timeout:n0} s): {angle:n1}° off, {rate:n2}°/s");
+                Fail("Could not turn to the burn direction before warping to it: check SAS and reaction wheels.");
+                return;
+            }
+            status_line = $"Aligning before the warp: {angle:n1}° off, {rate:n2}°/s, burn in {StrTool.DurationToString(BurnStartUT - now)}";
+        }
+
+        // The warp toward the burn has ended: a second pre-alignment, or the check at 1x.
+        void OnWarpEnded(double now)
+        {
+            warp_target_UT = double.NaN;
+            if (second_prealign_pending)
+            {
+                second_prealign_pending = false;
+                StartPreAlign(now, 2);
+                return;
+            }
+            TimeWarpTools.SetRateIndex(0, true);
+            if (prealign_stage > 0 && Steer(out _))
+            {
+                realign_before_ignition = BurnAlignPolicy.NeedsRealign(angle);
+                logger.LogInfo($"{BurnLogTag} after the warp: {angle:n1}° off" +
+                    (realign_before_ignition ? $", re-aligning within {BurnAlignPolicy.MaxAngleDeg:n0}° before igniting" : ""));
+            }
+            StartAligning(now);
+        }
+
+        double OrbitPeriodNow(double now)
+        {
+            IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
+            var el = OrbitMath.Elements(orbit.GetRelativePositionAtUTZup(now), orbit.GetOrbitalVelocityAtUTZup(now), orbit.referenceBody.gravParameter);
+            return el.IsClosed ? el.Period : double.PositiveInfinity;
+        }
+
+        // How far the local frame (the radius direction) turns from now to the burn start.
+        double FrameTurnDeg(double now)
+        {
+            IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
+            return Vector3d.Angle(orbit.GetRelativePositionAtUTZup(now), orbit.GetRelativePositionAtUTZup(BurnStartUT));
         }
 
         protected virtual double BurnStartUT => start_UT;
@@ -464,18 +607,25 @@ namespace K2D2.Node
                 RefreshWhileWaiting(now);
                 set_throttle(0);
 
-                // Turn toward the aim at the planned start while time passes (SAS target only).
-                bool steering = Steer(out _);
+                // Turn toward the aim at the planned start while time passes (SAS target only): before
+                // and during the warp, the burn direction as it will be at the burn start.
+                bool steering = mode == Mode.Warp && now < BurnStartUT ? Steer(out _, BurnStartUT) : Steer(out _);
                 if (finished)
                     return;
                 if (steering)
                     RefreshLead();
 
+                if (mode == Mode.Warp && prealigning && now < BurnStartUT)
+                {
+                    UpdatePreAlign(now, steering);
+                    return;
+                }
+
                 if (now >= BurnStartUT)
                 {
                     // Late alignment: wait (no throttle) until within MaxThrustAngle. Without an
                     // aim the burn starts and Burn() holds the throttle at 0, as before.
-                    if (steering && angle > MaxThrustAngle)
+                    if (steering && angle > (realign_before_ignition ? BurnAlignPolicy.MaxAngleDeg : MaxThrustAngle))
                     {
                         if (mode == Mode.Warp)
                             StartAligning(now);
@@ -502,17 +652,20 @@ namespace K2D2.Node
                 }
                 else if (mode == Mode.Warp)
                 {
-                    if (!allow_warp || now >= WarpEndUT)
+                    double target = double.IsNaN(warp_target_UT) ? WarpEndUT : warp_target_UT;
+                    if (!allow_warp || now >= target)
                     {
-                        StartAligning(now);
+                        OnWarpEnded(now);
+                        if (mode == Mode.Warp || finished)
+                            return;
                     }
                     else
                     {
-                        warp.UT = WarpEndUT;
+                        warp.UT = target;
                         warp.Update();
                         status_line = $"Burn in {StrTool.DurationToString(BurnStartUT - now)}, {angle:n1}° off - {warp.status_line}";
                         if (warp.finished)
-                            StartAligning(now);
+                            OnWarpEnded(now);
                         return;
                     }
                 }
@@ -1008,7 +1161,9 @@ namespace K2D2.Node
         // components in the Zup frame and rebuilt in the game frame from HorizonUp, the horizontal
         // prograde and forward × up (see OrbitGuidance.AimInFrame for that order). dv is always
         // set; false when no aim could be applied (undefined direction, no telemetry or autopilot).
-        bool Steer(out Vector3d dv)
+        // aimUT (optional): aim at the Δv as the guidance gives it at that time (the burn start), an
+        // inertial direction, split on the current frame so the aim is that same direction now.
+        bool Steer(out Vector3d dv, double aimUT = double.NaN)
         {
             IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
             double now = GeneralTools.Current_UT;
@@ -1016,7 +1171,10 @@ namespace K2D2.Node
             Vector3d v = orbit.GetOrbitalVelocityAtUTZup(now);
             double mu = orbit.referenceBody.gravParameter;
 
-            dv = GuidanceDeltaV(r, v, now, mu);
+            if (!double.IsNaN(aimUT) && aimUT > now)
+                dv = GuidanceDeltaV(orbit.GetRelativePositionAtUTZup(aimUT), orbit.GetOrbitalVelocityAtUTZup(aimUT), aimUT, mu);
+            else
+                dv = GuidanceDeltaV(r, v, now, mu);
             OrbitGuidance.Split(dv, r, v, out double radial, out double horizontal, out double normal);
             if (double.IsNaN(radial) || double.IsNaN(horizontal) || double.IsNaN(normal) || dv.magnitude <= 0)
                 return false;
