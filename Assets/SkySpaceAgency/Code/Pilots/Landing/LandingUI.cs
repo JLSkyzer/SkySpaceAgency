@@ -99,6 +99,12 @@ namespace K2D2.Landing
         VisualElement atmo_settings_panel;
         VisualElement vac_settings_panel;
 
+        // "Land with stage" (LandingPilotStages.cs): one dropdown per profile panel, both showing
+        // pilot.landing_stage_choice; the list is read again every UI tick (the Δv changes).
+        DropdownField stage_drop_atmo;
+        DropdownField stage_drop_vac;
+        List<LandingStageData> stage_choices = new();
+
         // "Land" for a parachute landing (one button, no engine), "Brake" otherwise.
         string IdleLabel => pilot.parachute_mode ? "Land" : "Brake";
 
@@ -195,6 +201,12 @@ namespace K2D2.Landing
             // K2Page.cs - it's shared by Node/Lift/Dock too, so it can't just be changed there).
             addLandingResetButton(panel.Q<Foldout>("advanced_foldout"));
 
+            // Landing with a chosen stage.
+            stage_drop_atmo = SetupStageChoice("land_stage_atmo");
+            stage_drop_vac = SetupStageChoice("land_stage_vac");
+            BindDropHeight(panel.Q<TextField>("drop_stage_at_km_atmo"), pilot.settings_atmo);
+            BindDropHeight(panel.Q<TextField>("drop_stage_at_km_vac"), pilot.settings_vac);
+
             // Precision Landing orbit gate - see UpdateOrbitGate's own comment. Reverts the toggle
             // the instant someone tries to turn it on from too high an orbit, rather than letting
             // it sit on and only get refused once Circularize.cs actually runs. Vacuum-only, same
@@ -218,6 +230,72 @@ namespace K2D2.Landing
             };
 
             return true;
+        }
+
+        DropdownField SetupStageChoice(string name)
+        {
+            DropdownField drop = panel.Q<DropdownField>(name);
+            drop?.RegisterValueChangedCallback(evt =>
+            {
+                int index = LandingStages.IndexOfLabel(stage_choices, evt.newValue);
+                if (index < 0 || pilot.isRunning || index == pilot.landing_stage_choice)
+                    return;
+                pilot.landing_stage_choice = index;
+                pilot.logger.LogInfo($"[LandingUI] land with stage {index + 1} ({evt.newValue})");
+            });
+            return drop;
+        }
+
+        // A text field, so that empty means automatic. A value that is not a number of km is
+        // shown in red and counts as automatic.
+        static void BindDropHeight(TextField field, LandingSettings settings)
+        {
+            if (field == null)
+                return;
+            void Show(string v)
+            {
+                field.SetValueWithoutNotify(v ?? "");
+                field.style.color = double.IsNaN(LandingStages.ParseDropHeight(v))
+                    ? new UnityEngine.UIElements.StyleColor(new UnityEngine.Color(0.88f, 0.52f, 0.52f))
+                    : new UnityEngine.UIElements.StyleColor(StyleKeyword.Null);
+            }
+            Show(settings.drop_stage_at_km.V);
+            settings.drop_stage_at_km.listeners += Show;
+            field.RegisterValueChangedCallback(evt => settings.drop_stage_at_km.V = (evt.newValue ?? "").Trim());
+        }
+
+        // The stage list of the active vessel, in the staging stack's order; the choice falls
+        // back to the current stage when its stage is gone. Locked while a landing runs.
+        void UpdateStageChoices()
+        {
+            var vessel = pilot.current_vessel?.VesselComponent;
+            List<LandingStageData> list = vessel == null ? null : LandingPilot.ReadStageList(vessel, out _);
+            if (list != null && list.Count > 0)
+                stage_choices = list;
+            else if (!pilot.isRunning)
+                stage_choices = new List<LandingStageData>();
+            if (!pilot.isRunning && pilot.landing_stage_choice >= stage_choices.Count)
+                pilot.landing_stage_choice = 0;
+
+            List<string> labels = LandingStages.Labels(stage_choices);
+            string shown;
+            if (pilot.isRunning && pilot.staged_landing_stage >= 0)
+                shown = $"Stage {pilot.staged_drops_left + 1} (landing stage, {pilot.staged_drops_left} drop(s) left)";
+            else if (stage_choices.Count == 0)
+                shown = "No stage data";
+            else
+                shown = LandingStages.Label(pilot.landing_stage_choice, stage_choices[pilot.landing_stage_choice]);
+            bool atmo_parachute = pilot.settings_atmo.mode.V == LandingMethod.Parachute;
+            foreach (DropdownField drop in new[] { stage_drop_atmo, stage_drop_vac })
+            {
+                if (drop == null)
+                    continue;
+                drop.choices = labels;
+                drop.SetValueWithoutNotify(shown);
+                drop.SetEnabled(!pilot.isRunning && labels.Count > 1);
+            }
+            // The stage choice is for powered braking only.
+            stage_drop_atmo?.Show(!atmo_parachute);
         }
 
         // Same idea as K2Page.addResetButton (Node/Lift/Dock's shared helper), but resets the
@@ -822,6 +900,10 @@ namespace K2D2.Landing
             {
                 pilot.current_executor?.UpdateInfoRows(AddInfoRow);
 
+                // Landing with a chosen stage: the drop height and the landing stage's Δv.
+                if (pilot.StagedBraking && pilot.stage_plan_valid)
+                    AddInfoRow("Stage Drop", $"{pilot.staged_drops_left} left, at {StrTool.DistanceToString((float)pilot.stage_drop_height)} at the latest");
+
                 if (isRunning && pilot.burn_dV.burned_dV > 0)
                     AddInfoRow("Burned", $"{pilot.burn_dV.burned_dV:n1} m/s");
             }
@@ -848,6 +930,7 @@ namespace K2D2.Landing
             UpdatePrecisionPlanLabel();
             UpdateReentrySuggestion();
             UpdateProfilePanels();
+            UpdateStageChoices();
 
             status_bar.Reset();
 
@@ -920,6 +1003,8 @@ namespace K2D2.Landing
                 if (pilot.current_executor != null && !string.IsNullOrEmpty(pilot.current_executor.status_line))
                     status_bar.Console(pilot.current_executor.status_line);
 
+                if (!string.IsNullOrEmpty(pilot.stage_message))
+                    status_bar.Console(pilot.stage_message);
                 if (!string.IsNullOrEmpty(pilot.last_warning))
                     status_bar.Console(pilot.last_warning);
                 if (pilot.PrecisionActive)

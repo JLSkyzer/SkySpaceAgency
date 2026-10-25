@@ -35,6 +35,9 @@
                      engines, Parachute lands without them (ParachuteDescent.cs). -->
                 <K2UI.InlineEnum name="land_mode_atmo" labels="Propulsive;Parachute" />
                 <K2UI.K2Toggle label="Deploy legs early" name="deploy_legs_early_atmo" tooltip="Propulsive landing: deploy the legs when braking starts instead of at Touch Down" />
+                <!-- Landing with a chosen stage (LandingUI.UpdateStageChoices, LandingPilotStages.cs): the
+                     lower stages brake first and are dropped when dry or at the drop height. -->
+                <ui:DropdownField label="Land with stage" index="-1" choices="" name="land_stage_atmo" tooltip="Brake with the lower stages first, drop them when they are empty or at the drop height, and land on the chosen stage. The current stage lands as before." />
                 <!-- Precision landing toggle: enabled in Parachute mode only (LandingSettings.setupBasicUI);
                      in Propulsive mode it is disabled and kept off, with the note below. -->
                 <K2UI.K2Toggle label="Precision Landing" name="precision_landing_atmo" tooltip="Parachute mode: deorbit with the engines, jettison the service module and land under the parachutes near the target" />
@@ -83,6 +86,9 @@
                     <ui:FloatField label="Target Longitude" value="0" name="target_longitude_vac" />
                 </ui:VisualElement>
                 <K2UI.K2Toggle label="Deploy legs early" name="deploy_legs_early_vac" tooltip="Deploy the landing legs when braking starts instead of at Touch Down" />
+                <!-- Landing with a chosen stage (LandingUI.UpdateStageChoices, LandingPilotStages.cs): the
+                     lower stages brake first and are dropped when dry or at the drop height. -->
+                <ui:DropdownField label="Land with stage" index="-1" choices="" name="land_stage_vac" tooltip="Brake with the lower stages first, drop them when they are empty or at the drop height, and land on the chosen stage. The current stage lands as before." />
             </ui:VisualElement>
 
             <!-- Brake/Touch Down restyled to the same bevel look as the reset buttons (see
@@ -154,6 +160,7 @@
                     <ui:VisualElement name="Brake_atmo">
                         <ui:Label text="// BRAKE" class="k2-section-header" />
                         <K2UI.K2Slider name="burn_before_atmo" label="Burn Before (s)" max="10" print-value="true" label-on-top="true" value="0" min="0" />
+                        <ui:TextField label="Drop lower stage at the latest at (km)" name="drop_stage_at_km_atmo" is-delayed="true" tooltip="Landing with a chosen stage: drop the lower stage at this height above the ground at the latest. Empty = automatic. A value raises the drop height, never below the safe one." />
                     </ui:VisualElement>
                     <ui:VisualElement name="TouchDown_atmo">
                         <ui:Label text="// TOUCH DOWN" class="k2-section-header" />
@@ -191,6 +198,7 @@
                     <ui:VisualElement name="Brake_vac">
                         <ui:Label text="// BRAKE" class="k2-section-header" />
                         <K2UI.K2Slider name="burn_before_vac" label="Burn Before (s)" max="10" print-value="true" label-on-top="true" value="0" min="0" />
+                        <ui:TextField label="Drop lower stage at the latest at (km)" name="drop_stage_at_km_vac" is-delayed="true" tooltip="Landing with a chosen stage: drop the lower stage at this height above the ground at the latest. Empty = automatic. A value raises the drop height, never below the safe one." />
                     </ui:VisualElement>
                     <ui:VisualElement name="TouchDown_vac">
                         <ui:Label text="// TOUCH DOWN" class="k2-section-header" />
