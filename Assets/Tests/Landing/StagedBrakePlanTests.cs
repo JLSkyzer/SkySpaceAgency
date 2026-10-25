@@ -186,6 +186,19 @@ public class StagedBrakePlanTests
     }
 
     [Test]
+    public void ParseDropHeight()
+    {
+        Assert.AreEqual(0, LandingStages.ParseDropHeight(""));
+        Assert.AreEqual(0, LandingStages.ParseDropHeight("  "));
+        Assert.AreEqual(0, LandingStages.ParseDropHeight(null));
+        Assert.AreEqual(5000, LandingStages.ParseDropHeight("5"), 1e-9);
+        Assert.AreEqual(2500, LandingStages.ParseDropHeight("2,5"), 1e-9);
+        Assert.AreEqual(2500, LandingStages.ParseDropHeight(" 2.5 "), 1e-9);
+        Assert.IsNaN(LandingStages.ParseDropHeight("abc"));
+        Assert.IsNaN(LandingStages.ParseDropHeight("-1"));
+    }
+
+    [Test]
     public void Labels_InStackOrder()
     {
         List<string> labels = LandingStages.Labels(GameStages());

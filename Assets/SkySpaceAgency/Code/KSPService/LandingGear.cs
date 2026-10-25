@@ -50,18 +50,23 @@ namespace K2D2.KSPService
             {
                 if (part == null || part.Model == null)
                     continue;
-                if (!part.Model.TryGetModuleData<PartComponentModule_Deployable, Data_Deployable>(out Data_Deployable data) || data == null)
-                    continue;
-                // Bound to Gear, or carrying a wheel/suspension module (Data_WheelBase covers "rover
-                // wheels and landing legs"): either way it is landing gear, not a solar panel or an
-                // antenna. The second test keeps legs whose default action group is not Gear.
-                bool on_gear = (data.DefaultActionGroup & KSPActionGroup.Gear) != 0;
-                bool has_wheel = part.Model.TryGetModuleData<PartComponentModule_WheelBase, Data_WheelBase>(out Data_WheelBase wheel) && wheel != null;
-                if (!on_gear && !has_wheel)
-                    continue;
-                legs.Add(data);
+                if (IsLeg(part.Model, out Data_Deployable data))
+                    legs.Add(data);
             }
             return legs;
+        }
+
+        // A deployable part bound to Gear, or carrying a wheel/suspension module (Data_WheelBase
+        // covers "rover wheels and landing legs"): either way it is landing gear, not a solar
+        // panel or an antenna. The second test keeps legs whose default action group is not Gear.
+        public static bool IsLeg(PartComponent part, out Data_Deployable data)
+        {
+            data = null;
+            if (part == null || !part.TryGetModuleData<PartComponentModule_Deployable, Data_Deployable>(out data) || data == null)
+                return false;
+            bool on_gear = (data.DefaultActionGroup & KSPActionGroup.Gear) != 0;
+            bool has_wheel = part.TryGetModuleData<PartComponentModule_WheelBase, Data_WheelBase>(out Data_WheelBase wheel) && wheel != null;
+            return on_gear || has_wheel;
         }
 
         // "No legs", or for example "4 legs: 2 Extended, 2 Retracted".

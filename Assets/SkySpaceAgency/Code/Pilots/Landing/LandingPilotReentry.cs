@@ -732,6 +732,16 @@ namespace K2D2.Landing
         // that throws keeps the landing.
         internal bool KeepThroughVesselChange()
         {
+            // Landing with a chosen stage: the split of a lower stage may make the kept piece
+            // another vessel.
+            if (isRunning && stage_drop != null && stage_drop.Activated)
+            {
+                bool keepStaged = stage_drop.KeepThroughVesselChange(current_vessel?.GetActiveSimVessel(), KTools.GeneralTools.Current_UT);
+                logger.LogInfo($"[Landing] stage drop: vessel change after the activation: the active vessel " +
+                    $"{(keepStaged ? "holds every kept part -> the landing goes on" : "does not hold the kept parts -> the landing stops")}");
+                if (keepStaged)
+                    return true;
+            }
             if (!(reentry_run && isRunning && jettison.Activated && (mode == Mode.Jettison || mode == Mode.Parachute)))
                 return false;
             bool? unrelated = ActiveHoldsNoneOfTheStack();

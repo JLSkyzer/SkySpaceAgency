@@ -66,6 +66,7 @@ namespace K2D2.Landing
             brake = new TouchDown(this, atmo_file, vac_file);
             parachute_descent = new ParachuteDescent(this);
             jettison = new Jettison(this);
+            stage_drop = new LandingStageDrop(this);
             _page = new LandingUI(this);
 
             Instance = this;
@@ -247,6 +248,9 @@ namespace K2D2.Landing
                         current_vessel.SetThrottle(0);
 
                     setMode(Mode.Off);
+                    // A stopped run has no lower stage to drop any more.
+                    staged_drops_left = 0;
+                    stage_drop.Reset();
                     _active = false;
                 }
                 else
@@ -302,6 +306,9 @@ namespace K2D2.Landing
             gear.Reset();
             // Same events end a map pick that is still waiting (no-op when none waits).
             (_page as LandingUI)?.CancelPick("reset: vessel or scene change, or a pilot start");
+            // A stage choice belongs to the vessel it was made on.
+            if (reset_by_vessel_change)
+                landing_stage_choice = 0;
         }
 
         internal float current_falling_speed = 0;
@@ -335,6 +342,7 @@ namespace K2D2.Landing
         internal bool brake_result_valid = false;
         float next_brake_sim_time = 0;
         const float BrakeSimInterval = 0.5f;
+        const float StagedSimInterval = 1.5f;
         // The collision search reports no collision on every non-converged frame: keep the last
         // result for this many ticks (4 x 0.5 s) instead of flipping to the legacy start.
         const int BrakeSimKeepTicks = 4;
@@ -654,10 +662,21 @@ namespace K2D2.Landing
                 StopHeight = PrecisionActive ? settings.start_touchdown_altitude.V : 0,
             };
             var sim_timer = Stopwatch.StartNew();
-            brake_result = BrakeSimulator.FindStart(input);
+            // Landing with a chosen stage: the lower stages brake first (StagedBrakePlan). The
+            // plan simulates many more burns: it runs less often.
+            bool staged = TryStagedPlan(input, out StagePlan plan);
+            if (staged)
+            {
+                brake_result = plan.Brake;
+                next_brake_sim_time = now_real + StagedSimInterval;
+            }
+            else
+                brake_result = BrakeSimulator.FindStart(input);
             sim_timer.Stop();
             last_brake_sim_ms = sim_timer.Elapsed.TotalMilliseconds;
             brake_result_valid = true;
+            if (staged)
+                UseStagePlan(plan, now);
             LogBrakeResult(now);
         }
 
@@ -765,9 +784,20 @@ namespace K2D2.Landing
 
             burn_dV.Compute_Thrust();
             LogEngines();
+            // Landing with a chosen stage: the stage list, the landing stage and the drops.
+            if (!PrepareStagedRun(out double landing_accel))
+                return false;
             // Precision landing on an airless body: its own plans and Δv check (all phases).
             if (settings.precision_landing.V && !LandingProfile.IsAtmospheric)
+            {
+                if (StagedBraking)
+                {
+                    last_error = "Choose the current stage to use precision landing.";
+                    ClearStagedRun();
+                    return false;
+                }
                 return CheckCanStartPrecision();
+            }
             var body = current_vessel.VesselComponent.Orbit.referenceBody;
             double surface_gravity = body.gravParameter / (body.radius * body.radius);
 
@@ -778,17 +808,30 @@ namespace K2D2.Landing
             var delta_v = current_vessel.VesselComponent.VesselDeltaV;
             double dv_remaining = delta_v != null ? delta_v.TotalDeltaVActual : double.NaN;
 
-            var check = LandingFeasibility.Check(burn_dV.active_dv, surface_gravity, brake, dv_remaining);
-            logger.LogInfo($"[Landing] start check: ok={check.Ok} accel {burn_dV.active_dv:n2} m/s², surface g {surface_gravity:n2}, " +
+            // Staged: the TWR check is the landing stage's, and the Δv check is the plan's (per stage).
+            bool staged = StagedBraking;
+            if (staged && brake.HasValue && stage_plan_valid && !stage_plan.Ok)
+            {
+                logger.LogInfo($"[Landing] start check: staged plan refused: {stage_plan.Describe()}");
+                last_error = stage_plan.Error;
+                ClearStagedRun();
+                return false;
+            }
+            var check = LandingFeasibility.Check(landing_accel, surface_gravity, brake, staged ? double.PositiveInfinity : dv_remaining);
+            logger.LogInfo($"[Landing] start check: ok={check.Ok} accel {landing_accel:n2} m/s²{(staged ? " (landing stage)" : "")}, surface g {surface_gravity:n2}, " +
                 $"collision {collision_detected}, sim {(brake.HasValue ? brake.Value.Status.ToString() : "none")}, Δv {dv_remaining:n0} m/s" +
+                (staged ? $", staged plan {(stage_plan_valid ? stage_plan.Describe() : "not made yet (no collision)")}" : "") +
                 (check.Ok ? "" : $" -> {check.Error}"));
 
             if (!check.Ok)
             {
                 last_error = check.Error;
+                ClearStagedRun();
                 return false;
             }
             last_warning = check.Warning ?? "";
+            start_stage_plan = stage_plan;
+            start_stage_plan_valid = staged && stage_plan_valid;
             return true;
         }
 
@@ -863,6 +906,7 @@ namespace K2D2.Landing
                 (landed_or_splashed ? "LandedOrSplashed" : "altitude/fall-speed net") +
                 $", altitude {altitude:n1} m, fall speed {current_falling_speed:n2} m/s");
             current_vessel.SetThrottle(0);
+            LogStagedFinish();
             if (reentry_run)
                 OnReentryFinish();
             else if (precision_run)
@@ -961,6 +1005,8 @@ namespace K2D2.Landing
                 FinishLanding(landed);
                 return;
             }
+            // Landing with a chosen stage: drop the lower stage when dry or at the drop height.
+            UpdateStageDrops();
             if (mode == Mode.Calibrate)
             {
                 UpdateCalibrate();

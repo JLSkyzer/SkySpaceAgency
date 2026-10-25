@@ -94,6 +94,21 @@ namespace K2D2.Landing.Braking
             return n >= 1 && n <= firingOrder.Count ? n - 1 : -1;
         }
 
+        /// <summary>
+        /// The player's "drop the lower stage at the latest at (km)" text in metres: 0 when empty
+        /// (automatic), NaN when it is not a number of km ≥ 0 (comma or dot decimals).
+        /// </summary>
+        public static double ParseDropHeight(string km)
+        {
+            if (string.IsNullOrWhiteSpace(km))
+                return 0;
+            string text = km.Trim().Replace(',', '.');
+            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+                || double.IsNaN(value) || double.IsInfinity(value) || value < 0)
+                return double.NaN;
+            return value * 1000;
+        }
+
         static double Positive(double x) => x > 0 && !double.IsInfinity(x) ? x : 0;
     }
 }

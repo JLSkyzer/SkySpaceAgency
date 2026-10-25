@@ -68,6 +68,11 @@ namespace K2D2.Landing
         // ADVANCED, or Apply on the suggestion shown after a precision return (never applied alone).
         public ClampSetting<float> reentry_drag_scale;
 
+        // Landing with a chosen stage: "Drop the lower stage at the latest at (km)", as typed.
+        // Empty = automatic (LandingStages.ParseDropHeight). It raises the computed drop height,
+        // never lowers it. Both profiles; bound in LandingUI (a text field, so it can be empty).
+        public Setting<string> drop_stage_at_km;
+
         public LandingSettings(SettingsFile file, bool atmospheric)
         {
             auto_warp = new("land.auto_warp", true, file);
@@ -84,6 +89,7 @@ namespace K2D2.Landing
             target_longitude = new("land.target_longitude", 0f, file);
 
             deploy_legs_early = new("land.deploy_legs_early", false, file);
+            drop_stage_at_km = new("land.drop_stage_at_km", "", file);
             if (atmospheric)
             {
                 mode = new("land.mode", LandingMethod.Propulsive, file);
