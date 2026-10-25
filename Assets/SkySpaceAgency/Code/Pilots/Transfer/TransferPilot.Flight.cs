@@ -970,18 +970,30 @@ namespace K2D2.Transfer
             string orbit = TransferDiagnostics.Orbit(vessel, now, out double energy, out double e, out double radius);
             double diff = TransferDiagnostics.WorldVsOrbit(vessel, now, out string world);
             logger.LogInfo($"[Transfer] physics mode {previous} -> {mode} at UT {now:F1}: {orbit}; {world}");
-            bool afterBurn = !double.IsNaN(burn_end_ut) && now - burn_end_ut < 3600;
+            // Δv accounting since the last burn's end, at every physics switch until the next burn:
+            // an engine still pushing when rails warp starts makes the game fly a burn of its own.
+            bool afterBurn = !double.IsNaN(burn_end_ut);
             double mu = vessel.Orbit?.referenceBody?.gravParameter ?? double.NaN;
-            if (afterBurn && TransferFlight.OrbitJumped(burn_end_energy, energy, burn_end_e, e, mu, radius))
+            if (afterBurn)
             {
-                logger.LogWarning($"[Transfer] state mismatch after the burn: the orbit changed at the switch {previous} -> {mode}, " +
-                    $"energy {burn_end_energy:F3} -> {energy:F3}, e {burn_end_e:F6} -> {e:F6}, {now - burn_end_ut:F0} s after the burn");
-                UpdateSoiPrediction("after the orbit changed at the physics switch");
+                double speed = vessel.Orbit != null ? vessel.Orbit.GetOrbitalVelocityAtUTZup(now).magnitude : double.NaN;
+                double dvEq = TransferFlight.EquivalentDeltaV(burn_end_energy, energy, speed);
+                logger.LogInfo($"[Transfer] energy since the {burn_name} ended: {burn_end_energy:F3} -> {energy:F3} ({energy - burn_end_energy:+0.000;-0.000}), " +
+                    $"about {dvEq:F2} m/s, {now - burn_end_ut:F0} s after it");
+                if (dvEq > TransferFlight.UncommandedDeltaV)
+                {
+                    logger.LogWarning($"[Transfer] state mismatch after the burn: about {dvEq:F2} m/s nobody commanded, at the switch {previous} -> {mode} " +
+                        $"(energy {burn_end_energy:F3} -> {energy:F3}, e {burn_end_e:F6} -> {e:F6}, {now - burn_end_ut:F0} s after the burn)");
+                    burn_end_energy = energy; // warned once per change
+                    burn_end_e = e;
+                    UpdateSoiPrediction("after the orbit changed at the physics switch");
+                }
+                else if (TransferFlight.OrbitJumped(burn_end_energy, energy, burn_end_e, e, mu, radius))
+                    logger.LogWarning($"[Transfer] state mismatch after the burn: the orbit changed at the switch {previous} -> {mode}, " +
+                        $"e {burn_end_e:F6} -> {e:F6}");
             }
-            else if (TransferFlight.StateMismatch(diff, radius))
+            if (TransferFlight.StateMismatch(diff, radius))
                 logger.LogWarning($"[Transfer] state mismatch at the switch {previous} -> {mode}: {world}");
-            if (afterBurn && mode != PhysicsMode.RigidBody)
-                burn_end_ut = double.NaN; // one switch to rails per burn is checked
         }
 
         // ---------------------------------------------------------------- a new transfer offered

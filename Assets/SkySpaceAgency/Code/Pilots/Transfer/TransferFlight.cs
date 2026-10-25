@@ -632,6 +632,13 @@ namespace K2D2.Transfer
         public static bool OrbitJumped(double energyBefore, double energyAfter, double eBefore, double eAfter, double mu, double radius) =>
             Math.Abs(energyAfter - energyBefore) > 1e-4 * mu / Math.Max(radius, 1) || Math.Abs(eAfter - eBefore) > 1e-4;
 
+        // An energy change seen at a physics switch after a burn, as the Δv that would make it at this
+        // speed (dE = v·dv). Above UncommandedDeltaV it is a burn nobody commanded.
+        public const double UncommandedDeltaV = 0.5;
+
+        public static double EquivalentDeltaV(double energyBefore, double energyAfter, double speed) =>
+            double.IsNaN(energyBefore) || double.IsNaN(energyAfter) ? 0 : Math.Abs(energyAfter - energyBefore) / Math.Max(speed, 1);
+
         // The capture holds: a closed orbit inside the body's SOI.
         public static bool InOrbit(Vector3d r, Vector3d v, double mu, double soi)
         {

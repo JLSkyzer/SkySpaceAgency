@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Never rails warp while an engine still pushes** (2026-10-25, the cause of the transfer drift). Right after a burn the engines can still give force for a moment. Rails warp asked then made the game fly a burn of its own under warp, adding about 8 m/s nobody commanded, as seen in the second in-game test. Every rails warp the mod asks for now waits until the throttle is 0 and no engine gives force for 1 s and 10 frames, holding 1x until then ("[Warp] waiting for the engines to stop before rails warp"). A watchdog drops to 1x when the game flies a burn under rails warp that the mod did not ask for. The transfer log adds the energy change since each burn at every physics switch, with a warning above 0.5 m/s.
+
 - **Warp during burns** (Node tab → ADVANCED → // WARP, saved in `skyspaceagency_settings.json`; 2026-10-25). One setting for every closed-loop burn (Node, Orbit, Lift, Land, Transfer, Rendezvous):
   - **Off (1x)**, the default: no physics or rails warp while the engines push, as before physics warp was added. The trajectory of the first in-game Kerbin → Duna flight jumped after physics-warped burns followed by rails warp, so the faster modes are now opt-in.
   - **Physics (x4)**: the game's physics warp during the burn.

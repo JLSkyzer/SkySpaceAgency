@@ -323,6 +323,9 @@ namespace K2D2
             Debug.developerConsoleVisible = false;
             // Update Models (even on non valid scenes)
             current_vessel.Update();
+            // Engine state for the rails warp gate, and the watchdog (every frame, in flight).
+            if (loaded)
+                WarpGate.Tick();
 
             /* TODO: Other mods interfacing
             if (K2D2OtherModsInterface.instance == null)

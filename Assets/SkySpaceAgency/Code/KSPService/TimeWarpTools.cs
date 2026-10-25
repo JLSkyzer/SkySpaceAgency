@@ -53,7 +53,19 @@ namespace K2D2
 
 
 
+        // Every warp the mod asks for goes through WarpGate: rails warp only once the engines have
+        // stopped pushing (throttle 0, no engine force for 1 s and 10 frames); held at 1x until then.
         public static void SetRateIndex(int rate_index, bool instant)
+        {
+            if (time_warp == null) return;
+            int current = time_warp.CurrentRateIndex;
+            rate_index = WarpGate.Allowed(rate_index, current, time_warp.IsPhysicsTimeWarp);
+            if (rate_index != current)
+                time_warp.SetRateIndex(rate_index, instant);
+        }
+
+        // Physics warp only (PhysicsWarp sets physics mode itself): not gated.
+        public static void SetRateIndexPhysics(int rate_index, bool instant)
         {
             if (time_warp == null) return;
             if (rate_index != time_warp.CurrentRateIndex)

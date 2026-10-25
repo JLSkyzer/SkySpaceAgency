@@ -79,7 +79,8 @@ namespace K2D2.KSPService
 
         public int CurrentIndex => TimeWarpTools.CurrentRateIndex;
 
-        public void SetIndex(int index, bool instant) => TimeWarpTools.SetRateIndex(index, instant);
+        // Physics mode is on whenever this raises the index (not gated: the engines push in a burn).
+        public void SetIndex(int index, bool instant) => TimeWarpTools.SetRateIndexPhysics(index, instant);
 
         /// <summary>
         /// Switches physics-warp mode on, at index 0 only (the game's own toggle works only while

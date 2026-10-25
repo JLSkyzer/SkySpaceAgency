@@ -116,6 +116,7 @@ namespace K2D2.KSPService
             if (granted && tw.CurrentRateIndex == index && !PhysicsMode)
             {
                 Entered = true;
+                WarpGate.RailsBurnAsked = true;
                 EnteredIndex = index;
                 FramesSinceEntry = 0;
                 return true;
@@ -176,6 +177,7 @@ namespace K2D2.KSPService
             if (!Entered)
                 return;
             Entered = false;
+            WarpGate.RailsBurnAsked = false;
             try { TimeWarpTools.SetRateIndex(0, true); }
             catch (Exception e) { logger?.LogWarning($"{Prefix} leaving failed: {e.GetType().Name}: {e.Message}"); }
         }
@@ -184,6 +186,7 @@ namespace K2D2.KSPService
         public void Reset()
         {
             Entered = false;
+            WarpGate.RailsBurnAsked = false;
             FramesSinceEntry = 0;
             RefusedBySetting = false;
         }
