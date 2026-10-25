@@ -43,7 +43,7 @@ namespace K2D2.Landing
         internal bool StagedBraking => staged_drops_left > 0 && !parachute_mode;
 
         // The player's drop height in metres (0 = automatic or not a number).
-        double PlayerDropHeight
+        internal double PlayerDropHeight
         {
             get
             {
@@ -177,6 +177,24 @@ namespace K2D2.Landing
             return true;
         }
 
+        /// <summary>
+        /// The stages for the precision plans (Precision.Vehicle.Stages), from the live list; null
+        /// without lower stages left (error null) or when the list cannot be read (error set).
+        /// </summary>
+        internal BrakeStage[] StagesForPlans(out string error)
+        {
+            error = null;
+            if (!StagedBraking)
+                return null;
+            List<LandingStageData> list = ReadStageList(current_vessel.VesselComponent, out error);
+            if (list == null)
+                return null;
+            SyncDropsLeft(list);
+            if (staged_drops_left <= 0)
+                return null;
+            return LandingStages.Build(list, staged_drops_left, burn_dV.mass, burn_dV.active_thrust, burn_dV.active_isp, out error);
+        }
+
         // The landing stage's place in the game's list gives the drops left. When the list does
         // not hold it any more, the count of drops done is kept (logged once).
         void SyncDropsLeft(List<LandingStageData> list)
@@ -237,7 +255,9 @@ namespace K2D2.Landing
 
             VesselComponent vessel = current_vessel.VesselComponent;
             double ut = GeneralTools.Current_UT;
-            double dropHeight = double.IsNaN(stage_drop_height) ? Math.Max(StagedBrakePlan.MinDropHeight, PlayerDropHeight) : stage_drop_height;
+            double dropHeight = double.IsNaN(stage_drop_height)
+                ? StagedBrakePlan.Floor(PlayerDropHeight, PrecisionActive ? settings.start_touchdown_altitude.V : BrakeSimulator.SafeAltitude)
+                : stage_drop_height;
             double speed = current_vessel.VesselVehicle.SurfaceSpeed;
             LandingStageDrop.Outcome outcome;
             try
@@ -282,6 +302,37 @@ namespace K2D2.Landing
             logger.LogInfo($"[Landing] stage drop {drops_done}: {(stage_drop.PendingReason == DropReason.Dry ? "dry" : "drop height")} " +
                 $"at {stage_drop.PendingAltitude:n0} m, {stage_drop.PendingSpeed:n0} m/s (drop height {stage_drop_height:n0} m) | {planned} | " +
                 $"Δv burned so far {burn_dV.burned_dV:n0} m/s, {staged_drops_left} drop(s) left");
+        }
+
+        // A precision landing with a chosen stage: its predicted brake (the deorbit plan's) is the
+        // start plan the drops and the touchdown are logged against.
+        void RecordStagedPrecisionPlan(Precision.StartPlan plan, Precision.Vehicle vehicle)
+        {
+            Precision.StopPrediction stop = plan.Deorbit.Stop;
+            BrakeStage landing = vehicle.Stages[vehicle.Stages.Length - 1];
+            BrakeDrop? last = stop.Drops != null && stop.Drops.Count > 0 ? stop.Drops[stop.Drops.Count - 1] : (BrakeDrop?)null;
+            start_stage_plan = new StagePlan
+            {
+                Ok = true,
+                SafeDropHeight = double.NaN,
+                DropHeight = vehicle.DropHeight,
+                Brake = new BrakeResult
+                {
+                    Status = BrakeStatus.Ok, StartUT = stop.BrakeStartUT, DeltaVNeeded = stop.BrakeDeltaV,
+                    StopAltitude = stop.StopAltitude, Drops = stop.Drops,
+                },
+                LandingStageReached = last.HasValue,
+                DroppedDry = last.HasValue && last.Value.Dry,
+                DropAltitude = last.HasValue ? last.Value.Altitude : double.NaN,
+                SpeedAtDrop = last.HasValue ? last.Value.SurfaceSpeed : double.NaN,
+                LandingDeltaVNeeded = plan.LandingStageDeltaV,
+                LandingDeltaVAvailable = landing.DeltaV,
+            };
+            start_stage_plan_valid = true;
+            stage_drop_height = vehicle.DropHeight;
+            logger.LogInfo($"[Landing] stage plan: precision: stage 1 pays {plan.BeforeBrakeDeltaV:n0} of {vehicle.Stages[0].DeltaV:n0} m/s " +
+                $"before the brake; predicted brake {start_stage_plan.Describe()}; landing stage needs {plan.LandingStageDeltaV:n0} m/s " +
+                $"(brake part, terminal and lateral reserves) of {landing.DeltaV:n0} m/s");
         }
 
         // At the end of a staged landing: the braking predicted at the start against the real one.

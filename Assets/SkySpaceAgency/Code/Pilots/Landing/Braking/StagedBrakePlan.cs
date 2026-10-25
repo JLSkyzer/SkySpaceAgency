@@ -49,7 +49,8 @@ namespace K2D2.Landing.Braking
 
     // A landing with a chosen stage: the lower stages brake first and leave when dry, or at the
     // drop height at the latest; the landing stage finishes. The drop height is the highest of:
-    //  - MinDropHeight above the terrain, so the dropped stage falls away from the landing site;
+    //  - MinDropHeight above the terrain, so the dropped stage falls away from the landing site,
+    //    and DropAboveHandOver above the hand-over height (Floor);
     //  - the safe height: below it, the landing stage alone, braking at once from the predicted
     //    state at the drop (after BrakeSimulator.StageGap per stage still to drop), would stop
     //    under the hand-over height (BrakeInput.StopHeight) or spend more than its Δv / DeltaVMargin;
@@ -60,6 +61,18 @@ namespace K2D2.Landing.Braking
     {
         public const double MinDropHeight = 2000;  // m
         public const double DeltaVMargin = 1.20;
+        // m: the drop is at least this far above the hand-over height, so that a precision landing
+        // (hand-over at start_touchdown_altitude) hands over to the terminal guidance on the landing stage.
+        public const double DropAboveHandOver = 500;
+
+        /// <summary>The lowest drop height: MinDropHeight, DropAboveHandOver over the hand-over
+        /// height, and the player's height (0 = automatic).</summary>
+        public static double Floor(double playerDropHeight, double handOverHeight)
+        {
+            double player = playerDropHeight > 0 && !double.IsInfinity(playerDropHeight) ? playerDropHeight : 0;
+            return Math.Max(Math.Max(MinDropHeight, handOverHeight + DropAboveHandOver), player);
+        }
+
         public const int MaxRounds = 3;
         const double Settled = 50;      // m: a round that moves the drop height less ends the search
         const int CoarseChecks = 16;    // samples tried along the descent before refining
@@ -77,7 +90,7 @@ namespace K2D2.Landing.Braking
             BrakeStage landing = stages[last];
             double available = landing.DeltaV > 0 && !double.IsInfinity(landing.DeltaV) ? landing.DeltaV : 0;
             double player = input.PlayerDropHeight > 0 && !double.IsInfinity(input.PlayerDropHeight) ? input.PlayerDropHeight : 0;
-            double floor = Math.Max(MinDropHeight, player);
+            double floor = Floor(player, StopHeightOf(input.Brake));
 
             var plan = new StagePlan { SafeDropHeight = double.NaN, LandingDeltaVAvailable = available, DropAltitude = double.NaN, SpeedAtDrop = double.NaN };
             BrakeInput free = input.Brake;

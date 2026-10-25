@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using K2D2.Landing.Braking;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
@@ -15,6 +16,47 @@ namespace K2D2.Landing.Precision
         // TerminalGuidance is built for a near-hover hand-over, not for a brake still flying
         // ~70° from vertical (end-to-end test, 2026-10-21).
         public double StopHeight;
+        // Landing with a chosen stage (BrakeInput.Stages): the active stage first, the landing
+        // stage last; null = one stage from ThrustKN, MassT and Isp. ThrustKN, MassT and Isp stay
+        // the active stage's: the burns before the brake fly on it.
+        public BrakeStage[] Stages;
+        public double DropHeight;   // BrakeInput.DropHeight (StagedBrakePlan.Floor)
+
+        public bool Staged => Stages != null && Stages.Length > 1;
+
+        // Full-throttle acceleration (m/s²) of the stage that lands, at its start mass.
+        public double LandingAccel
+        {
+            get
+            {
+                if (!Staged)
+                    return MassT > 0 ? ThrustKN / MassT : 0;
+                BrakeStage landing = Stages[Stages.Length - 1];
+                return landing.MassT > 0 ? landing.ThrustKN / landing.MassT : 0;
+            }
+        }
+
+        /// <summary>
+        /// The vehicle after an impulse of deltaV (m/s) on the active stage: lighter by the
+        /// propellant (constant mass without Isp), and that much less Δv on the active stage. The
+        /// stage list is copied, never changed in place.
+        /// </summary>
+        public Vehicle AfterImpulse(double deltaV)
+        {
+            Vehicle v = this;
+            double dv = Math.Abs(deltaV);
+            if (Isp > 0)
+                v.MassT = MassT * Math.Exp(-dv / (Isp * BrakeSimulator.G0));
+            if (Staged)
+            {
+                var stages = (BrakeStage[])Stages.Clone();
+                if (stages[0].Isp > 0)
+                    stages[0].MassT *= Math.Exp(-dv / (stages[0].Isp * BrakeSimulator.G0));
+                stages[0].DeltaV = Math.Max(0, stages[0].DeltaV - dv);
+                v.Stages = stages;
+            }
+            return v;
+        }
     }
 
     public struct Body
@@ -52,6 +94,10 @@ namespace K2D2.Landing.Precision
         // reads it at BrakeStartUT. ReentryPredictor gives it: its arc from the interface to the
         // stop can exceed 90°, where the interface velocity projected at the stop points backwards.
         public Vector3d TrackDirNow;
+        // Staged vehicle only: the lower stages dropped in the predicted brake, and the Δv the
+        // landing stage spends in it (0 when the brake ends before the landing stage pushes).
+        public List<BrakeDrop> Drops;
+        public double LandingStageDeltaV;
     }
 
     // Where a powered descent really stops: coast (after the optional impulse) to the terrain
@@ -73,7 +119,8 @@ namespace K2D2.Landing.Precision
         /// </summary>
         public static StopPrediction Predict(Vector3d r, Vector3d v, double ut, Body body, Vehicle vehicle, Impulse? impulse)
         {
-            if (!(vehicle.ThrustKN > 0) || !(vehicle.MassT > 0))
+            double landingThrust = vehicle.Staged ? vehicle.Stages[vehicle.Stages.Length - 1].ThrustKN : vehicle.ThrustKN;
+            if (!(landingThrust > 0) || !(vehicle.MassT > 0))
                 return Fail("No thrust: activate an engine");
 
             // State right after the impulse.
@@ -88,8 +135,7 @@ namespace K2D2.Landing.Precision
                 v = v + burn.DeltaV;
                 t0 = Math.Max(burn.UT, ut);
                 // The brake starts lighter by the propellant the impulse used.
-                if (vehicle.Isp > 0)
-                    vehicle.MassT *= Math.Exp(-burn.DeltaV.magnitude / (vehicle.Isp * BrakeSimulator.G0));
+                vehicle = vehicle.AfterImpulse(burn.DeltaV.magnitude);
             }
 
             double energy = 0.5 * v.sqrMagnitude - body.Mu / r.magnitude;
@@ -125,6 +171,8 @@ namespace K2D2.Landing.Precision
                 ImpactUT = impactUT,
                 TerrainHeight = terrain ?? (p => 0),
                 StopHeight = vehicle.StopHeight,
+                Stages = vehicle.Staged ? vehicle.Stages : null,
+                DropHeight = vehicle.Staged ? vehicle.DropHeight : 0,
             };
             BrakeResult brake = BrakeSimulator.FindStart(input);
 
@@ -139,6 +187,8 @@ namespace K2D2.Landing.Precision
                 StopAltitude = brake.StopAltitude,
                 BrakeDeltaV = brake.DeltaVNeeded,
                 BrakeStartUT = brake.StartUT,
+                Drops = brake.Drops,
+                LandingStageDeltaV = vehicle.Staged && brake.FinalStageIndex == vehicle.Stages.Length - 1 ? brake.FinalStageDeltaV : 0,
             };
             if (brake.Status == BrakeStatus.TooLate && vehicle.StopHeight > BrakeSimulator.SafeAltitude
                 && brake.StopAltitude >= BrakeSimulator.SafeAltitude)

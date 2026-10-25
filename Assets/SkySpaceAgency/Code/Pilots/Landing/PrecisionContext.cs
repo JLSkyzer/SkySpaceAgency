@@ -132,6 +132,15 @@ namespace K2D2.Landing
                 Isp = Finite(isp) && isp > 0 ? isp : 0,
                 StopHeight = pilot.settings.start_touchdown_altitude.V,
             };
+            // Landing with a chosen stage: the lower stages brake first and leave at the drop
+            // height at the latest, above the hand-over (StagedBrakePlan.Floor).
+            if (pilot.StagedBraking)
+            {
+                vehicle.Stages = pilot.StagesForPlans(out string stageError);
+                if (stageError != null)
+                    return "The vessel's stages: " + stageError;
+                vehicle.DropHeight = StagedBrakePlan.Floor(pilot.PlayerDropHeight, vehicle.StopHeight);
+            }
 
             // Surface reference: the vessel now, with its game latitude/longitude.
             double hxy = Math.Sqrt(r.x * r.x + r.y * r.y);
@@ -210,7 +219,11 @@ namespace K2D2.Landing
 
             if (log)
                 pilot.logger.LogInfo($"[Landing] precision: vehicle thrust {thrust:n1} kN{(fallback ? " (all engines: none active)" : "")}, " +
-                    $"mass {mass:n2} t, Isp {vehicle.Isp:n0} s, stop height {vehicle.StopHeight:n0} m | target lat {targetLat:0.0000} " +
+                    $"mass {mass:n2} t, Isp {vehicle.Isp:n0} s, stop height {vehicle.StopHeight:n0} m" +
+                    (vehicle.Staged ? $", {vehicle.Stages.Length - 1} lower stage(s) dropped at {vehicle.DropHeight:n0} m at the latest, " +
+                        $"landing stage {vehicle.Stages[vehicle.Stages.Length - 1].ThrustKN:n1} kN, {vehicle.Stages[vehicle.Stages.Length - 1].MassT:n2} t, " +
+                        $"Δv {vehicle.Stages[vehicle.Stages.Length - 1].DeltaV:n0} m/s" : "") +
+                    $" | target lat {targetLat:0.0000} " +
                     $"lon {targetLon:0.0000}, terrain {terrain:n0} m, slope {slope:0.0}° (Δh east {dhEast:n1} m, north {dhNorth:n1} m over {SlopeBaselineM:n0} m)" +
                     (slope > MaxSlopeDeg ? $" - steeper than {MaxSlopeDeg:n0}°" : ""));
 

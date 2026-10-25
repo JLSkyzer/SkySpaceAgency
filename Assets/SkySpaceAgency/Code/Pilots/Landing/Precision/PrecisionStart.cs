@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using K2D2.Landing.Braking;
 using K2D2.OrbitPlanning;
@@ -35,6 +36,9 @@ namespace K2D2.Landing.Precision
         public double TotalDeltaV;         // m/s, everything the landing needs: preparation + plane change + deorbit + brake + reserves
         public int PredictCalls;
         public OrbitClearance Clearance;   // terrain clearance of the circular orbit the approach starts from
+        // Staged vehicle only (Vehicle.Stages): the Δv of the burns before the brake (on the active
+        // stage), and what the landing stage needs (its part of the brake, terminal and lateral reserves).
+        public double BeforeBrakeDeltaV, LandingStageDeltaV;
     }
 
     public struct OrbitClearance
@@ -170,7 +174,7 @@ namespace K2D2.Landing.Precision
                 plan.PlanR = rp;
                 plan.PlanV = vc;
                 AtLaterTime(body, target, dt, out planBody, out target);
-                vehicle.MassT = AfterBurn(vehicle, plan.PreparationDeltaV);
+                vehicle = vehicle.AfterImpulse(plan.PreparationDeltaV);
             }
 
             PlaneChangePlan pc = PlaneChange.Plan(plan.PlanR, plan.PlanV, plan.PlanUT, planBody, vehicle, target);
@@ -189,7 +193,8 @@ namespace K2D2.Landing.Precision
                 KeplerPropagator.Propagate(plan.PlanR, plan.PlanV, mu, lead, out Vector3d rb, out Vector3d vb);
                 Vector3d vNew = IntoPlane(rb, vb, pc.Target.PlaneNormal);
                 AtLaterTime(planBody, target, lead, out Body burnBody, out _);
-                noTarget.MassT = AfterBurn(vehicle, pc.DeltaV);
+                noTarget = vehicle.AfterImpulse(pc.DeltaV);
+                noTarget.StopHeight = 0;
                 plan.Baseline = DeorbitSearch.Baseline(rb, vNew, pc.BurnUT, burnBody, noTarget,
                     PlaneChange.EarliestDeorbitUT(pc.BurnUT, pc.DeltaV, vehicle));
             }
@@ -198,7 +203,8 @@ namespace K2D2.Landing.Precision
             plan.PredictCalls += plan.Baseline.PredictCalls;
 
             double g = mu / (body.Radius * body.Radius);
-            double maxAccel = vehicle.ThrustKN / vehicle.MassT;
+            // The terminal descent flies on the landing stage (the active one without a stage choice).
+            double maxAccel = vehicle.LandingAccel;
             double handOver = vehicle.StopHeight > 0 ? vehicle.StopHeight : BrakeSimulator.SafeAltitude;
             plan.CorrectionReserve = CorrectionReserve;
             plan.TerminalReserve = PrecisionBudget.TerminalReserve(handOver, g, input.TouchDownSpeed, maxAccel);
@@ -214,6 +220,27 @@ namespace K2D2.Landing.Precision
             plan.Budget = PrecisionBudget.Evaluate(plan.Baseline, plan.Deorbit, plan.CorrectionReserve,
                 plan.TerminalReserve + plan.LateralReserve, plan.PreparationDeltaV, planeChange, plan.BaselineTerminalReserve);
             plan.TotalDeltaV = plan.PreparationDeltaV + planeChange + plan.Budget.PrecisionDeltaV;
+
+            // Landing with a chosen stage: the burns before the brake fly on the active stage,
+            // which cannot be dropped during them; the landing stage pays its part of the brake,
+            // the terminal and lateral reserves, with StagedBrakePlan.DeltaVMargin to spare.
+            if (input.Vehicle.Staged)
+            {
+                BrakeStage[] stages = input.Vehicle.Stages;
+                plan.BeforeBrakeDeltaV = plan.PreparationDeltaV + planeChange + plan.Deorbit.DeltaV.magnitude + plan.CorrectionReserve;
+                if (plan.BeforeBrakeDeltaV > stages[0].DeltaV)
+                    return Refuse(plan, string.Format(CultureInfo.InvariantCulture,
+                        "Stage 1 has {0:0} m/s for the {1:0} m/s of burns before the braking (orbit preparation, plane change, deorbit, correction): choose another landing stage.",
+                        stages[0].DeltaV, plan.BeforeBrakeDeltaV));
+                BrakeStage landing = stages[stages.Length - 1];
+                plan.LandingStageDeltaV = plan.Deorbit.Stop.LandingStageDeltaV + plan.TerminalReserve + plan.LateralReserve;
+                if (StagedBrakePlan.DeltaVMargin * plan.LandingStageDeltaV > landing.DeltaV)
+                {
+                    List<BrakeDrop> drops = plan.Deorbit.Stop.Drops;
+                    double speed = drops != null && drops.Count > 0 ? drops[drops.Count - 1].SurfaceSpeed : double.NaN;
+                    return Refuse(plan, StagedBrakePlan.CannotBrakeMessage(stages.Length, speed, landing.DeltaV));
+                }
+            }
             plan.Ok = true;
             return plan;
         }
@@ -282,9 +309,6 @@ namespace K2D2.Landing.Precision
             double angle = Math.Atan2(Vector3d.Dot(Vector3d.Cross(nb, n2), axis), Vector3d.Dot(nb, n2));
             return OrbitMath.Rotate(vb, axis, angle);
         }
-
-        static double AfterBurn(Vehicle vehicle, double deltaV) =>
-            vehicle.Isp > 0 ? vehicle.MassT * Math.Exp(-Math.Abs(deltaV) / (vehicle.Isp * BrakeSimulator.G0)) : vehicle.MassT;
 
         static StartPlan Refuse(StartPlan plan, string reason)
         {

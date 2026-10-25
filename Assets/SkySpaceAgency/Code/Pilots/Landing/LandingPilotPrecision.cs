@@ -169,7 +169,8 @@ namespace K2D2.Landing
             double surface_gravity = body.gravParameter / (body.radius * body.radius);
             var delta_v = vessel.VesselDeltaV;
             double dv_remaining = delta_v != null ? delta_v.TotalDeltaVActual : double.NaN;
-            double accel = ctx.Vehicle.MassT > 0 ? ctx.Vehicle.ThrustKN / ctx.Vehicle.MassT : 0;
+            // The landing stage's TWR (the active stage's without a stage choice).
+            double accel = ctx.Vehicle.LandingAccel;
             var needed = new BrakeResult { Status = BrakeStatus.Ok, DeltaVNeeded = plan.TotalDeltaV };
             var check = LandingFeasibility.Check(accel, surface_gravity, needed, dv_remaining);
             logger.LogInfo($"[Landing] precision: start check: ok={check.Ok} accel {accel:n2} m/s², surface g {surface_gravity:n2}, " +
@@ -182,6 +183,8 @@ namespace K2D2.Landing
                 return false;
             }
             last_warning = check.Warning ?? "";
+            if (ctx.Vehicle.Staged)
+                RecordStagedPrecisionPlan(plan, ctx.Vehicle);
 
             precision_plan = plan;
             precision_lon_sign = ctx.Reference.LonSign;

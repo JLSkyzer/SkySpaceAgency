@@ -790,13 +790,10 @@ namespace K2D2.Landing
             // Precision landing on an airless body: its own plans and Δv check (all phases).
             if (settings.precision_landing.V && !LandingProfile.IsAtmospheric)
             {
-                if (StagedBraking)
-                {
-                    last_error = "Choose the current stage to use precision landing.";
+                bool ok = CheckCanStartPrecision();
+                if (!ok)
                     ClearStagedRun();
-                    return false;
-                }
-                return CheckCanStartPrecision();
+                return ok;
             }
             var body = current_vessel.VesselComponent.Orbit.referenceBody;
             double surface_gravity = body.gravParameter / (body.radius * body.radius);
