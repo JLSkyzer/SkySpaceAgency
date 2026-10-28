@@ -160,7 +160,7 @@
                     <ui:VisualElement name="Brake_atmo">
                         <ui:Label text="// BRAKE" class="k2-section-header" />
                         <K2UI.K2Slider name="burn_before_atmo" label="Burn Before (s)" max="10" print-value="true" label-on-top="true" value="0" min="0" />
-                        <ui:TextField label="Drop lower stage at the latest at (km)" name="drop_stage_at_km_atmo" is-delayed="true" tooltip="Landing with a chosen stage: drop the lower stage at this height above the ground at the latest. Empty = automatic. A value raises the drop height, never below the safe one." />
+                        <ui:TextField label="Drop lower stage at the latest at (km)" name="drop_stage_at_km_atmo" class="stacked-field" is-delayed="true" tooltip="Landing with a chosen stage: drop the lower stage at this height above the ground at the latest. Empty = automatic. A value raises the drop height, never below the safe one." />
                     </ui:VisualElement>
                     <ui:VisualElement name="TouchDown_atmo">
                         <ui:Label text="// TOUCH DOWN" class="k2-section-header" />
@@ -198,7 +198,7 @@
                     <ui:VisualElement name="Brake_vac">
                         <ui:Label text="// BRAKE" class="k2-section-header" />
                         <K2UI.K2Slider name="burn_before_vac" label="Burn Before (s)" max="10" print-value="true" label-on-top="true" value="0" min="0" />
-                        <ui:TextField label="Drop lower stage at the latest at (km)" name="drop_stage_at_km_vac" is-delayed="true" tooltip="Landing with a chosen stage: drop the lower stage at this height above the ground at the latest. Empty = automatic. A value raises the drop height, never below the safe one." />
+                        <ui:TextField label="Drop lower stage at the latest at (km)" name="drop_stage_at_km_vac" class="stacked-field" is-delayed="true" tooltip="Landing with a chosen stage: drop the lower stage at this height above the ground at the latest. Empty = automatic. A value raises the drop height, never below the safe one." />
                     </ui:VisualElement>
                     <ui:VisualElement name="TouchDown_vac">
                         <ui:Label text="// TOUCH DOWN" class="k2-section-header" />

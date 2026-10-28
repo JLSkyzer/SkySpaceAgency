@@ -17,6 +17,29 @@
     font-size: 14px;
 }
 
+/* KerbalUI.uss gives every .unity-popup-field flex-grow: 1 (with height: 32px). Every dropdown
+   of this window sits in a column, so that grew it vertically: "Land with stage" became a
+   ~100 px box, and the extra height it took squeezed the target settings below it until the
+   Target Latitude/Longitude fields ran over the atmospheric-precision note. A type + class
+   selector, so it wins over KerbalUI.uss whatever the stylesheet order. */
+DropdownField.unity-popup-field {
+    flex-grow: 0;
+}
+
+/* A field whose label is too long to share a row with its input ("Drop lower stage at the
+   latest at (km)" in Landing's ADVANCED): on one row the label took the whole width and left the
+   input 4 px wide. The label goes on its own line above the input, wrapped if needed. */
+.unity-base-field.stacked-field {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.unity-base-field.stacked-field > .unity-base-field__label {
+    white-space: normal;
+    min-width: 0;
+    margin-bottom: 2px;
+}
+
 /* K2UI.StatusLine (run-status messages like "No Maneuver node.", shown via the shared
    StatusGroup.uxml template - reaches every tab): K2UI.uss's own .k2-status-line rule used to
    point it at NotoSansMonoCJK; it now names JetBrains Mono too, because merely referencing the

@@ -185,6 +185,10 @@
 - **Orbit prediction on very eccentric orbits**: the two-body propagator used by the landing, Orbit and Node predictions could, in rare cases near periapsis, fail to converge and return a position far off (1.6e9 m in the case found). It now falls back to a bracketed solve; every case that converged before gives the same result.
 - **Orbit prediction on long hyperbolic steps**: the same propagator could return a wrong or NaN position on an escape or arrival hyperbola predicted far ahead (for example 1e7 s after leaving low Kerbin orbit). It now starts from a hyperbolic guess and its fallback survives the overflow far out. Closed orbits that converged before give the same result.
 
+### Fixed
+
+- **Window layout** (2026-10-28, layout only): the Inclination switch of the Orbit and Transfer tabs was squeezed to a sliver and its label cut (the switch track could shrink; the label column is now 68 % wide on those rows, and the track a fixed 30 px on every switch); "Land with stage" and the other dropdowns no longer grow into tall boxes, which on the Land tab also stops Target Latitude/Longitude from running over the atmospheric-precision note; the "Drop lower stage at the latest at (km)" field (Land → ADVANCED) has its label above a usable input instead of a 4 px one. New EditMode tests lay out every tab and fail on overlaps, squeezed controls, clipped labels and elements outside their parent; `UiLayoutHarness.RenderAll` renders each tab to a PNG.
+
 ## 1.3.0
 
 ### Added

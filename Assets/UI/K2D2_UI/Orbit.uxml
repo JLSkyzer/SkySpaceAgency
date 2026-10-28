@@ -7,15 +7,15 @@
             <ui:Label text="Orbit Planner" name="Title" class="unselectedContent" style="width: 100%; -unity-text-align: upper-center;" />
             <K2UI.Group text="Target orbit">
                 <ui:VisualElement style="flex-direction: row; align-items: center;">
-                    <K2UI.K2Toggle label="Ap (km)" name="ap_enabled" tooltip="Change the apoapsis altitude" style="width: 50%;" />
+                    <K2UI.K2Toggle label="Ap (km)" name="ap_enabled" tooltip="Change the apoapsis altitude" style="width: 68%;" />
                     <ui:FloatField name="ap_km" value="100" style="flex-grow: 1;" />
                 </ui:VisualElement>
                 <ui:VisualElement style="flex-direction: row; align-items: center;">
-                    <K2UI.K2Toggle label="Pe (km)" name="pe_enabled" tooltip="Change the periapsis altitude" style="width: 50%;" />
+                    <K2UI.K2Toggle label="Pe (km)" name="pe_enabled" tooltip="Change the periapsis altitude" style="width: 68%;" />
                     <ui:FloatField name="pe_km" value="100" style="flex-grow: 1;" />
                 </ui:VisualElement>
                 <ui:VisualElement style="flex-direction: row; align-items: center;">
-                    <K2UI.K2Toggle label="Inclination (°)" name="inc_enabled" tooltip="Change the inclination (0 equatorial, 90 polar)" style="width: 50%;" />
+                    <K2UI.K2Toggle label="Inclination (°)" name="inc_enabled" tooltip="Change the inclination (0 equatorial, 90 polar)" style="width: 68%;" />
                     <ui:FloatField name="inc_deg" value="0" style="flex-grow: 1;" />
                 </ui:VisualElement>
             </K2UI.Group>

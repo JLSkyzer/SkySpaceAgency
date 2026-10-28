@@ -14,17 +14,17 @@
                 <ui:Label name="low_orbit_hint" text="" style="white-space: normal; font-size: 12px; color: rgb(180, 180, 180);" />
                 <ui:VisualElement name="orbit_fields">
                     <ui:VisualElement style="flex-direction: row; align-items: center;">
-                        <ui:Label text="Pe (km)" style="width: 50%;" />
+                        <ui:Label text="Pe (km)" style="width: 68%;" />
                         <ui:FloatField name="pe_km" value="100" style="flex-grow: 1;" />
                     </ui:VisualElement>
                     <ui:VisualElement name="ap_row" style="flex-direction: row; align-items: center;">
-                        <ui:Label text="Ap (km)" style="width: 50%;" />
+                        <ui:Label text="Ap (km)" style="width: 68%;" />
                         <ui:FloatField name="ap_km" value="100" style="flex-grow: 1;" />
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <!-- Outside orbit_fields: a low circular orbit can still have a chosen plane. -->
                 <ui:VisualElement style="flex-direction: row; align-items: center;">
-                    <K2UI.K2Toggle label="Inclination (°)" name="inc_enabled" tooltip="Set the arrival inclination (the approach correction sets the plane). Unticked: free" style="width: 50%;" />
+                    <K2UI.K2Toggle label="Inclination (°)" name="inc_enabled" tooltip="Set the arrival inclination (the approach correction sets the plane). Unticked: free" style="width: 68%;" />
                     <ui:FloatField name="inc_deg" value="0" style="flex-grow: 1;" />
                 </ui:VisualElement>
             </K2UI.Group>
@@ -32,7 +32,7 @@
                 <K2UI.K2Toggle label="Prepare only" name="prepare_only" tooltip="Make one game node at a time for you to fly; no warp" />
                 <K2UI.K2Toggle label="Use gravity assist" name="gravity_assist" tooltip="Coming soon" />
                 <ui:VisualElement style="flex-direction: row; align-items: center;">
-                    <ui:Label text="Max trip (days)" style="width: 50%;" tooltip="Days of 6 h. Empty: no limit" />
+                    <ui:Label text="Max trip (days)" style="width: 68%;" tooltip="Days of 6 h. Empty: no limit" />
                     <ui:TextField name="max_trip_days" value="" tooltip="Days of 6 h. Empty: no limit" style="flex-grow: 1;" />
                 </ui:VisualElement>
             </K2UI.Group>

@@ -13,8 +13,13 @@
    only moves the knob, it doesn't recolor it). Size/shape (30x18 track, 15x15 knob) stayed at
    this mod's existing proportions rather than stock's larger 54x24 - this panel is narrower than
    Parts Manager's. */
+/* The track is a fixed 30 px: without min-width and flex-shrink: 0, a label longer than the
+   space left in a fixed-width toggle ("Inclination (°)" at width: 50% on Orbit and Transfer)
+   squeezed the track down to a 1 px sliver instead of clipping the label. */
 .slide-toggle__input {
     max-width: 30px;
+    min-width: 30px;
+    flex-shrink: 0;
     border-top-left-radius: 8px;
     border-bottom-left-radius: 8px;
     border-top-right-radius: 8px;
