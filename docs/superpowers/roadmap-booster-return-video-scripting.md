@@ -219,14 +219,22 @@ user said "recovery system": confirm which one, and read how it did it.
    at the place where it was put down, with its fuel. Later, the player can switch to it, and recover
    it for real or fly it back to the KSC.
    - At touchdown, take the booster's vessel state: our own serialization, or the game's.
-   - After the reload, remove the booster's in-flight copy from the separation save. Unloaded, it
-     would fall on rails, or be destroyed.
+   - **Never remove the booster's in-flight copy at the reload** (user's decision, 2026-10-30). The
+     copy from the separation save stays in the game and moves away from the upper stage, replaying
+     what the player did with it, for consistency and immersion. Two ways, to choose in Phase 0:
+     - **(a)** drive that real copy along the recording: kinematic, no physics, position and
+       attitude set each frame, with the engine, plume, leg and fin states set from the recording;
+     - **(b)** hide it and show a ghost built from its models.
+     Prefer (a) if the game allows it: it is the real vessel. Only once it is out of the physics and
+     render range is it removed. Unloaded, it would otherwise fall on rails or be destroyed. The ghost
+     or the driven copy must never be simulated a second time.
+   - **The landed booster appears when the game time reaches its touchdown time** (decided by the
+     user on 2026-10-30). Until then, the replay flies. If the time is reached while the replay is
+     still in range, the replay ends on the ground at the same place, and is swapped for the real
+     landed vessel.
    - Create the landed booster from the stored state.
-   - When it appears is to decide:
-     - at the reload, as the KSP1 mod is thought to have done;
-     - or when the game time reaches its touchdown time, with the ghost flying until then. This is
-       more consistent with the replay.
-   - A booster that crashed, or that was recovered, gives nothing.
+   - A booster that crashed, or that was recovered, gives nothing: the replay ends as it did (crash,
+     or recovery at touchdown), then disappears.
 7. Phase 0 must answer:
    - can a vessel be serialized, then created again, at a surface position: the game's
      `SerializationUtility`, the vessel spawn API, or Redux's own recovery code?
@@ -266,6 +274,17 @@ user said "recovery system": confirm which one, and read how it did it.
     leaves the physics range.
   - While the player flies the booster, the upper stage's recording is paused. It goes on when the
     upper stage's flight resumes.
+- **Never record the separation twice in the upper stage's video.** The rule works on game time:
+  each instant of the upper stage's flight appears only once.
+  - Before the switch, the recording may run from the separation to the pause.
+  - After the reload, the flight restarts at the separation time.
+  - At the reload, every frame of the upper stage's recording whose game time is at or after the
+    separation-save time is dropped. The recording then goes on from that point. The separation is
+    shown once, in the resumed flight, where the booster's replay is visible.
+  - The same rule holds for any reload during a recording: frames recorded in game time after the
+    reloaded point are replaced, never kept twice.
+  - The booster's own video is another vessel and another point of view. It keeps its own view of
+    the separation.
 - **The booster's recording** stops by itself 10 to 20 s after the booster has landed.
 - **The upper stage's recording** goes on until the player stops it. Constraints:
   - it can only be stopped once the booster has landed and its own recording has stopped. Before
