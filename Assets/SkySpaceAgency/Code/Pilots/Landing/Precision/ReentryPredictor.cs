@@ -13,11 +13,13 @@ namespace K2D2.Landing.Precision
         public double[] Density;      // kg/m³
         public double[] Pressure;     // the unit of Chutes.MinPressureToOpen
         public double[] SoundSpeed;   // m/s
+        public double[] Temperature;  // K (heating only; null = 0)
         public double SampleStep;     // m
 
         public double DensityAt(double altitude) => Sample(Density, altitude);
         public double PressureAt(double altitude) => Sample(Pressure, altitude);
         public double SoundSpeedAt(double altitude) => Sample(SoundSpeed, altitude);
+        public double TemperatureAt(double altitude) => Sample(Temperature, altitude);
 
         double Sample(double[] table, double altitude)
         {
@@ -349,7 +351,7 @@ namespace K2D2.Landing.Precision
         // Kepler coast from above the interface to just before clearance(r, t) <= 0 (the
         // interface, or the terrain if it sticks out of the air). The step never exceeds the time
         // to cover the clearance at the current speed. Null on success, else why not.
-        static string Coast(ref Vector3d r, ref Vector3d v, ref double t, Body body, Func<Vector3d, double, double> clearance)
+        internal static string Coast(ref Vector3d r, ref Vector3d v, ref double t, Body body, Func<Vector3d, double, double> clearance)
         {
             double energy = 0.5 * v.sqrMagnitude - body.Mu / r.magnitude;
             if (energy >= 0)

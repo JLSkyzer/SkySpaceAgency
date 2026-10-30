@@ -243,7 +243,7 @@ namespace K2D2.Landing.Precision
 
         // Retrograde impulse at burnUT that lowers the periapsis to `wanted` (R − DescentPeriapsisMargin for a powered descent).
         // Zero when the periapsis is already that low.
-        static Impulse Burn(Vector3d r, Vector3d v, double ut, Body body, double burnUT, double wanted)
+        internal static Impulse Burn(Vector3d r, Vector3d v, double ut, Body body, double burnUT, double wanted)
         {
             Vector3d rb = r, vb = v;
             if (burnUT > ut)
@@ -265,7 +265,7 @@ namespace K2D2.Landing.Precision
         }
 
         // Periapsis radius from h²/(μ(1+e)), valid for any conic.
-        static double Periapsis(Vector3d r, Vector3d v, double mu)
+        internal static double Periapsis(Vector3d r, Vector3d v, double mu)
         {
             double h2 = Vector3d.Cross(r, v).sqrMagnitude;
             double energy = 0.5 * v.sqrMagnitude - mu / r.magnitude;
