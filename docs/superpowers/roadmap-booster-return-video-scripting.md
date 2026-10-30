@@ -54,6 +54,22 @@ Write the findings to `.research/booster-return/NOTES.md` (not versioned): one l
 type or member name, what was read, and what stays a guess. Then add here, or to the specs, every
 missing item the scan reveals.
 
+### Said on the Redux Discord (2026-10-30, not verified)
+
+A community member said that Redux already plans two things on this roadmap:
+- **A built-in replay mode with flight recording**, "talked about for months". It overlaps R5
+  (recording), and maybe the replay of R4b.
+- **Built-in Lua scripting support.** It overlaps R6.
+
+Phase 0 checks this first, in the Redux docs, the IL and the changelogs:
+- what exists already;
+- what is announced;
+- whether it can be hooked into, instead of rebuilt.
+
+If the replay mode exists, R5 and R7 should build on it (cameras, overlay, the booster's
+telemetry) rather than duplicate it. For R6, the user chose our own language on 2026-10-30.
+Weigh that choice again against Redux's Lua, with the user, once the facts are in.
+
 ### Questions the scan must answer
 
 **Stage recovery and separation**
