@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 420" width="1600" height="420" font-family="Bahnschrift, Segoe UI, Arial, sans-serif">
+  <!-- SkySpaceAgency UI concept: the compact flight bar. A thin horizontal strip that stays on
+       screen while a pilot flies, so the big window can be closed. Shown over a dim game frame,
+       expanded (top) and minimal (bottom). -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe29a"/><stop offset="1" stop-color="#d08a20"/></linearGradient>
+    <linearGradient id="game" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1a3a"/><stop offset="0.7" stop-color="#1b4f86"/><stop offset="1" stop-color="#2e7a5a"/></linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#111c44" stop-opacity="0.96"/><stop offset="1" stop-color="#080e26" stop-opacity="0.96"/></linearGradient>
+  </defs>
+  <rect width="1600" height="420" fill="url(#game)"/>
+
+  <!-- expanded bar -->
+  <g transform="translate(200 30)">
+    <rect width="1200" height="96" rx="16" fill="url(#bar)" stroke="#24366e" stroke-width="2"/>
+    <circle cx="48" cy="48" r="22" fill="#0a1230" stroke="url(#gold)" stroke-width="3"/>
+    <path d="M 45 61 L 45 41 Q 48 31 51 41 L 51 61 Z" fill="#ffffff"/>
+    <text x="86" y="40" font-size="13" fill="#8ea3d6" letter-spacing="2">LAND</text>
+    <text x="86" y="66" font-size="21" font-weight="700" fill="#ffe29a">Pre-brake</text>
+    <!-- mini phase dots -->
+    <g>
+      <circle cx="250" cy="48" r="7" fill="#e8a93a"/>
+      <line x1="257" y1="48" x2="283" y2="48" stroke="#e8a93a" stroke-width="3"/>
+      <circle cx="290" cy="48" r="9" fill="#0a1230" stroke="#ffe29a" stroke-width="3"/>
+      <line x1="299" y1="48" x2="323" y2="48" stroke="#1d2c66" stroke-width="3"/>
+      <circle cx="330" cy="48" r="7" fill="#1d2c66"/>
+      <line x1="337" y1="48" x2="363" y2="48" stroke="#1d2c66" stroke-width="3"/>
+      <circle cx="370" cy="48" r="7" fill="#1d2c66"/>
+      <line x1="377" y1="48" x2="403" y2="48" stroke="#1d2c66" stroke-width="3"/>
+      <circle cx="410" cy="48" r="7" fill="#1d2c66"/>
+    </g>
+    <!-- readouts -->
+    <g font-size="12" fill="#8ea3d6">
+      <line x1="450" y1="20" x2="450" y2="76" stroke="#24366e"/>
+      <text x="474" y="38">ALTITUDE</text><text x="474" y="68" font-size="24" font-weight="600" fill="#f4f7ff">54.8 km</text>
+      <text x="624" y="38">SPEED</text><text x="624" y="68" font-size="24" font-weight="600" fill="#f4f7ff">1 012 m/s</text>
+      <text x="790" y="38">TARGET</text><text x="790" y="68" font-size="24" font-weight="600" fill="#f4f7ff">0.4 km</text>
+      <text x="920" y="38">HOTTEST PART</text>
+      <rect x="920" y="54" width="120" height="12" rx="6" fill="#1d2c66"/><rect x="920" y="54" width="27" height="12" rx="6" fill="#7fe7ff"/>
+      <text x="1048" y="66" font-size="14" fill="#f4f7ff">22 %</text>
+    </g>
+    <!-- controls -->
+    <rect x="1090" y="26" width="44" height="44" rx="10" fill="#3a1a1a" stroke="#7a3030"/>
+    <rect x="1104" y="40" width="16" height="16" rx="2" fill="#ff9a7a"/>
+    <rect x="1142" y="26" width="44" height="44" rx="10" fill="#17245a" stroke="#24366e"/>
+    <path d="M 1154 38 h 20 v 20 h -20 z M 1154 44 h 20" fill="none" stroke="#8ea3d6" stroke-width="2"/>
+  </g>
+  <text x="200" y="152" font-size="14" fill="#c4d0ef">Expanded: phase, the readouts of the running pilot, stop, open the full window</text>
+
+  <!-- minimal bar -->
+  <g transform="translate(200 200)">
+    <rect width="560" height="52" rx="26" fill="url(#bar)" stroke="#24366e" stroke-width="2"/>
+    <circle cx="26" cy="26" r="15" fill="#0a1230" stroke="url(#gold)" stroke-width="2.5"/>
+    <path d="M 24 35 L 24 21 Q 26 15 28 21 L 28 35 Z" fill="#ffffff"/>
+    <text x="52" y="32" font-size="16" fill="#ffe29a" font-weight="700">LAND · Pre-brake</text>
+    <text x="230" y="32" font-size="15" fill="#f4f7ff">54.8 km · 1 012 m/s · heat 22 %</text>
+    <circle cx="534" cy="26" r="12" fill="#3a1a1a" stroke="#7a3030"/>
+    <rect x="529" y="21" width="10" height="10" rx="1.5" fill="#ff9a7a"/>
+  </g>
+  <text x="200" y="278" font-size="14" fill="#c4d0ef">Minimal: one line, for when you just want to watch</text>
+
+  <!-- alert state -->
+  <g transform="translate(840 200)">
+    <rect width="560" height="52" rx="26" fill="#2a1216" stroke="#ff5a3a" stroke-width="2"/>
+    <circle cx="26" cy="26" r="9" fill="#ff5a3a"/>
+    <text x="48" y="32" font-size="16" fill="#ffb09a" font-weight="700">Heat guard · thrusting retrograde</text>
+    <text x="396" y="32" font-size="15" fill="#ffd2c4">engine at 78 %</text>
+  </g>
+  <text x="840" y="278" font-size="14" fill="#c4d0ef">Alert: the bar turns coral when a guard acts</text>
+
+  <!-- palette -->
+  <g transform="translate(200 320)" font-size="13" fill="#c4d0ef">
+    <text x="0" y="0" letter-spacing="2">PALETTE</text>
+    <rect x="0" y="14" width="56" height="40" rx="8" fill="#0a1230" stroke="#24366e"/><text x="0" y="74">#0A1230 night</text>
+    <rect x="170" y="14" width="56" height="40" rx="8" fill="#e8a93a"/><text x="170" y="74">#E8A93A gold · actions</text>
+    <rect x="380" y="14" width="56" height="40" rx="8" fill="#7fe7ff"/><text x="380" y="74">#7FE7FF cyan · data</text>
+    <rect x="580" y="14" width="56" height="40" rx="8" fill="#d6f53c"/><text x="580" y="74">#D6F53C prograde · ok</text>
+    <rect x="800" y="14" width="56" height="40" rx="8" fill="#ff7a5a"/><text x="800" y="74">#FF7A5A coral · alerts</text>
+    <rect x="1010" y="14" width="56" height="40" rx="8" fill="#4fa8ff"/><text x="1010" y="74">#4FA8FF node · plans</text>
+  </g>
+</svg>

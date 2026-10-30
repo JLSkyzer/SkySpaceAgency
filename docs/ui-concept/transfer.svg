@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Bahnschrift, Segoe UI, Arial, sans-serif">
+  <!-- SkySpaceAgency UI concept, Transfer tab: destination picker, transfer map, Δv budget,
+       burn timeline. Same window, header and tab bar as lift.svg. -->
+  <defs>
+    <linearGradient id="win" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#111c44"/><stop offset="1" stop-color="#080e26"/></linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe29a"/><stop offset="1" stop-color="#d08a20"/></linearGradient>
+    <radialGradient id="sun"><stop offset="0" stop-color="#fff3c4"/><stop offset="1" stop-color="#ffb02e"/></radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="#050816"/>
+  <rect x="20" y="20" width="1560" height="860" rx="18" fill="url(#win)" stroke="#24366e" stroke-width="2"/>
+
+  <!-- header -->
+  <circle cx="62" cy="62" r="24" fill="#0a1230" stroke="url(#gold)" stroke-width="4"/>
+  <path d="M 58 76 L 58 54 Q 62 42 66 54 L 66 76 Z" fill="#ffffff"/>
+  <path d="M 46 70 A 22 8 -15 0 0 80 60" fill="none" stroke="#e8a93a" stroke-width="3"/>
+  <text x="100" y="58" font-size="24" font-weight="700" fill="#f4f7ff" letter-spacing="2">SKYSPACEAGENCY</text>
+  <text x="100" y="80" font-size="14" fill="#8ea3d6" letter-spacing="1">FLY FURTHER</text>
+  <g font-size="15">
+    <rect x="520" y="44" width="230" height="36" rx="18" fill="#17245a"/><circle cx="542" cy="62" r="6" fill="#d6f53c"/>
+    <text x="556" y="67" fill="#f4f7ff">Kerbal Explorer II</text>
+    <rect x="762" y="44" width="160" height="36" rx="18" fill="#17245a"/>
+    <text x="782" y="67" fill="#8ea3d6">Kerbin · <tspan fill="#f4f7ff">Orbit</tspan></text>
+    <rect x="934" y="44" width="170" height="36" rx="18" fill="#17245a"/>
+    <text x="954" y="67" fill="#8ea3d6">Δv <tspan fill="#f4f7ff">2 070 m/s</tspan></text>
+    <rect x="1116" y="44" width="170" height="36" rx="18" fill="#17245a"/>
+    <text x="1136" y="67" fill="#8ea3d6">Window <tspan fill="#f4f7ff">in 12 d</tspan></text>
+  </g>
+  <rect x="1470" y="48" width="28" height="28" rx="6" fill="#17245a"/><path d="M 1477 62 h 14" stroke="#8ea3d6" stroke-width="2.5"/>
+  <rect x="1508" y="48" width="28" height="28" rx="6" fill="#17245a"/><path d="M 1515 55 l 14 14 M 1529 55 l -14 14" stroke="#8ea3d6" stroke-width="2.5"/>
+
+  <!-- tab bar -->
+  <g font-size="17" font-weight="600" letter-spacing="1">
+    <rect x="40" y="104" width="1520" height="52" rx="12" fill="#0c1538"/>
+    <rect x="368" y="110" width="150" height="40" rx="9" fill="#1d2c66"/>
+    <rect x="368" y="146" width="150" height="4" rx="2" fill="url(#gold)"/>
+    <text x="123" y="137" text-anchor="middle" fill="#8ea3d6">LIFT</text>
+    <text x="283" y="137" text-anchor="middle" fill="#8ea3d6">ORBIT</text>
+    <text x="443" y="137" text-anchor="middle" fill="#ffe29a">TRANSFER</text>
+    <text x="613" y="137" text-anchor="middle" fill="#8ea3d6">RENDEZVOUS</text>
+    <text x="773" y="137" text-anchor="middle" fill="#8ea3d6">LAND</text>
+    <text x="913" y="137" text-anchor="middle" fill="#8ea3d6">RETURN</text>
+    <text x="1053" y="137" text-anchor="middle" fill="#8ea3d6">NODES</text>
+    <text x="1500" y="137" text-anchor="end" fill="#5c6ea6" font-weight="400">SETTINGS</text>
+  </g>
+
+  <!-- left: destination -->
+  <rect x="40" y="172" width="400" height="508" rx="14" fill="#0e1840" stroke="#1f2f66"/>
+  <text x="64" y="208" font-size="14" fill="#8ea3d6" letter-spacing="2">DESTINATION</text>
+  <g font-size="15">
+    <rect x="64" y="224" width="112" height="76" rx="12" fill="#0a1230" stroke="#24366e"/><circle cx="92" cy="262" r="14" fill="#a9b0bf"/><text x="114" y="267" fill="#f4f7ff">Mun</text>
+    <rect x="184" y="224" width="112" height="76" rx="12" fill="#0a1230" stroke="#24366e"/><circle cx="210" cy="262" r="10" fill="#9fd9c9"/><text x="228" y="267" fill="#f4f7ff">Minmus</text>
+    <rect x="304" y="224" width="112" height="76" rx="12" fill="#2a1a24" stroke="#ff9a6b" stroke-width="2"/><circle cx="332" cy="262" r="14" fill="#d35a36"/><text x="354" y="267" fill="#ffd2bf" font-weight="700">Duna</text>
+    <rect x="64" y="308" width="112" height="76" rx="12" fill="#0a1230" stroke="#24366e"/><circle cx="92" cy="346" r="15" fill="#a070d0"/><text x="114" y="351" fill="#f4f7ff">Eve</text>
+    <rect x="184" y="308" width="112" height="76" rx="12" fill="#0a1230" stroke="#24366e"/><circle cx="212" cy="346" r="12" fill="#b08860"/><text x="232" y="351" fill="#f4f7ff">Moho</text>
+    <rect x="304" y="308" width="112" height="76" rx="12" fill="#0a1230" stroke="#24366e"/><circle cx="332" cy="346" r="16" fill="#6fae4a"/><text x="354" y="351" fill="#f4f7ff">Jool</text>
+  </g>
+  <text x="64" y="420" font-size="14" fill="#8ea3d6">Arrival</text>
+  <g font-size="15">
+    <rect x="64" y="430" width="352" height="40" rx="10" fill="#0a1230"/>
+    <rect x="68" y="434" width="190" height="32" rx="8" fill="#1d2c66"/>
+    <text x="163" y="455" text-anchor="middle" fill="#ffe29a">Capture into orbit</text>
+    <text x="337" y="455" text-anchor="middle" fill="#8ea3d6">Flyby</text>
+  </g>
+  <g font-size="14">
+    <text x="64" y="502" fill="#8ea3d6">Capture periapsis</text>
+    <rect x="64" y="512" width="168" height="44" rx="10" fill="#0a1230" stroke="#24366e"/>
+    <text x="80" y="541" font-size="20" fill="#f4f7ff">60</text><text x="214" y="541" text-anchor="end" fill="#5c6ea6">km</text>
+    <text x="248" y="502" fill="#8ea3d6">Priority</text>
+    <rect x="248" y="512" width="168" height="44" rx="10" fill="#0a1230" stroke="#24366e"/>
+    <text x="264" y="541" font-size="18" fill="#f4f7ff">Lowest Δv</text>
+  </g>
+  <g font-size="15" fill="#f4f7ff">
+    <text x="64" y="604">Prepare only (I fly the nodes)</text>
+    <rect x="356" y="588" width="60" height="28" rx="14" fill="#1d2c66"/><circle cx="370" cy="602" r="11" fill="#5c6ea6"/>
+    <text x="64" y="648">Drop empty stages in burns</text>
+    <rect x="356" y="632" width="60" height="28" rx="14" fill="#d6f53c"/><circle cx="402" cy="646" r="11" fill="#0a1230"/>
+  </g>
+
+  <!-- centre: transfer map -->
+  <rect x="456" y="172" width="704" height="508" rx="14" fill="#070c22" stroke="#1f2f66"/>
+  <text x="480" y="208" font-size="14" fill="#8ea3d6" letter-spacing="2">TRANSFER MAP</text>
+  <text x="1136" y="208" font-size="13" fill="#5c6ea6" text-anchor="end">Kerbol system · not to scale</text>
+  <g stroke="#7fe7ff" stroke-opacity="0.06">
+    <line x1="808" y1="230" x2="808" y2="590"/><line x1="500" y1="400" x2="1120" y2="400"/>
+  </g>
+  <circle cx="808" cy="400" r="120" fill="none" stroke="#2a5a9a" stroke-width="2"/>
+  <circle cx="808" cy="400" r="200" fill="none" stroke="#7a4a40" stroke-width="2" stroke-dasharray="4 7"/>
+  <circle cx="808" cy="400" r="44" fill="#ffd27a" opacity="0.12"/>
+  <circle cx="808" cy="400" r="24" fill="url(#sun)"/>
+  <!-- the transfer half-ellipse, flown arc in gold -->
+  <path d="M 688 400 A 160 135 0 0 1 1008 400" fill="none" stroke="url(#gold)" stroke-width="5"/>
+  <path d="M 1008 400 A 160 135 0 0 1 688 400" fill="none" stroke="#e8a93a" stroke-opacity="0.22" stroke-width="2" stroke-dasharray="6 8"/>
+  <circle cx="688" cy="400" r="12" fill="#2d8ec4"/>
+  <text x="672" y="432" font-size="13" text-anchor="end" fill="#8fd3ff">Kerbin · depart</text>
+  <circle cx="1008" cy="400" r="10" fill="#d35a36"/>
+  <text x="1024" y="432" font-size="13" fill="#ffb08a">Duna · arrive</text>
+  <circle cx="948" cy="258" r="9" fill="none" stroke="#d35a36" stroke-width="2" stroke-dasharray="3 3"/>
+  <text x="964" y="250" font-size="12" fill="#8f6a60">Duna today</text>
+  <path d="M 940 268 A 200 200 0 0 1 1005 380" fill="none" stroke="#d35a36" stroke-opacity="0.5" stroke-width="2"/>
+  <g transform="translate(688 370)"><circle r="11" fill="#0c1640" stroke="#4fa8ff" stroke-width="4"/><circle r="4" fill="#4fa8ff"/></g>
+  <text x="704" y="356" font-size="12" fill="#8fc4ff">ejection node</text>
+  <g font-size="13" fill="#8ea3d6">
+    <rect x="480" y="600" width="210" height="60" rx="10" fill="#0e1840"/>
+    <text x="496" y="624">PHASE ANGLE</text><text x="496" y="648" font-size="18" fill="#f4f7ff">44.3° now · 44.0° go</text>
+    <rect x="706" y="600" width="210" height="60" rx="10" fill="#0e1840"/>
+    <text x="722" y="624">TRIP TIME</text><text x="722" y="648" font-size="18" fill="#f4f7ff">231 days</text>
+    <rect x="932" y="600" width="210" height="60" rx="10" fill="#0e1840"/>
+    <text x="948" y="624">ENCOUNTER</text><text x="948" y="648" font-size="18" fill="#d6f53c">Pe 61 km</text>
+  </g>
+
+  <!-- right: Δv budget -->
+  <rect x="1176" y="172" width="384" height="508" rx="14" fill="#0e1840" stroke="#1f2f66"/>
+  <text x="1200" y="208" font-size="14" fill="#8ea3d6" letter-spacing="2">Δv BUDGET</text>
+  <circle cx="1368" cy="326" r="90" fill="none" stroke="#1d2c66" stroke-width="18"/>
+  <circle cx="1368" cy="326" r="90" fill="none" stroke="url(#gold)" stroke-width="18" stroke-dasharray="381 565" transform="rotate(-90 1368 326)"/>
+  <text x="1368" y="322" font-size="36" font-weight="600" text-anchor="middle" fill="#f4f7ff">1 398</text>
+  <text x="1368" y="350" font-size="14" text-anchor="middle" fill="#8ea3d6">of 2 070 m/s</text>
+  <g font-size="14">
+    <text x="1200" y="460" fill="#f4f7ff">Ejection</text><text x="1536" y="460" text-anchor="end" fill="#ffe29a">1 061 m/s</text>
+    <text x="1200" y="490" fill="#f4f7ff">Corrections (est.)</text><text x="1536" y="490" text-anchor="end" fill="#ffe29a">20 m/s</text>
+    <text x="1200" y="520" fill="#f4f7ff">Capture</text><text x="1536" y="520" text-anchor="end" fill="#ffe29a">317 m/s</text>
+    <line x1="1200" y1="538" x2="1536" y2="538" stroke="#24366e"/>
+    <text x="1200" y="568" fill="#8ea3d6">Left after arrival</text><text x="1536" y="568" text-anchor="end" fill="#d6f53c">672 m/s</text>
+  </g>
+  <rect x="1200" y="614" width="336" height="44" rx="10" fill="#132a1e" stroke="#3d6b2a"/>
+  <circle cx="1222" cy="636" r="6" fill="#d6f53c"/>
+  <text x="1238" y="641" font-size="14" fill="#d6f53c">Every stage can pay its burns</text>
+
+  <!-- burn timeline -->
+  <rect x="40" y="696" width="1520" height="80" rx="14" fill="#0e1840" stroke="#1f2f66"/>
+  <line x1="120" y1="726" x2="1480" y2="726" stroke="#1d2c66" stroke-width="4"/>
+  <g font-size="14">
+    <circle cx="120" cy="726" r="15" fill="#0a1230" stroke="#ffe29a" stroke-width="4"/><circle cx="120" cy="726" r="6" fill="#ffe29a"/>
+    <text x="120" y="760" text-anchor="middle" fill="#f4f7ff" font-weight="700">Wait for window</text>
+    <circle cx="390" cy="726" r="12" fill="#1d2c66"/><text x="390" y="760" text-anchor="middle" fill="#8ea3d6">Ejection · 1 061 m/s</text>
+    <circle cx="660" cy="726" r="12" fill="#1d2c66"/><text x="660" y="760" text-anchor="middle" fill="#8ea3d6">Leave Kerbin SOI</text>
+    <circle cx="930" cy="726" r="12" fill="#1d2c66"/><text x="930" y="760" text-anchor="middle" fill="#8ea3d6">Mid-course correction</text>
+    <circle cx="1200" cy="726" r="12" fill="#1d2c66"/><text x="1200" y="760" text-anchor="middle" fill="#8ea3d6">Enter Duna SOI</text>
+    <circle cx="1480" cy="726" r="12" fill="#1d2c66"/><text x="1480" y="760" text-anchor="middle" fill="#8ea3d6">Capture · 317 m/s</text>
+  </g>
+
+  <!-- action bar -->
+  <g font-size="17" font-weight="600">
+    <text x="48" y="832" font-size="14" font-weight="400" fill="#8ea3d6">Every step is explained before it flies · resumes after save / load</text>
+    <rect x="1246" y="800" width="150" height="52" rx="12" fill="#17245a" stroke="#24366e"/>
+    <text x="1321" y="832" text-anchor="middle" fill="#f4f7ff">Re-plan</text>
+    <rect x="1412" y="800" width="148" height="52" rx="12" fill="url(#gold)"/>
+    <text x="1486" y="832" text-anchor="middle" fill="#1a1205">Start</text>
+  </g>
+</svg>
