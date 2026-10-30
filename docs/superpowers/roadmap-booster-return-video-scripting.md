@@ -254,6 +254,45 @@ parachutes.
     booster's flight, recorded in game time. The replay from the upper stage's point of view (R4b)
     must keep this delay exactly as it was flown.
 
+### R4c. The exact flow, step by step (user's, 2026-10-31)
+
+This section is the reference for R3, R4 and R4b.
+
+1. **Lift flies the ascent.** At the booster separation, Redux's recovery system makes its save by
+   itself. The mod pauses the game.
+2. **No reload at this point**: the game is already in the separation state. The player takes
+   control of the booster, then unpauses.
+3. **Return**: it starts by itself when "Start Return on taking control" is ticked; otherwise the
+   player presses Return.
+4. **Once the booster has landed**, the mod writes a local **booster-landed record**, outside the
+   game save, in the mod's own folder:
+   - the flight, the separation-save identity, the booster vessel id;
+   - the landing place and time, and its state (fuel, intact or not).
+
+   This record is the safety barrier of step 7, and the data R4b needs to keep the booster where it
+   landed.
+5. **The player opens Redux's recovery menu and loads the separation save**, as a normal load from
+   the Escape menu. When the load ends, the mod makes sure the game is paused, and pauses it itself
+   if not.
+6. **The player takes control of the upper stage, not the booster**, then unpauses.
+7. **Lift resumes at once where it stopped before the separation**, with the same goal and plan.
+   - **Barrier**: Lift resumes only if the active vessel is the upper stage of that flight. It refuses
+     when the player controls the booster, in particular the booster vessel named in the
+     booster-landed record. The refusal is said in plain words ("This is the booster that already
+     landed: switch to the upper stage to resume the ascent"), and Lift never fires its engines.
+   - Recognising the upper stage: by vessel id against the ids recorded at the separation, with the
+     record as a cross-check. Phase 0 must confirm that vessel ids are stable across a save and a
+     reload.
+8. **The booster's replay and the landed booster** then follow R4b.
+
+Phase 0 must answer:
+- Does Lift's state survive the reload, or must the mod store its own Lift resume state at the
+  separation (goal, phase, plan, staging)? Lift does not resume today.
+- Is there a message for "load finished", to pause and to arm the resume?
+- Where does Redux's recovery save live, and how does the mod identify it?
+- What if the player loads an older save, or another flight? The resume must then not start: match on
+  the flight and the separation-save identity.
+
 ### R4b. Two branches of one flight: booster replay and the booster kept where it landed
 The flow the user wants (2026-10-30), as a KSP1 recovery mod did it. That mod is probably FMRS; the
 user said "recovery system": confirm which one, and read how it did it.
