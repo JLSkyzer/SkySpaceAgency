@@ -199,6 +199,42 @@ parachutes.
 - The upper stage's own pilot (Lift) must stop cleanly when the active vessel changes, and must be
   resumable. Lift does not resume today: check it.
 
+### R4b. Two branches of one flight: booster replay and the booster kept where it landed
+The flow the user wants (2026-10-30), as a KSP1 recovery mod did it. That mod is probably FMRS; the
+user said "recovery system": confirm which one, and read how it did it.
+1. At separation, the automatic save is made. Redux's recovery system should already do it: verify
+   in Phase 0.
+2. The game pauses. The player takes the booster and flies it: boostback, return, landing. Or a crash.
+3. Once the booster has landed, the player can recover it, or leave it where it stands.
+4. The player goes back to the separation save to go on with the upper stage.
+5. **Replay**: after that reload, the player sees the booster in the game doing what it did when the
+   player flew it (separation, flip, boostback, moving away), until it leaves the game's physics
+   range. This makes the upper stage's video consistent.
+   - It is a **visual ghost**, without physics, driven by the booster's flight recording:
+     - position and attitude in the body's rotating frame, in game time;
+     - engine states, for the plumes;
+     - legs and grid fins.
+   - It is never a second simulation.
+6. **The booster stays where it landed**. If it was not recovered, it exists in the tracking station
+   at the place where it was put down, with its fuel. Later, the player can switch to it, and recover
+   it for real or fly it back to the KSC.
+   - At touchdown, take the booster's vessel state: our own serialization, or the game's.
+   - After the reload, remove the booster's in-flight copy from the separation save. Unloaded, it
+     would fall on rails, or be destroyed.
+   - Create the landed booster from the stored state.
+   - When it appears is to decide:
+     - at the reload, as the KSP1 mod is thought to have done;
+     - or when the game time reaches its touchdown time, with the ghost flying until then. This is
+       more consistent with the replay.
+   - A booster that crashed, or that was recovered, gives nothing.
+7. Phase 0 must answer:
+   - can a vessel be serialized, then created again, at a surface position: the game's
+     `SerializationUtility`, the vessel spawn API, or Redux's own recovery code?
+   - how is a vessel deleted cleanly?
+   - can a part-less visual ghost be created, by cloning the booster's models and plume effects?
+   - what is the render and physics range for a ghost?
+   - which save does Redux make at separation, and how does a reload behave?
+
 ### R5. Flight recording
 - Opt-in in the K2D2 window:
   - resolution 720p or 1080p;
@@ -219,6 +255,17 @@ parachutes.
   the tab.
 - **Two recordings**, one per vessel: the booster's and the upper stage's (the rocket that goes on to
   orbit). Both start with the Lift, when the option is on.
+- **Several cameras per vessel.** The user said "a camera on the upper stage", but meant one or
+  more, for several points of view. This holds for the booster too. Each camera is a point of view
+  placed on a part, with a position, a direction and a field of view. The output is one video per
+  camera, or a cut between cameras: to decide in the spec.
+- **Filming the separation from the upper stage.** The upper stage's cameras film the separation
+  and the booster moving away:
+  - live, up to the vessel switch;
+  - then, after the reload of the separation save, through the booster's replay (R4b), until it
+    leaves the physics range.
+  - While the player flies the booster, the upper stage's recording is paused. It goes on when the
+    upper stage's flight resumes.
 - **The booster's recording** stops by itself 10 to 20 s after the booster has landed.
 - **The upper stage's recording** goes on until the player stops it. Constraints:
   - it can only be stopped once the booster has landed and its own recording has stopped. Before
