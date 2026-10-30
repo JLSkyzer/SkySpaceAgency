@@ -104,3 +104,23 @@ If the guard fails, the mod must drop to physics warp at once without losing fue
 - The drop happens when the booster is dry or at the drop height: `cutting the throttle first`, then `stage drop: … fired / done`, then `the new stage pushes`.
 - The lander must never fall onto the dropped booster. No `ALARM` line should appear.
 - Also try precision landing on the Mun with two stages (`stage plan: precision: …`).
+
+## 16. Deorbit, Δv refusal and reentry heating (Land tab, Propulsive mode)
+Lines to read: `[Landing] deorbit: …` (plan, start check, phases) and `[Landing] heat: …` (model inputs, entries, predictions, guard).
+1. **Airless, from orbit** (Mun, 30 km circular, precision off): press Brake.
+   - `[Landing] deorbit: start plan ok … deorbit at +… s, Δv ~20 m/s to pe -2.0 km | brake Δv … | total …` then `start check: ok=true`.
+   - The tab shows "Deorbit burn", then the usual Pause / Quick Warp / Brake / Touch Down. `phase deorbit end: Δv used … (planned …)` should match within a few m/s.
+   - Precision on: unchanged (its own deorbit). Above a 100 km periapsis the tab turns precision off: the plain deorbit then flies.
+2. **Δv refusal**: drain the tanks until the landing cannot be paid. The start is refused with "Δv X m/s for ~Y m/s needed (deorbit …, pre-brake …, brake …, +10 %)." and nothing moves.
+3. **Staged landing, airless, from orbit** ("Land with stage 2"): it now starts from orbit. Stage 1 pays the deorbit (`stage plan: deorbit: stage 1 pays …`), the drops follow after the deorbit. On Kerbin or Duna from orbit it is still refused ("the staged plan has no drag model").
+4. **Kerbin, from a 100 km orbit**, a stage with its engines first (retrograde):
+   - `[Landing] heat: model inputs on Kerbin: … | heated parts: n of m read …` lists the parts with their airstream area and Cd at retrograde. A `0.00 m²` everywhere, or "heating not modelled", needs a fix.
+   - `[Landing] heat: start plan: entries: pe 42.0 km: … | pe 35.0 km: …` and the chosen entry, `predicted peak … % … before the brake`.
+   - Phases: "Deorbit burn", then "Pre-brake before the atmosphere" when planned (`plan pre-brake`), then "Atmospheric coast": warp stops 60 s before the interface, 1x in the air, SAS surface retrograde.
+   - `[Landing] heat: prediction: brake start +… s …` every few seconds, then `[Landing] heat: brake at altitude …`: compare the predicted brake Δv with the Δv really burned at touchdown.
+   - Compare `[Landing] heat: AeroCoast: … hottest <part> … %` with the predicted peak. The "Hottest Part" row shows it live.
+5. **Heat guard**: start from orbit with a fragile engine, or deorbit by hand to a steep, fast entry, then press Brake above the atmosphere.
+   - From 75 %: `[Landing] heat: guard on …`, throttle up surface retrograde (only within 15° of retrograde), `guard off` under 70 % or below Mach 1.
+   - It must never pass 90 %; otherwise the red "Overheating: …" message and the log say so. "Heat guard is using the landing's Δv reserve" when it eats into the brake's Δv.
+   - In Pause / Quick Warp / Waiting on a collision course inside the air, the guard switches the run to the atmospheric coast.
+6. **Things to check against the game**: the difficulty "HeatScaling" read in the model inputs line; the `harshness`; that the predicted heating is in the right range (a factor 2 off means the area or the occlusion model is wrong); the frame time while the coast predicts (`… ms` at the end of the prediction lines).
