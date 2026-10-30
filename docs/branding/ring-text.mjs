@@ -39,7 +39,7 @@ function ring(text, { r, size, spacing, fill, weight, bottom }) {
 
 const top = ring("SKYSPACEAGENCY", { r: 444, size: 46, spacing: 9, fill: "#f4f7ff", weight: 700, bottom: false });
 // Bottom glyphs point to the centre, so the baseline sits on the outer radius.
-const bottom = ring("AUTOPILOT SYSTEMS · KSP2 REDUX", { r: 478, size: 28, spacing: 5, fill: "#ffd27a", weight: 600, bottom: true });
+const bottom = ring("FLY FURTHER · KSP2 REDUX", { r: 478, size: 30, spacing: 7, fill: "#ffd27a", weight: 600, bottom: true });
 
 const svg = readFileSync(file, "utf8");
 const next = svg.replace(/<!--RING-START-->[\s\S]*?<!--RING-END-->/, `<!--RING-START-->\n${top}\n${bottom}\n  <!--RING-END-->`);

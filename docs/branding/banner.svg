@@ -62,7 +62,7 @@
   <text x="640" y="270" font-family="Segoe UI, Arial, sans-serif" font-size="104" font-weight="700"
         fill="url(#title)" letter-spacing="1">SkySpaceAgency</text>
   <text x="644" y="335" font-family="Segoe UI, Arial, sans-serif" font-size="38" font-weight="400"
-        fill="#9fdcef">Autopilots for KSP2 Redux</text>
+        fill="#9fdcef">Fly further in KSP2 Redux</text>
   <rect x="644" y="365" width="120" height="5" rx="2.5" fill="#ffc861"/>
   <text x="644" y="420" font-family="Segoe UI, Arial, sans-serif" font-size="27" font-weight="600"
         fill="#d7e3f5" letter-spacing="2">LAUNCH · ORBIT · TRANSFER · RENDEZVOUS · DOCK · LAND</text>
