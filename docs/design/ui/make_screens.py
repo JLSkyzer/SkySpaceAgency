@@ -336,7 +336,129 @@ def overlay():
     return s + "\n</svg>\n"
 
 
-for name, fn in [("orbit", orbit), ("rendezvous", rendezvous), ("return", ret), ("nodes", nodes), ("settings", settings), ("overlay", overlay)]:
+# ---------------------------------------------------------------- VIDEO OVERLAY, webcast style (v2)
+import math
+
+
+def arc(cx, cy, r, a0, a1):
+    # Arc path from angle a0 to a1 (degrees, 0 = right, clockwise on screen).
+    x0, y0 = cx + r * math.cos(math.radians(a0)), cy + r * math.sin(math.radians(a0))
+    x1, y1 = cx + r * math.cos(math.radians(a1)), cy + r * math.sin(math.radians(a1))
+    large = 1 if (a1 - a0) % 360 > 180 else 0
+    return f"M {x0:.1f} {y0:.1f} A {r} {r} 0 {large} 1 {x1:.1f} {y1:.1f}"
+
+
+def gauge(cx, cy, label, value, unit, frac, dim=False):
+    col = "#ffffff" if not dim else "#8a93a8"
+    s = f'<path d="{arc(cx, cy, 64, 135, 405)}" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="7" stroke-linecap="round"/>'
+    if frac > 0:
+        a1 = 135 + 270 * frac
+        if not dim:
+            s += f'<path d="{arc(cx, cy, 64, 135, a1)}" fill="none" stroke="#7fe7ff" stroke-width="12" stroke-opacity="0.45" stroke-linecap="round" filter="url(#glow)"/>'
+        s += f'<path d="{arc(cx, cy, 64, 135, a1)}" fill="none" stroke="{col}" stroke-width="7" stroke-linecap="round"/>'
+    s += t(cx, cy + 4, value, 28, col, "middle", "700")
+    s += t(cx, cy + 26, unit, 11, "#c4d0ef", "middle", extra='letter-spacing="2"')
+    s += t(cx, cy + 84, label, 12, "#c4d0ef", "middle", extra='letter-spacing="3"')
+    return s
+
+
+def engines(cx, cy, lit, dim=False):
+    s = f'<circle cx="{cx}" cy="{cy}" r="46" fill="#000000" fill-opacity="0.35" stroke="#ffffff" stroke-opacity="{0.25 if dim else 0.55}" stroke-width="2"/>'
+    for j, (dx, dy) in enumerate([(0, -17), (-15, 9), (15, 9)]):
+        on = j < lit and not dim
+        if on:
+            s += f'<circle cx="{cx+dx}" cy="{cy+dy}" r="14" fill="#ffd27a" opacity="0.55" filter="url(#glow)"/>'
+        s += f'<circle cx="{cx+dx}" cy="{cy+dy}" r="11" fill="{"#ffffff" if on else "none"}" stroke="#ffffff" stroke-opacity="{0.3 if dim else 1}" stroke-width="2"/>'
+    return s
+
+
+def props(x, y, fills, dim=False):
+    s = ""
+    for i, (name, f) in enumerate(fills):
+        xx = x + i * 30
+        s += f'<rect x="{xx}" y="{y}" width="10" height="104" rx="5" fill="#ffffff" fill-opacity="0.15"/>'
+        h = 104 * f
+        s += f'<rect x="{xx}" y="{y+104-h:.0f}" width="10" height="{h:.0f}" rx="5" fill="{"#8a93a8" if dim else "#ffffff"}"/>'
+        s += t(xx + 5, y + 124, name, 10, "#c4d0ef", "middle", extra='letter-spacing="1"')
+    return s
+
+
+def overlay_v2():
+    W, H = 1920, 1080
+    s = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" font-family="Bahnschrift, Segoe UI, Arial, sans-serif">\n'
+    s += '  <!-- SkySpaceAgency recording overlay concept, webcast style: the booster seen by its chase camera during the boostback, both vehicles, mission clock on an arc, event banner. -->\n'
+    s += """  <defs>
+    <linearGradient id="air" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#010208"/><stop offset="0.45" stop-color="#071431"/><stop offset="0.72" stop-color="#1d4d8c"/><stop offset="0.86" stop-color="#6fb3e0"/><stop offset="1" stop-color="#cfeaf7"/></linearGradient>
+    <radialGradient id="sunflare" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fffbe8" stop-opacity="0.95"/><stop offset="0.15" stop-color="#ffe9b0" stop-opacity="0.5"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="limb" cx="0.5" cy="0.5" r="0.5"><stop offset="0.9" stop-color="#9fdcff" stop-opacity="0"/><stop offset="0.965" stop-color="#bfeaff" stop-opacity="0.85"/><stop offset="1" stop-color="#bfeaff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="ground" cx="0.45" cy="0.02" r="0.7"><stop offset="0" stop-color="#3a8ec0"/><stop offset="0.5" stop-color="#1f5f8f"/><stop offset="1" stop-color="#0b2a4a"/></radialGradient>
+    <linearGradient id="hull" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6e7890"/><stop offset="0.35" stop-color="#f2f5fa"/><stop offset="0.6" stop-color="#ffffff"/><stop offset="1" stop-color="#7d889f"/></linearGradient>
+    <linearGradient id="soot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1d26" stop-opacity="0"/><stop offset="1" stop-color="#1a1d26" stop-opacity="0.75"/></linearGradient>
+    <linearGradient id="plume" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.12" stop-color="#fff2c2"/><stop offset="0.35" stop-color="#ffb02e" stop-opacity="0.9"/><stop offset="1" stop-color="#ff4d1a" stop-opacity="0"/></linearGradient>
+    <radialGradient id="plumeglow" cx="0.5" cy="0.3" r="0.6"><stop offset="0" stop-color="#ffd27a" stop-opacity="0.75"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.45" r="0.75"><stop offset="0.6" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.7"/></radialGradient>
+    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="0.45" stop-color="#000000" stop-opacity="0.55"/><stop offset="1" stop-color="#000000" stop-opacity="0.85"/></linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe29a"/><stop offset="1" stop-color="#d08a20"/></linearGradient>
+    <linearGradient id="bannerline" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffe29a" stop-opacity="0"/><stop offset="0.5" stop-color="#ffe29a"/><stop offset="1" stop-color="#ffe29a" stop-opacity="0"/></linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="haze" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter>
+  </defs>
+"""
+    # ---- stand-in for the game camera feed (in game: the real booster, seen by the chosen camera)
+    s += f'<rect width="{W}" height="{H}" fill="url(#air)"/>'
+    s += f'<rect width="{W}" height="{H}" fill="#000000" fill-opacity="0.25"/>'
+    s += t(960, 470, "GAME CAMERA FEED", 40, "#ffffff", "middle", "700", 'letter-spacing="14" opacity="0.18"')
+    s += t(960, 510, "the real vessel, seen by the chosen camera", 18, "#ffffff", "middle", extra='letter-spacing="3" opacity="0.18"')
+    # ---- top: brand, LIVE, camera, event banner, small telemetry
+    s += '<circle cx="78" cy="76" r="30" fill="#0a1230" stroke="url(#gold)" stroke-width="4"/><path d="M 73 93 L 73 65 Q 78 52 83 65 L 83 93 Z" fill="#fff"/><path d="M 56 88 A 28 10 -15 0 0 102 74" fill="none" stroke="#e8a93a" stroke-width="3"/>'
+    s += t(124, 70, "SKYSPACEAGENCY", 22, "#ffffff", weight="700", extra='letter-spacing="4"')
+    s += f'<rect x="124" y="84" width="64" height="24" rx="4" fill="#e0342a"/>' + t(156, 101, "LIVE", 13, "#ffffff", "middle", "700", 'letter-spacing="2"')
+    s += t(200, 101, "BOOSTER CAM 2 · CHASE", 14, "#e6ecf8", extra='letter-spacing="3"')
+    s += f'<line x1="660" y1="96" x2="1260" y2="96" stroke="url(#bannerline)" stroke-width="2"/>'
+    s += f'<line x1="660" y1="96" x2="1260" y2="96" stroke="url(#bannerline)" stroke-width="8" stroke-opacity="0.35" filter="url(#glow)"/>'
+    s += t(960, 74, "BOOSTBACK BURN", 34, "#ffffff", "middle", "700", 'letter-spacing="8"')
+    s += t(960, 124, "STARTUP · 3 ENGINES · HEADING HOME", 14, "#ffe29a", "middle", "600", 'letter-spacing="5"')
+    s += f'<rect x="1676" y="56" width="200" height="34" rx="17" fill="#000000" fill-opacity="0.45" stroke="#ff7a5a" stroke-opacity="0.8"/><circle cx="1700" cy="73" r="7" fill="#ff5a3a"/>'
+    s += t(1716, 79, "REC 00:03:12", 15, "#ffd2c4", weight="600", extra='letter-spacing="2"')
+    s += t(1876, 118, "DOWNRANGE  61.4 KM", 13, "#e6ecf8", "end", extra='letter-spacing="2"') + t(1876, 140, "ACCEL  2.3 G", 13, "#e6ecf8", "end", extra='letter-spacing="2"')
+
+    # ---- bottom band
+    s += f'<rect y="{H-330}" width="{W}" height="330" fill="url(#band)"/>'
+    s += t(80, 812, "BOOSTER", 16, "#ffffff", weight="700", extra='letter-spacing="5"') + f'<rect x="190" y="798" width="60" height="18" rx="9" fill="#d6f53c"/>' + t(220, 812, "BURN", 10, "#0a1230", "middle", "700", 'letter-spacing="1"')
+    s += gauge(150, 920, "SPEED", "1 248", "KM/H", 0.42) + engines(290, 920, 3) + gauge(430, 920, "ALTITUDE", "38.6", "KM", 0.3)
+    s += props(530, 862, [("LOX", 0.25), ("CH4", 0.22)])
+    s += t(1840, 812, "SHIP", 16, "#ffffff", "end", "700", 'letter-spacing="5"')
+    s += gauge(1490, 920, "SPEED", "--", "KM/H", 0.86, True) + engines(1630, 920, 0, True) + gauge(1770, 920, "ALTITUDE", "--", "KM", 0.7, True)
+    s += props(1360, 862, [("LOX", 0.6), ("CH4", 0.58)], True)
+    s += f'<rect x="1596" y="796" width="140" height="22" rx="11" fill="#2a1216" stroke="#ff7a5a"/>' + t(1666, 812, "SIGNAL LOST", 11, "#ffb09a", "middle", "700", 'letter-spacing="2"')
+    s += t(960, 836, "SSA · DUNA LANDER I", 14, "#c4d0ef", "middle", extra='letter-spacing="5"')
+    s += t(960, 884, "T+ 00:03:12", 52, "#ffffff", "middle", "700", 'letter-spacing="4"')
+    cx, cy, r = 960, 1500, 560
+    s += f'<path d="{arc(cx, cy, r, 235, 305)}" fill="none" stroke="#ffffff" stroke-opacity="0.28" stroke-width="3"/>'
+    names = ["LIFTOFF", "MAX-Q", "MECO", "STAGE SEP", "BOOSTBACK", "ENTRY BURN", "LANDING BURN", "TOUCHDOWN"]
+    events = [(n, i / (len(names) - 1)) for i, n in enumerate(names)]
+    now = 4 / 7
+    s += f'<path d="{arc(cx, cy, r, 235, 235 + 70 * now)}" fill="none" stroke="#ffffff" stroke-width="3"/>'
+    s += f'<path d="{arc(cx, cy, r, 235, 235 + 70 * now)}" fill="none" stroke="#7fe7ff" stroke-width="8" stroke-opacity="0.4" filter="url(#glow)"/>'
+    for i, (e, f) in enumerate(events):
+        a = math.radians(235 + 70 * f)
+        x, y = cx + r * math.cos(a), cy + r * math.sin(a)
+        done = f <= now
+        cur = abs(f - now) < 1e-6
+        if cur:
+            s += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="16" fill="none" stroke="#ffe29a" stroke-width="2" opacity="0.8"/><circle cx="{x:.1f}" cy="{y:.1f}" r="22" fill="#ffe29a" opacity="0.25" filter="url(#glow)"/>'
+        s += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="{"#ffffff" if done else "#0a0d18"}" stroke="#ffffff" stroke-width="2"/>'
+        deg = 235 + 70 * f + 90
+        rr = r + 22 if (i % 2 == 0 or i == len(events) - 1) else r - 30
+        lx, ly = cx + rr * math.cos(a), cy + rr * math.sin(a)
+        col = "#ffe29a" if cur else ("#ffffff" if done else "#9aa6c4")
+        s += f'<text x="0" y="0" transform="translate({lx:.1f} {ly:.1f}) rotate({deg:.1f})" font-size="11" fill="{col}" text-anchor="middle" letter-spacing="2" font-weight="{"700" if cur else "400"}">{e}</text>'
+    s += t(W - 40, H - 24, "SkySpaceAgency · overlay concept · development build", 11, "#9aa6c4", "end", extra='letter-spacing="1"')
+    return s + "\n</svg>\n"
+
+
+for name, fn in [("orbit", orbit), ("rendezvous", rendezvous), ("return", ret), ("nodes", nodes), ("settings", settings), ("overlay", overlay_v2)]:
     with open(name + ".svg", "w", encoding="utf-8") as f:
         f.write(fn())
 print("written")
