@@ -187,6 +187,8 @@
 
 ### Fixed
 
+- **Small corrections near a periapsis no longer abort as "diverging"** (2026-10-30, seen in game on a Mun transfer): the fixed-impulse guidance compared the velocity with the one at ignition, so gravity during the burn (4.5 m/s² at 885 km from Kerbin) looked like a missing Δv that kept growing. It now counts only the Δv the engines applied, against the unpowered coast from the ignition state.
+
 - **Window layout** (2026-10-28, layout only): the Inclination switch of the Orbit and Transfer tabs was squeezed to a sliver and its label cut (the switch track could shrink; the label column is now 68 % wide on those rows, and the track a fixed 30 px on every switch); "Land with stage" and the other dropdowns no longer grow into tall boxes, which on the Land tab also stops Target Latitude/Longitude from running over the atmospheric-precision note; the "Drop lower stage at the latest at (km)" field (Land → ADVANCED) has its label above a usable input instead of a 4 px one. New EditMode tests lay out every tab and fail on overlaps, squeezed controls, clipped labels and elements outside their parent; `UiLayoutHarness.RenderAll` renders each tab to a PNG.
 
 ## 1.3.0

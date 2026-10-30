@@ -90,17 +90,24 @@ namespace K2D2.Node
     }
 
     /// <summary>
-    /// A fixed impulse deltaV, fixed in inertial space: the Δv to go is (v0 + deltaV) − v, where
-    /// v0 is the velocity at ignition (TargetOrbitBurn calls FixAtIgnition, which replaces any v0
-    /// given here by the velocity measured then). Built without v0, the guidance returns deltaV
-    /// itself until ignition: the direction to align with while waiting, whatever the velocity
-    /// does on the coast.
+    /// A fixed impulse deltaV, fixed in inertial space at ignition. Once FixAtIgnition has given the
+    /// ignition state (r0, v0, ut0), the Δv to go is deltaV minus the Δv the engines have applied so
+    /// far, that is v minus the velocity the vessel would have on its unpowered coast from the
+    /// ignition state (KeplerPropagator over ut − ut0). Gravity during the burn therefore does not
+    /// count as a missing Δv: near a periapsis (4.5 m/s² at 885 km from Kerbin) the old
+    /// (v0 + deltaV) − v grew by ~60 m/s over a 21 s burn that kept re-pointing, and aborted as
+    /// diverging (in game, 2026-10-30). Built with only a v0 (no ignition state), it keeps the plain
+    /// (v0 + deltaV) − v. Built without v0, it returns deltaV itself until ignition: the direction
+    /// to align with while waiting, whatever the velocity does on the coast.
     /// </summary>
     public sealed class FixedImpulseGuidance : IBurnGuidance, IFixedAtIgnition
     {
         public Vector3d DeltaV { get; }
         Vector3d v0;
         bool fixedV0;
+        Vector3d r0;
+        double ut0, mu0;
+        bool coastKnown;
 
         public FixedImpulseGuidance(Vector3d deltaV)
         {
@@ -114,13 +121,31 @@ namespace K2D2.Node
             fixedV0 = true;
         }
 
-        public Vector3d DeltaVToGo(Vector3d r, Vector3d v, double ut, double mu) =>
-            fixedV0 ? v0 + DeltaV - v : DeltaV;
+        public Vector3d DeltaVToGo(Vector3d r, Vector3d v, double ut, double mu)
+        {
+            if (!fixedV0)
+                return DeltaV;
+            if (coastKnown)
+            {
+                double dt = ut - ut0;
+                if (dt > 0)
+                {
+                    KSP2FlightAssistant.MathLibrary.KeplerPropagator.Propagate(r0, v0, mu0, dt, out _, out Vector3d vCoast);
+                    if (!double.IsNaN(vCoast.x) && !double.IsInfinity(vCoast.x))
+                        return DeltaV - (v - vCoast);
+                }
+            }
+            return v0 + DeltaV - v;
+        }
 
         public void FixAtIgnition(Vector3d r, Vector3d v, double ut, double mu)
         {
             v0 = v;
             fixedV0 = true;
+            r0 = r;
+            ut0 = ut;
+            mu0 = mu;
+            coastKnown = mu > 0 && r.sqrMagnitude > 0;
         }
 
         public string Describe() => FormattableString.Invariant(

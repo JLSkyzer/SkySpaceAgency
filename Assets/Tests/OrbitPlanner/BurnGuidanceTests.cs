@@ -101,13 +101,38 @@ public class BurnGuidanceTests
         var vIgnition = new Vector3d(-50, 2240, 0);
         guidance.FixAtIgnition(r, vIgnition, 10, Mu);
         AssertVector(deltaV, guidance.DeltaVToGo(r, vIgnition, 10, Mu), 1e-9, "at ignition");
-        var later = vIgnition + new Vector3d(0, 40, 0);
-        AssertVector(new Vector3d(0, 60, 0), guidance.DeltaVToGo(r, later, 12, Mu), 1e-9, "during the burn");
+        // During the burn: 40 m/s applied by the engines on top of the 2 s coast.
+        KSP2FlightAssistant.MathLibrary.KeplerPropagator.Propagate(r, vIgnition, Mu, 2, out Vector3d rLater, out Vector3d vCoast);
+        var later = vCoast + new Vector3d(0, 40, 0);
+        AssertVector(new Vector3d(0, 60, 0), guidance.DeltaVToGo(rLater, later, 12, Mu), 1e-6, "during the burn");
 
         // A known velocity is replaced by the one measured at the real ignition.
         var known = new FixedImpulseGuidance(deltaV, new Vector3d(0, 2246, 0));
         known.FixAtIgnition(r, vIgnition, 10, Mu);
         AssertVector(deltaV, known.DeltaVToGo(r, vIgnition, 10, Mu), 1e-9, "re-fixed at ignition");
+    }
+
+    [Test]
+    public void FixedImpulse_GravityDuringTheBurnIsNotMissingDeltaV()
+    {
+        // The in-game case of 2026-10-30: a 6 m/s correction 885 km from Kerbin's centre, near the
+        // periapsis of an e = 0.89 orbit. Gravity there is ~4.5 m/s²; a burn that stalls (vessel
+        // re-pointing, no thrust) must keep the same Δv to go, not grow with gravity.
+        var r0 = new Vector3d(885520, 0, 0);
+        var v0 = new Vector3d(0, 2723.8, 0);
+        var deltaV = new Vector3d(5.6, 2.3, 0);
+        var guidance = new FixedImpulseGuidance(deltaV);
+        guidance.FixAtIgnition(r0, v0, 100, Mu);
+
+        for (int s = 1; s <= 21; s += 5)
+        {
+            KSP2FlightAssistant.MathLibrary.KeplerPropagator.Propagate(r0, v0, Mu, s, out Vector3d r, out Vector3d v);
+            AssertVector(deltaV, guidance.DeltaVToGo(r, v, 100 + s, Mu), 1e-6, $"coasting {s} s, no thrust");
+        }
+
+        // Half the impulse applied by the engines after 3 s: half left.
+        KSP2FlightAssistant.MathLibrary.KeplerPropagator.Propagate(r0, v0, Mu, 3, out Vector3d r3, out Vector3d v3);
+        AssertVector(0.5 * deltaV, guidance.DeltaVToGo(r3, v3 + 0.5 * deltaV, 103, Mu), 1e-6, "half applied");
     }
 
     [Test]
