@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Orbit tab: capture from a flyby** (2026-10-30, not yet flown in game). Inside a body's SOI on an open trajectory (hyperbolic, or elliptic with its apoapsis beyond the SOI), the tab no longer refuses with "No closed orbit to plan from". The first step is a capture burn, then the usual plan, each step planned again from the orbit actually reached (one node at a time, flown by the closed-loop burn):
+  - **Where**: at the periapsis when it is ahead, above the surface and atmosphere and at least 60 s away; otherwise as soon as possible (60 s from now, the lead of the other burns), for example past the periapsis on the way out.
+  - **Into what**: an orbit in the trajectory's plane through the capture point, with the ticked Ap / Pe; an unticked one stands at the capture radius, so with nothing ticked the capture is circular there. At the periapsis the burn stays tangential: a capture radius between the targets becomes the Pe of the capture orbit, and the next step sets the target Pe. A ticked inclination is changed after the capture.
+  - **Refused**, with a message: a periapsis below the surface or in the atmosphere when the earliest capture point is already too low or comes after it; a vessel that leaves the SOI first, or a target Ap beyond the SOI; a capture that needs more Δv than the vessel has.
+  - The tab explains it first: "Capture at the Mun periapsis (170 km) first: 254 m/s." Log: "[OrbitUI] capture: …" or "[OrbitUI] capture refused: …".
+
 - **Land with a chosen stage** (Land tab, powered braking; 2026-10-25, not yet flown in game). A new "Land with stage" list shows the vessel's stages in the staging stack's order, counted from the active one (stage 1). The default, the current stage, lands exactly as before. With a higher stage, the lower stages brake first, the way a Duna booster with 755 m/s left can now pay for part of the braking instead of being thrown away:
   - **Drops**: the active lower stage is dropped when it runs dry (no thrust for 0.5 s) or at the drop height at the latest, one activation at a time, never while paused, after leaving rails warp, and checked: the dropped parts must leave within 3 s. Then the next one, until the chosen stage is active; it lands as before (legs, final descent).
   - **Safe at the drop**:

@@ -26,6 +26,7 @@ namespace K2D2.OrbitPlanning
             public BodyInfo Body;
             public OrbitElements El;
             public double GameInclinationRad;
+            public string BodyName;
             public double ApKm => (El.ApoapsisRadius - Body.Radius) / 1000;
             public double PeKm => (El.PeriapsisRadius - Body.Radius) / 1000;
             public double IncDeg => El.InclinationRad * Rad2Deg;
@@ -82,13 +83,18 @@ namespace K2D2.OrbitPlanning
                 field.SetValueWithoutNotify((float)current);
         }
 
-        static bool TryReadCurrent(out Current c)
+        // A closed orbit only: the target fields show its current values.
+        static bool TryReadCurrent(out Current c) => TryReadTrajectory(out c) && c.El.IsClosed;
+
+        // Any trajectory, open ones included (the planner captures them first).
+        static bool TryReadTrajectory(out Current c)
         {
             c = default;
             if (!TryReadState(out c.R, out c.V, out c.UT, out c.Body, out c.GameInclinationRad))
                 return false;
             c.El = OrbitMath.Elements(c.R, c.V, c.Body.Mu);
-            return c.El.IsClosed;
+            c.BodyName = K2D2_Plugin.Instance?.current_vessel?.VesselComponent?.Orbit?.referenceBody?.bodyName ?? "body";
+            return true;
         }
 
         /// <summary>
@@ -113,6 +119,7 @@ namespace K2D2.OrbitPlanning
             if (orbit == null)
                 return false;
             var reference = orbit.referenceBody;
+            var parent = reference.referenceBody;
             ut = GeneralTools.Current_UT;
             r = orbit.GetRelativePositionAtUTZup(ut);
             v = orbit.GetOrbitalVelocityAtUTZup(ut);
@@ -120,7 +127,9 @@ namespace K2D2.OrbitPlanning
             {
                 Mu = reference.gravParameter,
                 Radius = reference.radius,
-                AtmosphereDepth = reference.hasAtmosphere ? reference.atmosphereDepth : 0
+                AtmosphereDepth = reference.hasAtmosphere ? reference.atmosphereDepth : 0,
+                // The star has no parent: its SOI is unbounded.
+                SoiRadius = parent == null || ReferenceEquals(parent, reference) ? double.PositiveInfinity : reference.sphereOfInfluence
             };
             gameInclination = orbit.inclination;
             return true;
@@ -129,11 +138,12 @@ namespace K2D2.OrbitPlanning
         void CreateManeuvers()
         {
             plan_summary = null;
-            if (!TryReadCurrent(out var c))
+            if (!TryReadTrajectory(out var c))
             {
-                summary.text = "No closed orbit to plan from: be in flight, in orbit around a body.";
+                summary.text = "No trajectory to plan from: be in flight.";
                 return;
             }
+            bool capture = OrbitPlanner.NeedsCapture(c.R, c.V, c.Body);
 
             // Frame guard (spec): our inclination from the state vectors must match the game's,
             // in either unit (see FrameGuardDeg).
@@ -154,7 +164,8 @@ namespace K2D2.OrbitPlanning
                 return;
             }
 
-            if (!OrbitSettings.ap_enabled.V && !OrbitSettings.pe_enabled.V && !OrbitSettings.inc_enabled.V)
+            // From an open trajectory, no target means a circular orbit at the capture radius.
+            if (!capture && !OrbitSettings.ap_enabled.V && !OrbitSettings.pe_enabled.V && !OrbitSettings.inc_enabled.V)
             {
                 summary.text = "Tick at least one target (Ap, Pe or Inclination) first.";
                 return;
@@ -167,9 +178,20 @@ namespace K2D2.OrbitPlanning
                 InclinationDeg = OrbitSettings.inc_enabled.V ? OrbitSettings.inc_deg.V : (double?)null
             };
             var plan = OrbitPlanner.Plan(c.R, c.V, c.UT, c.Body, targets);
-            if (!plan.Ok)
+            double vesselDv = VesselDeltaV();
+            var budget = OrbitPlanner.CheckCaptureBudget(plan, vesselDv);
+            if (plan.Capture != null)
+                K2D2_Plugin.logger.LogInfo($"[OrbitUI] capture: {plan.Burns[0].Label} at {c.BodyName}, " +
+                    $"{plan.Capture.DeltaV:n1} m/s (vessel {vesselDv:n1} m/s), then {plan.Burns.Count - 1} burn(s), " +
+                    $"trajectory e {c.El.Eccentricity:n4} Pe {(c.El.PeriapsisRadius - c.Body.Radius) / 1000:n1} km, SOI {c.Body.SoiRadius / 1000:n0} km");
+            else if (capture)
+                K2D2_Plugin.logger.LogInfo($"[OrbitUI] capture refused: {plan.Error}, trajectory e {c.El.Eccentricity:n4} " +
+                    $"Pe {(c.El.PeriapsisRadius - c.Body.Radius) / 1000:n1} km at {c.BodyName}");
+            if (budget != OrbitPlanError.None)
             {
-                summary.text = Describe(plan.Error);
+                summary.text = budget == OrbitPlanError.CaptureBeyondDeltaV
+                    ? $"The capture at {c.BodyName} needs {plan.Capture.DeltaV:n0} m/s, the vessel has {vesselDv:n0} m/s. No node created."
+                    : Describe(plan.Error, c.BodyName);
                 return;
             }
             if (plan.Burns.Count == 0)
@@ -203,9 +225,24 @@ namespace K2D2.OrbitPlanning
             });
         }
 
+        // The vessel's total Δv (m/s), NaN when the game does not give it.
+        static double VesselDeltaV()
+        {
+            var dv = K2D2_Plugin.Instance?.current_vessel?.VesselComponent?.VesselDeltaV;
+            return dv != null ? dv.TotalDeltaVActual : double.NaN;
+        }
+
+        public static string CaptureLine(CaptureInfo capture, string bodyName, double bodyRadius)
+        {
+            string where = capture.AtPeriapsis ? $"at the {bodyName} periapsis" : $"as soon as possible around the {bodyName}";
+            return $"Capture {where} ({(capture.Radius - bodyRadius) / 1000:n0} km) first: {capture.DeltaV:n0} m/s.";
+        }
+
         static string Summary(OrbitPlan plan, Current c)
         {
             var text = new StringBuilder();
+            if (plan.Capture != null)
+                text.AppendLine(CaptureLine(plan.Capture, c.BodyName, c.Body.Radius));
             for (int i = 0; i < plan.Burns.Count; i++)
             {
                 var burn = plan.Burns[i];
@@ -224,10 +261,13 @@ namespace K2D2.OrbitPlanning
             return $"{(int)t.TotalHours:00}:{t.Minutes:00}:{t.Seconds:00}";
         }
 
-        static string Describe(OrbitPlanError error)
+        static string Describe(OrbitPlanError error, string bodyName = "body")
         {
             switch (error)
             {
+                case OrbitPlanError.CaptureBelowSurface: return $"The trajectory hits the {bodyName}: its periapsis is below the surface and no capture above it is possible any more.";
+                case OrbitPlanError.CaptureInAtmosphere: return $"The trajectory enters the {bodyName} atmosphere: no capture above it is possible any more.";
+                case OrbitPlanError.CaptureLeavesSoi: return $"No capture possible: the vessel leaves the {bodyName} SOI first, or the target Ap is beyond it.";
                 case OrbitPlanError.EscapeTrajectory: return "Current trajectory escapes the body: planning needs a closed orbit.";
                 case OrbitPlanError.UnstableCurrentOrbit: return "Current periapsis is inside the atmosphere or below the surface: circularize first (Lift or Node tab).";
                 case OrbitPlanError.PeBelowSurface: return "Target Pe is below the surface.";

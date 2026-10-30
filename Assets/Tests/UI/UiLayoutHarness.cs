@@ -55,6 +55,7 @@ public static class UiLayoutHarness
         // The same tabs with every foldout open (Profile, ADVANCED, INFO, ...).
         new Scenario { Name = "node_open", Tab = "node", Setup = OpenFoldouts },
         new Scenario { Name = "orbit_open", Tab = "orbit", Setup = p => { SetupOrbit(p); OpenFoldouts(p); } },
+        new Scenario { Name = "orbit_capture", Tab = "orbit", Setup = SetupOrbitCapture },
         new Scenario { Name = "transfer_open", Tab = "transfer", Setup = p => { SetupTransfer(p); OpenFoldouts(p); } },
         new Scenario { Name = "lift_open", Tab = "lift", Setup = OpenFoldouts },
         new Scenario { Name = "landing_atmo_open", Tab = "landing", Setup = p => { SetupLanding(p, atmo: true); OpenFoldouts(p); } },
@@ -78,6 +79,21 @@ public static class UiLayoutHarness
         page.Q<FloatField>("pe_km").SetValueWithoutNotify(200);
         page.Q<FloatField>("inc_deg").SetValueWithoutNotify(0.43f);
         page.Q<FloatField>("inc_deg").SetEnabled(false);
+    }
+
+    // The plan summary of a capture from a flyby (OrbitUI.Summary), with its capture line.
+    static void SetupOrbitCapture(VisualElement page)
+    {
+        SetupOrbit(page);
+        var capture = new K2D2.OrbitPlanning.CaptureInfo { AtPeriapsis = true, Radius = 370000, DeltaV = 254 };
+        page.Q<Label>("summary").text =
+            string.Join("\n",
+                K2D2.OrbitPlanning.OrbitUI.CaptureLine(capture, "Mun", 200000),
+                "1. T+00:42:10  Capture at periapsis (170.0 km): 254.0 m/s",
+                "2. T+01:20:05  Set Pe 100.0 km at apoapsis: 61.3 m/s",
+                "Total Δv: 315.3 m/s",
+                "Final orbit: Ap 500.0 km, Pe 100.0 km, inclination 12.00°",
+                "Step 1/2: node created for 'Capture at periapsis (170.0 km)'. Start in the Node tab flies the whole plan.");
     }
 
     static void SetupTransfer(VisualElement page)
