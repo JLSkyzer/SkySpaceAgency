@@ -110,6 +110,10 @@ missing item the scan reveals.
 - Can the UI be kept out of the recorded image?
 - Audio: is it possible and wanted? It is not asked for. Note what Wwise allows.
 - The pause and time warp states during a recording.
+- For the overlay (R7):
+  - reading per-engine ignition and thrust, and engine part positions;
+  - propellant amounts per stage;
+  - composing an overlay into a captured frame under URP.
 
 **Scripting**
 - What runs on an unloaded vessel: `PartComponentModule` updates ("executed even on unloaded
@@ -134,9 +138,11 @@ missing item the scan reveals.
   - the flight-view picker (new: a raycast on the terrain);
   - choosing the KSC pads, or a saved list.
 - Show it: a waypoint if Redux allows it, and the distance and bearing in the tab.
-- Missing items added:
-  - several boosters on one rocket (side boosters in pairs) need one point each, or a shared one;
-  - checks: the body must match, and the point must not be under the sea unless that is asked.
+- **Only one booster counts**: the real booster, the stage that takes the rocket out of the atmosphere
+  or nearly. Other stages (upper stages, side boosters, anything dropped later) get no return point
+  and no recovery: never handle them.
+- Missing item added: the body must match, and the point must not be under the sea unless that is
+  asked.
 
 ### R2. Return tab: propulsive return landing in an atmosphere
 This is the big new piece. Precision landing today works only on airless bodies, or under
@@ -177,8 +183,8 @@ parachutes.
 - Reuse the per-stage Δv and staging tools: `StageBudget`, `StagedBrakePlan`, `LandingStages`,
   `BurnStaging`.
 - Missing items added:
-  - which stage is "the booster" is chosen in the tab;
-  - side boosters (asparagus or parallel stages);
+  - "the booster" is the stage that takes the rocket out of the atmosphere (see R1); propose it
+    automatically, the player can change it in the tab;
   - fuel crossfeed, which can drain the booster's reserve: check it.
 
 ### R4. Separation: pause, save, switch
@@ -211,10 +217,25 @@ parachutes.
   - keeping the UI out.
 - The performance cost of each extra render must be measured in game, never assumed. Show it in
   the tab.
-- Missing items added:
-  - the recording must survive the vessel switch and the pause;
-  - files are split per vessel, or one file with cuts;
-  - a maximum size or time limit.
+- **Two recordings**, one per vessel: the booster's and the upper stage's (the rocket that goes on to
+  orbit). Both start with the Lift, when the option is on.
+- **The booster's recording** stops by itself 10 to 20 s after the booster has landed.
+- **The upper stage's recording** goes on until the player stops it. Constraints:
+  - it can only be stopped once the booster has landed and its own recording has stopped. Before
+    that, the stop button is refused, with the reason;
+  - after that, the player stops it whenever they want;
+  - for the rest of the mission, the player can start a new recording at any time, for as long as
+    they want.
+- **No file size or duration limit** (decided by the user on 2026-10-30). Only show the size and the
+  free disk space, and warn when the disk is nearly full.
+- **The recording pauses with the game.** It follows the game, not the wall clock: nothing is
+  recorded while the game is paused, and the video carries on as soon as the game runs again.
+- **Timeline at the vessel switch** (to settle with Phase 0 and R4). The player flies the booster to
+  the ground first, then comes back to the upper stage, by reloading the separation save if Redux's
+  stage recovery works that way. When the upper stage's flight resumes, its recording continues from
+  the separation point, and its overlay replays the booster's telemetry recorded during its landing
+  (see R7), in sync with the game time, up to touchdown.
+- Missing item added: the recording must survive the vessel switch, the pause and a save reload.
 
 ### R6. Our own scripting language and computer part
 - A small language interpreted in C# inside the mod:
@@ -231,6 +252,29 @@ parachutes.
   Autonomous landing out of view stays out of scope (see "Rejected").
 - Missing items added: example scripts (booster return, launch to orbit), and versioned scripts
   stored per vessel.
+
+### R7. Finishing: SpaceX-style video overlay
+This comes last, after R1–R6. It adds a broadcast overlay on the recorded videos, like SpaceX's
+Starship webcasts.
+- **Both vehicles on screen**: the booster on one side, the upper stage on the other.
+- **Per vehicle**:
+  - speed and altitude;
+  - fuel, per propellant, as a gauge;
+  - inclination;
+  - an **engine diagram as seen from below**, like Starship's. Each engine is a dot, lit or off,
+    placed from the real engine positions projected onto the stage's base plane.
+- **In the booster's video**, the upper stage shows **"SIGNAL LOST"**: no data for it, by design.
+- **In the upper stage's video**, the booster's data come from the telemetry recorded while the
+  player flew it (game time, speed, altitude, fuel, engine states, landed). They are replayed in sync
+  up to the booster's touchdown, then the booster panel shows "LANDED".
+- **Telemetry recorder**: a time series per vessel, stored in game time, written during the flight
+  and saved next to the videos, so a save reload does not lose it. The same file can later feed a
+  post-flight replay or a chart.
+- **Rendering**: the overlay is drawn into the recorded frames only, not over the player's screen,
+  unless an option shows it live too. Scan for:
+  - how to compose UI Toolkit or a `RenderTexture` overlay into the captured frame;
+  - fonts and licences (the overlay must not copy SpaceX's assets; it only takes the style).
+- Mission clock: T+ from liftoff on both panels.
 
 ## Rejected (2026-10-30)
 
