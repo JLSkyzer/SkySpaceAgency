@@ -144,11 +144,40 @@ missing item the scan reveals.
 - Missing item added: the body must match, and the point must not be under the sea unless that is
   asked.
 
+### R1b. Our parts: the recovery computer and the script computer
+- **Recovery computer**: our own probe core, made for the recovery system.
+  - **Required**: it is the only part that makes a booster eligible for the recovery system. No
+    recovery computer, no Return, no replay, no landed-booster persistence.
+  - **Sizes**: every size, from the smallest to the largest. Use size variants (V-SwiFT) or one part
+    per size: to settle in Phase 0.
+  - **Shape**: flat and cylindrical, so it stacks between parts in the VAB. Not the ball shape of
+    the stock probe, which is awkward to build with.
+  - **Mass**: very light, so it barely costs Δv.
+  - **Function**: a control source with SAS, enough for the Return pilot.
+- **Script computer** (R6): same style, a flat, light cylinder in every size.
+- Phase 0 must answer:
+  - how to make a part in Redux (`Modding-Docs/Part modding guides/`, Redux-Modeling-Kit, Patch
+    Manager definition, V-SwiFT size variants);
+  - which modules a probe core needs (`Module_Command`, SAS level, EC use);
+  - its tech node in campaigns;
+  - and how our pilot detects the part on a vessel.
+
 ### R2. Return tab: propulsive return landing in an atmosphere
 This is the big new piece. Precision landing today works only on airless bodies, or under
 parachutes.
+- **Separation safety, at any cost** (user's demand, 2026-10-30). The booster must never hit the
+  upper stage, nor fire its plume at it.
+  - **Turning** is done by the SAS, reaction wheels, RCS and fins only. They never do the boostback
+    itself. A slight rotation, or a larger one, turns the booster away from the upper stage before
+    any engine lights.
+  - **The boostback** is done by the main engine(s). They light only once the clearance checks pass:
+    - a minimum distance from the upper stage;
+    - the upper stage outside the plume cone;
+    - the relative paths, predicted over the next seconds, never closing under a keep-out radius.
+    The engines then carry out the turn.
+  - If a check fails, wait and drift apart. Never fire. Log every check (`[Return] clearance: …`).
 - **Phases**:
-  1. flip;
+  1. clearance, then flip (rotation only, see above);
   2. boostback burn toward the point (closed loop, `TargetOrbitBurn`-style guidance on the impact
      point);
   3. coast with the engines first;
@@ -198,6 +227,14 @@ parachutes.
   the booster, then reload the separation save".
 - The upper stage's own pilot (Lift) must stop cleanly when the active vessel changes, and must be
   resumable. Lift does not resume today: check it.
+- **Option "Return at once on taking control"** (user's request, 2026-10-30):
+  - **On**: when the player takes control of the booster after the separation, the mod detects the
+    vessel change to a booster carrying a recovery computer (load of Redux's recovery save, then
+    switch). It starts Return without delay.
+  - **Off**: the player opens the Return tab and presses "Return".
+  - **Replay**: either way, the delay between the separation and the start of Return is part of the
+    booster's flight, recorded in game time. The replay from the upper stage's point of view (R4b)
+    must keep this delay exactly as it was flown.
 
 ### R4b. Two branches of one flight: booster replay and the booster kept where it landed
 The flow the user wants (2026-10-30), as a KSP1 recovery mod did it. That mod is probably FMRS; the
