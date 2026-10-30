@@ -66,9 +66,11 @@ Phase 0 checks this first, in the Redux docs, the IL and the changelogs:
 - what is announced;
 - whether it can be hooked into, instead of rebuilt.
 
-If the replay mode exists, R5 and R7 should build on it (cameras, overlay, the booster's
-telemetry) rather than duplicate it. For R6, the user chose our own language on 2026-10-30.
-Weigh that choice again against Redux's Lua, with the user, once the facts are in.
+**User's decision (2026-10-30)**: as long as Redux has released nothing, we build our own flight
+recording (R5, R7) and our own scripting language (R6), as planned. The user expects ours to go
+further on these features. Only a feature Redux has actually released counts. If one lands, compare
+it with ours in Phase 0 or at that point, and decide with the user whether to hook into it. Never
+drop ours on an announcement alone.
 
 ### Questions the scan must answer
 
