@@ -225,7 +225,9 @@ user said "recovery system": confirm which one, and read how it did it.
      - **(a)** drive that real copy along the recording: kinematic, no physics, position and
        attitude set each frame, with the engine, plume, leg and fin states set from the recording;
      - **(b)** hide it and show a ghost built from its models.
-     Prefer (a) if the game allows it: it is the real vessel. Only once it is out of the physics and
+     **The user chose (a)** on 2026-10-30, because a ghost would not look as good. Phase 0 must find
+     how to drive the real copy without physics. (b) is only a fallback, if (a) proves impossible,
+     and must then be agreed with the user again. Only once it is out of the physics and
      render range is it removed. Unloaded, it would otherwise fall on rails or be destroyed. The ghost
      or the driven copy must never be simulated a second time.
    - **The landed booster appears when the game time reaches its touchdown time** (decided by the
