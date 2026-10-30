@@ -824,6 +824,23 @@ namespace K2D2.Landing
                 reentry_suggestion.text = Precision.DragCalibration.SuggestionMessage(pilot.suggested_drag_scale, pilot.settings_atmo.reentry_drag_scale.V);
         }
 
+        // A planned descent's own phases (LandingPilotDescent.cs), else the precision ones.
+        string PhaseText(LandingPilot.Mode mode)
+        {
+            if (pilot.deorbit_run)
+            {
+                switch (mode)
+                {
+                    case LandingPilot.Mode.Deorbit: return "Deorbit burn";
+                    case LandingPilot.Mode.PreBrake: return "Pre-brake before the atmosphere";
+                    case LandingPilot.Mode.AeroCoast: return "Atmospheric coast, surface retrograde";
+                }
+            }
+            if (mode == LandingPilot.Mode.AeroCoast)
+                return "Atmospheric coast: slowing down to cool";
+            return PrecisionPhaseText(mode);
+        }
+
         static string PrecisionPhaseText(LandingPilot.Mode mode)
         {
             switch (mode)
@@ -886,7 +903,7 @@ namespace K2D2.Landing
             // braking simulation every 2 s outside the burns, live in Touch Down).
             if (pilot.PrecisionActive)
             {
-                AddInfoRow("Precision Phase", PrecisionPhaseText(pilot.mode) ?? pilot.mode.ToString());
+                AddInfoRow("Precision Phase", PhaseText(pilot.mode) ?? pilot.mode.ToString());
                 AddInfoRow(pilot.precision_distance_label, double.IsNaN(pilot.precision_distance_m)
                     ? "no prediction yet" : StrTool.DistanceToString((float)pilot.precision_distance_m));
             }
@@ -899,6 +916,10 @@ namespace K2D2.Landing
             if (pilot.isRunning)
             {
                 pilot.current_executor?.UpdateInfoRows(AddInfoRow);
+
+                // Atmospheric descent: the hottest part against its max temperature (heat guard).
+                if (!string.IsNullOrEmpty(pilot.heat_readout))
+                    AddInfoRow("Hottest Part", pilot.heat_readout);
 
                 // Landing with a chosen stage: the drop height and the landing stage's Δv.
                 if (pilot.StagedBraking && pilot.stage_plan_valid)
@@ -961,7 +982,9 @@ namespace K2D2.Landing
                     case LandingPilot.Mode.MidCourse:
                     case LandingPilot.Mode.ReentryCoast:
                     case LandingPilot.Mode.Jettison:
-                        status_bar.Status(PrecisionPhaseText(pilot.mode));
+                    case LandingPilot.Mode.PreBrake:
+                    case LandingPilot.Mode.AeroCoast:
+                        status_bar.Status(PhaseText(pilot.mode));
                         break;
                     case LandingPilot.Mode.Pause:
                         status_bar.Status("Pause");
@@ -1013,6 +1036,11 @@ namespace K2D2.Landing
                 }
                 if (!string.IsNullOrEmpty(pilot.last_warning))
                     status_bar.Console(pilot.last_warning);
+                // Planned descent: its Δv breakdown; the heat guard's alarms.
+                if (pilot.deorbit_run && !string.IsNullOrEmpty(pilot.descent_summary))
+                    status_bar.Console(pilot.descent_summary);
+                if (!string.IsNullOrEmpty(pilot.heat_message))
+                    status_bar.Error(pilot.heat_message);
                 if (pilot.PrecisionActive)
                 {
                     if (!string.IsNullOrEmpty(pilot.precision_summary))

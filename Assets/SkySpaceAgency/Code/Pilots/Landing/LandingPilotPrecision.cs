@@ -328,6 +328,12 @@ namespace K2D2.Landing
 
         void StartPrecisionPhase(Mode m)
         {
+            // The normal landing's planned descent has its own deorbit (LandingPilotDescent.cs).
+            if (deorbit_run && m == Mode.Deorbit)
+            {
+                StartDescentPhase(m);
+                return;
+            }
             double now = GeneralTools.Current_UT;
             current_executor.setController(precision_phase);
             precision_phase.allow_warp = settings.auto_warp.V;

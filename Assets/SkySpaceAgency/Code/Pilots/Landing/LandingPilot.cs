@@ -107,7 +107,12 @@ namespace K2D2.Landing
             // Parachute precision return only (LandingPilotReentry.cs), after MidCourse: the coast to
             // the jettison, then the jettison itself. Left by explicit transitions, never nextMode().
             ReentryCoast,
-            Jettison
+            Jettison,
+            // Normal landing with a planned descent (LandingPilotDescent.cs), after the Deorbit phase:
+            // the retrograde burn before the atmosphere, then the atmospheric coast with the heat
+            // guard. Left by explicit transitions, never nextMode().
+            PreBrake,
+            AeroCoast
         }
 
         public Mode mode = Mode.Off;
@@ -210,6 +215,12 @@ namespace K2D2.Landing
                     current_executor.setController(jettison);
                     jettison.Start();
                     break;
+                case Mode.PreBrake:
+                    StartDescentPhase(mode);
+                    break;
+                case Mode.AeroCoast:
+                    StartAeroCoast();
+                    break;
             }
 
             logger.LogInfo("current_pilot " + mode);
@@ -226,7 +237,7 @@ namespace K2D2.Landing
 
             // TouchDown and Parachute are both final phases: the run ends on contact. The reentry
             // coast and jettison leave by explicit transitions (LandingPilotReentry.cs).
-            if (mode == Mode.TouchDown || mode == Mode.Parachute || ReentryMode(mode))
+            if (mode == Mode.TouchDown || mode == Mode.Parachute || ReentryMode(mode) || mode == Mode.PreBrake || mode == Mode.AeroCoast)
                 return;
 
             var next = this.mode + 1;
@@ -285,6 +296,10 @@ namespace K2D2.Landing
                         setMode(Mode.Parachute);
                     else if (precision_run)
                         setMode(precision_calibrating ? Mode.Calibrate : reentry_run ? Mode.PlaneChange : Mode.OrbitPrep);
+                    else if (deorbit_run)
+                        // A planned descent (no collision course, or above the atmosphere): the deorbit,
+                        // the pre-brake and the atmospheric coast first (LandingPilotDescent.cs).
+                        setMode(DescentFirstMode());
                     else
                         setMode(Mode.QuickWarp);
                 }
@@ -615,7 +630,9 @@ namespace K2D2.Landing
         // TouchDown and Parachute, which do not read the result.
         void UpdateBrakeSimulation(bool force)
         {
-            if (!force && (mode == Mode.TouchDown || mode == Mode.Parachute || ReentryMode(mode)))
+            // Nor during a planned descent's deorbit and pre-brake: a staged plan made mid-burn from
+            // orbital speed could only raise the drop height for nothing.
+            if (!force && (mode == Mode.TouchDown || mode == Mode.Parachute || ReentryMode(mode) || DescentPhaseMode(mode)))
                 return;
 
             float now_real = UnityEngine.Time.realtimeSinceStartup;
@@ -774,6 +791,7 @@ namespace K2D2.Landing
             precision_run = false;
             precision_calibrating = false;
             reentry_run = false;
+            ResetDescent();
             if (parachute_mode)
             {
                 if (!CheckCanStartParachute())
@@ -799,6 +817,11 @@ namespace K2D2.Landing
             double surface_gravity = body.gravParameter / (body.radius * body.radius);
 
             collision_detected = compute_real_collision();
+            // No collision course (or above the atmosphere): the planned descent, its deorbit, heating
+            // and whole Δv check (LandingPilotDescent.cs). A staged landing already on a collision
+            // course above the atmosphere keeps the staged plan below.
+            if (NeedsDescentPlan(body, collision_detected) && !(StagedBraking && collision_detected))
+                return CheckCanStartDescent(landing_accel, surface_gravity);
             UpdateBrakeSimulation(force: true);
             BrakeResult? brake = brake_result_valid ? brake_result : (BrakeResult?)null;
 
@@ -1019,6 +1042,8 @@ namespace K2D2.Landing
             }
             // Landing with a chosen stage: drop the lower stage when dry or at the drop height.
             UpdateStageDrops();
+            // Atmospheric descent: the hottest part and the heat guard (LandingPilotDescent.cs).
+            UpdateHeatWatch();
             if (mode == Mode.Calibrate)
             {
                 UpdateCalibrate();
@@ -1030,6 +1055,12 @@ namespace K2D2.Landing
                     UpdateReentryGuarded();
                 else
                     UpdatePrecisionReadout();
+            }
+            if (mode == Mode.AeroCoast)
+            {
+                UpdateAeroCoast();
+                if (mode != Mode.AeroCoast)
+                    return;
             }
             if (mode == Mode.Pause)
             {
@@ -1123,7 +1154,9 @@ namespace K2D2.Landing
             // on an impact course it skips or lands without target (OnPrecisionPhaseFailed).
             if (current_executor.failed)
             {
-                if (precision_run && PrecisionPhaseMode(mode))
+                if (DescentPhaseMode(mode))
+                    OnDescentPhaseFailed(current_executor.failure_reason);
+                else if (precision_run && PrecisionPhaseMode(mode))
                     OnPrecisionPhaseFailed(current_executor.failure_reason);
                 else if (reentry_run && mode == Mode.Jettison)
                     OnJettisonFailed(current_executor.failure_reason);
@@ -1134,6 +1167,17 @@ namespace K2D2.Landing
 
             if (current_executor.finished)
             {
+                // A planned descent's burns and coast leave by explicit transitions.
+                if (DescentPhaseMode(mode))
+                {
+                    OnDescentPhaseEnd();
+                    return;
+                }
+                if (mode == Mode.AeroCoast)
+                {
+                    current_executor.setController(null);
+                    return;
+                }
                 if (PrecisionPhaseMode(mode))
                     OnPrecisionPhaseEnd();
                 // A phase end may stop the run (a precision return whose deorbit fell short):

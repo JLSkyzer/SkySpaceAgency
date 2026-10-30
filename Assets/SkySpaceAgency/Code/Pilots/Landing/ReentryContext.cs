@@ -185,8 +185,8 @@ namespace K2D2.Landing
             return parts;
         }
 
-        // Pressure (atm), density and sound speed every SampleStep m above sea level, up to the depth.
-        static Atmosphere AtmosphereTables(CelestialBodyComponent body)
+        // Pressure (atm), density, sound speed and temperature (K) every SampleStep m above sea level, up to the depth.
+        internal static Atmosphere AtmosphereTables(CelestialBodyComponent body)
         {
             double depth = body.atmosphereDepth;
             int n = (int)Math.Floor(depth / SampleStep) + 1;
@@ -197,6 +197,7 @@ namespace K2D2.Landing
                 Density = new double[n],
                 Pressure = new double[n],
                 SoundSpeed = new double[n],
+                Temperature = new double[n],
             };
             for (int i = 0; i < n; i++)
             {
@@ -206,6 +207,7 @@ namespace K2D2.Landing
                 double rho = body.GetDensity(kPa, temperature);
                 air.Pressure[i] = Finite(kPa) && kPa > 0 ? kPa * KPaToAtm : 0;
                 air.Density[i] = Finite(rho) && rho > 0 ? rho : 0;
+                air.Temperature[i] = Finite(temperature) && temperature > 0 ? temperature : 0;
                 double a = AeroUtilities.GetSoundSpeed(body.atmosphereAdiabaticIndex, kPa, rho);
                 air.SoundSpeed[i] = Finite(a) && a > 0 ? a : 0;
             }

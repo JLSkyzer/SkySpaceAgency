@@ -19,7 +19,7 @@ moves, and heating handled twice, "planned + live guard", the guard acting from 
 
 1. **Deorbit phase** (`Mode.Deorbit`, flown by `PrecisionPhase`: a closed-loop `TargetOrbitBurn` toward the orbit
    after a retrograde impulse, re-planned from the real orbit at the burn). The impulse is
-   `DeorbitSearch.RetrogradeBurn`: the speed along the current velocity is scaled down until the periapsis reaches the
+   `DeorbitSearch.Burn` (the precision deorbit's own, made internal): the speed along the current velocity is scaled down until the periapsis reaches the
    target, at the earliest time (`PrecisionPhases.EarliestDeorbitUT`, the lead of the precision deorbit).
    - **Airless body**: periapsis `R − 2 km` (`DeorbitSearch.DescentPeriapsisMargin`, the precision landing's own
      target). Below the datum, so the conic always crosses the terrain (the collision search can then see it), and
@@ -40,14 +40,16 @@ deorbit): no deorbit then, the pre-brake and the coast only.
 
 `total = deorbit + pre-brake + brake`, refused when `LandingFeasibility.DeltaVMargin × total > Δv`
 (`DeltaVMargin` = 1.10), with the numbers:
-"Δv 850 m/s for ~1020 m/s needed (deorbit 120, pre-brake 400, brake 500)."
+"Δv 850 m/s for ~1122 m/s needed (deorbit 120, pre-brake 400, brake 500, +10 %)." (the needed figure includes
+the margin, so that the two numbers compare directly).
 
 - **Brake, airless**: `StopPointPredictor` on the post-deorbit conic (`BrakeSimulator.FindStart` at the latest
   safe start).
 - **Brake, atmospheric**: the descent predicted with drag (no thrust) gives a sample every 2 s. The lowest sample
   from which a vacuum brake (`BrakeSimulator.Simulate`, started at once) still stops above `SafeAltitude` is found
-  by bisection; `StopPointPredictor` from it gives the Δv and the start. Pessimistic: no drag counted after that
-  sample.
+  walking back from the ground in 24 strides, then by bisection (the test is not monotone high up: a horizontal
+  hypersonic sample can fail while a later, slower one stops); `StopPointPredictor` from it gives the Δv and the
+  start. Pessimistic: no drag counted after that sample.
 - The unchanged TWR and engine checks come first. An unknown Δv is a warning, as before.
 
 ### Landing with a chosen stage
@@ -91,6 +93,10 @@ Assumed (not read, or simplified):
   constant mass between burns.
 - Difficulty `HeatScaling` = 1 (not read).
 - Air temperature from `CelestialBodyComponent.GetTemperature`, radiating to it (0 K above the atmosphere).
+
+**The peak is judged up to the planned brake start.** A dense vessel keeps heating down to a few km if it never
+brakes (the EditMode case: 80 % at 10 km against 69 % at the brake start, 16 km); the powered brake slows it hard,
+so the heating after its start is not counted (the guard watches it).
 
 **Plan limit 70 %** of `MaxTemp`, not 90 %: planning up to 90 % would make the 75 % guard fire on every nominal entry
 and spend Δv the start check did not count. 90 % stays the ceiling the guard defends.
