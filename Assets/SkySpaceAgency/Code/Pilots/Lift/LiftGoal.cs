@@ -119,6 +119,12 @@ namespace K2D2.Lift
 
         public static double WarpEndUT(double launchUT) => launchUT - HoldSeconds;
 
+        // The throttle stays at 0 while the vessel waits on the pad: WarpGate allows rails warp only
+        // after 1 s and 10 frames of throttle 0 and no engine force, and a vessel often sits on the pad
+        // at full throttle (2026-11-04: "throttle 1, 0 force(s)", held at 1x for the whole wait).
+        // The launch sets the throttle itself at T-0.
+        public static bool HoldsThrottleAtZero(PadAction action) => action == PadAction.Warp || action == PadAction.Hold;
+
         // launchUT is the liftoff (LaunchWindowResult.LaunchUT, the ascent lead already in it).
         public static PadAction Decide(double now, double launchUT, bool landed)
         {

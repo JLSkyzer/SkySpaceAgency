@@ -120,6 +120,9 @@ public class TransferReadoutTests
         Assert.IsFalse(input.Resolve(_s, out _, out error));
         Assert.AreEqual("The target Eeloo is not among the game's bodies: choose it again.", error);
         Assert.IsFalse(input.Resolve(null, out _, out _));
+        input.TargetName = "Kerbol";
+        Assert.IsFalse(input.Resolve(_s, out _, out error), "the star is no transfer target");
+        Assert.AreEqual("Kerbol is the star: choose a planet or a moon.", error);
     }
 
     [Test]

@@ -138,7 +138,7 @@ namespace K2D2.Lift
                     else
                     {
                         list_system = s;
-                        entries = BodyChoices.Grouped(s);
+                        entries = BodyChoices.Targets(s);
                         target_drop.choices = BodyChoices.Labels(entries);
                     }
                 }

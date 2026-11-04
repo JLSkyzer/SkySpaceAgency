@@ -63,6 +63,15 @@ namespace K2D2.Transfer
             return result;
         }
 
+        // The entries a transfer can aim at: every body but the roots (the star: a vessel cannot be
+        // sent into its sphere of influence, it is already in it).
+        public static List<Entry> Targets(BodySystem s)
+        {
+            var result = Grouped(s);
+            result.RemoveAll(e => e.Depth == 0);
+            return result;
+        }
+
         public static List<string> Labels(IReadOnlyList<Entry> entries)
         {
             var labels = new List<string>(entries.Count);

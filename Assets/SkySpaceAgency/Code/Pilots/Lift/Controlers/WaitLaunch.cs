@@ -45,6 +45,7 @@ namespace K2D2.Lift
 
         // A first stage fired and not yet confirmed: the staging read just before it.
         bool stage_pending;
+        bool throttle_cut_logged;
         int stage_count_before;
         bool last_active_before;
 
@@ -64,6 +65,7 @@ namespace K2D2.Lift
             refusal = null;
             status_line = "";
             stage_pending = false;
+            throttle_cut_logged = false;
             var p = lift.transfer;
             if (p != null && p.Ready)
             {
@@ -285,7 +287,10 @@ namespace K2D2.Lift
 
             double now = GeneralTools.Current_UT;
             double launch = p.Window.LaunchUT;
-            switch (LiftGoalRules.Decide(now, launch, vessel.LandedOrSplashed))
+            PadAction action = LiftGoalRules.Decide(now, launch, vessel.LandedOrSplashed);
+            if (LiftGoalRules.HoldsThrottleAtZero(action))
+                HoldThrottleAtZero(vessel);
+            switch (action)
             {
                 case PadAction.Warp:
                 {
@@ -322,6 +327,21 @@ namespace K2D2.Lift
                         "the plane will be off, the ascent steering and the trim take it out");
                     finished = true;
                     break;
+            }
+        }
+
+        // Throttle 0 on the pad, every frame of the wait (the player may move it): without it the warp
+        // gate never sees the engines quiet and keeps the clock at 1x.
+        void HoldThrottleAtZero(VesselComponent vessel)
+        {
+            float throttle = vessel.flightCtrlState.mainThrottle;
+            if (throttle <= 0)
+                return;
+            current_vessel.SetThrottle(0);
+            if (!throttle_cut_logged)
+            {
+                throttle_cut_logged = true;
+                logger.LogInfo(Inv($"[Lift] pad wait: throttle {throttle:0.##} cut to 0 until T-0, so that the rails warp to the launch time can start"));
             }
         }
 

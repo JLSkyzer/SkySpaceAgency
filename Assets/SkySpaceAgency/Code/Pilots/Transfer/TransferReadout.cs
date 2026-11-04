@@ -84,6 +84,11 @@ namespace K2D2.Transfer
                     : $"The target {TargetName} is not among the game's bodies: choose it again.";
                 return false;
             }
+            if (s[target].ParentIndex < 0)
+            {
+                error = $"{TargetName} is the star: choose a planet or a moon.";
+                return false;
+            }
             double radius = s[target].Radius;
             request = new TransferRequest
             {

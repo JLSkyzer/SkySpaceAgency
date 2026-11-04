@@ -45,6 +45,18 @@ public class BodyChoicesTests
     [Test]
     public void NoSystem_Empty() => Assert.AreEqual(0, BodyChoices.Grouped(null).Count);
 
+    // 2026-11-04 in game: the Lift tab planned "a transfer to Kerbol from Kerbin" (33360 m/s).
+    [Test]
+    public void Targets_LeaveTheStarOut()
+    {
+        var list = BodyChoices.Targets(KerbolFixture.Build());
+        CollectionAssert.AreEqual(
+            new[] { "Moho", "Eve", "Kerbin", "Mun", "Minmus", "Duna", "Ike", "Dres", "Jool", "Laythe", "Vall", "Tylo" },
+            list.Select(e => e.Name).ToArray());
+        Assert.AreEqual(-1, BodyChoices.FindName(list, "Kerbol"));
+        Assert.AreEqual(0, BodyChoices.Targets(null).Count);
+    }
+
     static BodyNode Root(string name) => new BodyNode { Name = name, Index = 0, Mu = 1e18, Radius = 1e8, Soi = double.PositiveInfinity };
 
     static BodyNode Moon(string name, int index, int parent, double radius)

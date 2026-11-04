@@ -14,6 +14,23 @@ public class LiftGoalTests
 
     // ---------------------------------------------------------------- pad decisions
 
+    // 2026-11-04 in game: "throttle 1, 0 force(s)" on the pad, the warp gate held 1x for the whole wait.
+    [Test]
+    public void TheThrottleIsHeldAtZero_WhileWaitingOnly()
+    {
+        Assert.IsTrue(LiftGoalRules.HoldsThrottleAtZero(PadAction.Warp));
+        Assert.IsTrue(LiftGoalRules.HoldsThrottleAtZero(PadAction.Hold));
+        Assert.IsFalse(LiftGoalRules.HoldsThrottleAtZero(PadAction.Launch), "the launch sets it");
+        Assert.IsFalse(LiftGoalRules.HoldsThrottleAtZero(PadAction.LiftedOff));
+        Assert.IsFalse(LiftGoalRules.HoldsThrottleAtZero(PadAction.Resolve));
+        // With the throttle at 0 and no engine force, the gate lets the rails warp through after 1 s.
+        var quiet = new K2D2.EngineQuietTimer();
+        for (int i = 0; i < 11; i++)
+            quiet.Update(true, i * 0.11);
+        Assert.AreEqual(6, K2D2.WarpGatePolicy.AllowedIndex(6, 0, false, quiet.Quiet(1.1)));
+        Assert.AreEqual(0, K2D2.WarpGatePolicy.AllowedIndex(6, 0, false, false), "held at 1x at full throttle");
+    }
+
     [Test]
     public void LongBeforeTheLaunch_Warps()
     {
