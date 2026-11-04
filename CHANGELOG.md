@@ -2,6 +2,15 @@
 
 ## Unreleased (SkySpaceAgency)
 
+### Fixed
+
+- **Land tab: the reentry heating judges the engines only** (2026-11-04, after the first in-game try; not yet flown again). Brake from a Kerbin orbit was refused with "Reentry too hot: even braking 3164 m/s before the atmosphere, storage_0v_battery_electricity_radial reaches 193 % of its max temperature". The model gives every part the full airflow on its own face (the game's shock-cone shading is not modelled), so a light radial part (a battery: almost no thermal mass for its area) came out far too hot, and the 3164 m/s was only the largest pre-brake tried (95 % of the air speed at the interface), not a need.
+  - The planned check (70 %), the heat guard (75 %, alarm at 90 %) and the "Hottest Engine" row (was "Hottest Part") now look at the parts carrying an engine module only: they lead at retrograde, and losing them ends the landing.
+  - The other parts are still heated and logged ("hottest other part (not judged)"), never refused on. Without any engine among the parts read, the check passes with a note.
+  - New refusal text: "Reentry too hot for the engines: even braking … m/s before the atmosphere, the engine … reaches … % of its max temperature (limit 70 %)." When the largest pre-brake fails for another reason (the brake after it, or the prediction), the message now says that instead of quoting a temperature.
+- **Lift "Prepare transfer" now warps while waiting on the pad** (2026-11-04). The clock stayed at 1x for the whole wait ("Launch in T-1h 21m"): the vessel sat at full throttle on the pad, and the rails-warp gate waits for throttle 0 ("[Warp] waiting for the engines to stop before rails warp (throttle 1, 0 force(s))"). The pad wait now holds the throttle at 0 until T-0 (log "[Lift] pad wait: throttle … cut to 0"), warps to 30 s before the launch, then launches at full throttle as before.
+- **Transfer targets: the star is no longer offered** (Lift and Transfer tabs, 2026-11-04). The Lift tab could plan "a transfer to Kerbol from Kerbin" (33360 m/s). The target lists leave the star out, and a saved star target is refused: "Kerbol is the star: choose a planet or a moon."
+
 ### Added
 
 - **Land tab: Brake deorbits by itself, refuses what it cannot pay, and guards the reentry heating** (Propulsive mode; 2026-10-30, not yet flown in game). Pressing Brake in orbit did nothing ("None detected"): it now plans the whole descent before anything moves.

@@ -124,3 +124,12 @@ Lines to read: `[Landing] deorbit: …` (plan, start check, phases) and `[Landin
    - It must never pass 90 %; otherwise the red "Overheating: …" message and the log say so. "Heat guard is using the landing's Δv reserve" when it eats into the brake's Δv.
    - In Pause / Quick Warp / Waiting on a collision course inside the air, the guard switches the run to the atmospheric coast.
 6. **Things to check against the game**: the difficulty "HeatScaling" read in the model inputs line; the `harshness`; that the predicted heating is in the right range (a factor 2 off means the area or the occlusion model is wrong); the frame time while the coast predicts (`… ms` at the end of the prediction lines).
+
+## 17. After the 2026-11-04 fixes
+1. **Heating judged on the engines only** (Kerbin, 100 km orbit or higher, Propulsive, the vessel that was refused because of `storage_0v_battery_electricity_radial`): press Brake.
+   - No refusal because of a battery or any other part that is not an engine.
+   - `[Landing] heat: model inputs on Kerbin: … heated parts: n engine(s) judged and m other part(s) logged …`: the engines are listed under "engines", the battery under "not judged". "No engine among the heated parts" here needs a fix.
+   - `[Landing] heat: start plan: hottest other part (not judged, only engines are): … %`: informational.
+   - In the air, the row is "Hottest Engine". The guard starts only on an engine (`guard on in …: engine …`). Watch whether the battery really burns: the model expects it far hotter than the game will make it (no shock-cone shading in the model).
+2. **Lift "Prepare transfer"** on the pad, target Duna: after `[Lift] plan: …`, `[Lift] pad wait: throttle 1 cut to 0 …` (when the throttle was up), then the clock warps (no `[Warp] waiting for the engines …` line every 5 s), drops to 1x about 30 s before the launch, and the first stage fires at T-0 at full throttle.
+   - The target list starts with Moho: Kerbol is no longer offered (Lift and Transfer tabs).
