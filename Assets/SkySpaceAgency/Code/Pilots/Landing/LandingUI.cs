@@ -917,9 +917,10 @@ namespace K2D2.Landing
             {
                 pilot.current_executor?.UpdateInfoRows(AddInfoRow);
 
-                // Atmospheric descent: the hottest part against its max temperature (heat guard).
+                // Atmospheric descent: the hottest engine against its max temperature (heat guard;
+                // only engines are judged).
                 if (!string.IsNullOrEmpty(pilot.heat_readout))
-                    AddInfoRow("Hottest Part", pilot.heat_readout);
+                    AddInfoRow("Hottest Engine", pilot.heat_readout);
 
                 // Landing with a chosen stage: the drop height and the landing stage's Δv.
                 if (pilot.StagedBraking && pilot.stage_plan_valid)

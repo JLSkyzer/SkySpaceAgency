@@ -5,8 +5,40 @@ namespace K2D2.Landing.Heating
 {
     public enum HeatGuardEvent { None, Started, Stopped }
 
+    // The hottest engine (what the guard judges) and the hottest other part (logged only), fed part by
+    // part every frame without allocating. Pure, tested in EditMode.
+    public struct HottestParts
+    {
+        public double EngineRatio;   // Temperature / MaxTemp of the hottest engine, 0 without any
+        public string Engine;
+        public int Engines;          // engines read
+        public double OtherRatio;    // the hottest part that is not an engine
+        public string Other;
+
+        public void Add(string name, double temperature, double maxTemp, bool isEngine)
+        {
+            if (!(maxTemp > 0) || double.IsNaN(temperature))
+                return;
+            double ratio = temperature / maxTemp;
+            if (isEngine)
+            {
+                Engines++;
+                if (Engine == null || ratio > EngineRatio)
+                {
+                    EngineRatio = ratio;
+                    Engine = name;
+                }
+            }
+            else if (Other == null || ratio > OtherRatio)
+            {
+                OtherRatio = ratio;
+                Other = name;
+            }
+        }
+    }
+
     // The live heat guard's decision, every frame of an atmospheric descent: from On (75 %) of the
-    // hottest part's max temperature, above Mach 1, thrust surface retrograde (the reentry flux grows
+    // hottest engine's max temperature (engines only: HottestParts), above Mach 1, thrust surface retrograde (the reentry flux grows
     // with the cube of the air speed), from MinThrottle at On to full at Full (85 %), only while
     // aligned within MaxAngleDeg; stop under Off (70 %) or below Mach 1, where the game gives no
     // reentry flux (ExposedAreaProportion 0, read in the IL). Ceiling (90 %) is the level it defends:
@@ -37,7 +69,7 @@ namespace K2D2.Landing.Heating
             PeakRatio = 0;
         }
 
-        /// <param name="ratio">Hottest part's Temperature / MaxTemp.</param>
+        /// <param name="ratio">Hottest engine's Temperature / MaxTemp (0 without an engine).</param>
         /// <param name="mach">The vessel's Mach number.</param>
         /// <param name="angleDeg">Angle between the vessel's thrust axis and surface retrograde.</param>
         /// <param name="hasThrust">An active engine can push.</param>
@@ -76,7 +108,7 @@ namespace K2D2.Landing.Heating
         }
 
         public static string OverheatMessage(string part, double ratio) => string.Format(CultureInfo.InvariantCulture,
-            "Overheating: {0} at {1:0} % of its max temperature, cannot slow down enough.", part ?? "a part", ratio * 100);
+            "Overheating: the engine {0} at {1:0} % of its max temperature, cannot slow down enough.", part ?? "?", ratio * 100);
 
         public const string NoThrustMessage = "Heat guard: no thrust left to slow down.";
     }

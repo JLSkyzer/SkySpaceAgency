@@ -35,7 +35,9 @@ namespace K2D2.Landing.Heating
     // Assumed here: the difficulty's HeatScaling is 1 (not read); Ta = Tatm (the air temperature, 0 K
     // above the atmosphere); every part's ExposedAreaProportion is 1 on the airstream area of its drag
     // cube as attached (the game shades parts behind the leading one with shock cones, not modelled:
-    // conservative).
+    // conservative). That assumption over-heats light parts sticking out of the flow (a radial battery:
+    // a tiny thermal mass for its area), so only engines are judged (ThermalPart.IsEngine, 2026-11-04):
+    // they lead at retrograde and their loss ends the landing; the other parts are only logged.
     public struct ThermalConstants
     {
         public double FluxScale, ReferenceSpeed, VelocityExponent, DensityExponent, SkinFrictionScale, SkinFrictionExponent;
@@ -72,6 +74,9 @@ namespace K2D2.Landing.Heating
         public DragTable DragCoefficient; // against Mach
         public double WettedArea;      // m²; 0 = unknown (no air exchange nor radiation: conservative)
         public double Emissivity;      // 0..1
+        /// <summary>Carries an engine module: only these parts are judged (the plan's limit, the
+        /// guard); the others are heated and logged, never refused on.</summary>
+        public bool IsEngine;
 
         public double Ratio => MaxTemp > 0 ? Temperature / MaxTemp : 0;
     }

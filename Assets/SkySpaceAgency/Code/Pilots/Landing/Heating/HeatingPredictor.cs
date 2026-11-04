@@ -24,7 +24,8 @@ namespace K2D2.Landing.Heating
         public Vector3d R, V;
         public double Altitude;   // m above the terrain
         public double AirSpeed;   // m/s
-        // The highest Temperature / MaxTemp of any part up to this sample, and that part.
+        // The highest Temperature / MaxTemp of any engine (ThermalPart.IsEngine) up to this sample,
+        // and that engine.
         public double PeakRatio;
         public string PeakPart;
     }
@@ -35,8 +36,11 @@ namespace K2D2.Landing.Heating
         public string Reason;
         public double InterfaceUT;      // first point in the air (the start when already in it)
         public bool StartsInAir;
-        public double PeakRatio;        // highest Temperature / MaxTemp of any part (the start included)
+        public double PeakRatio;        // highest Temperature / MaxTemp of any engine (the start included)
         public string PeakPart;
+        // The hottest part that is not an engine: logged, never judged.
+        public double OtherPeakRatio;
+        public string OtherPeakPart;
         public double PeakUT, PeakAltitude, PeakAirSpeed;
         public double PeakFlux;         // kW, highest reentry flux on any part
         public double[] PartPeaks;      // per part, same order as DescentVehicle.Parts
@@ -46,16 +50,29 @@ namespace K2D2.Landing.Heating
 
         public override string ToString() => FormattableString.Invariant(
             $"interface T{InterfaceUT:F0}{(StartsInAir ? " (in the air)" : "")}, peak {PeakRatio * 100:0} % on {PeakPart ?? "-"} at T{PeakUT:F0} ") + FormattableString.Invariant(
-            $"({PeakAltitude / 1000:0.0} km, {PeakAirSpeed:0} m/s), peak flux {PeakFlux:0} kW, touchdown T{TouchdownUT:F0} at {TouchdownSpeed:0} m/s, {Steps} steps, {Passes} pass(es)");
+            $"({PeakAltitude / 1000:0.0} km, {PeakAirSpeed:0} m/s), other parts {OtherPeakRatio * 100:0} % on {OtherPeakPart ?? "-"} (not judged), ") + FormattableString.Invariant(
+            $"peak flux {PeakFlux:0} kW, touchdown T{TouchdownUT:F0} at {TouchdownSpeed:0} m/s, {Steps} steps, {Passes} pass(es)");
     }
 
     // Unpowered descent through an atmosphere co-rotating with the body, with every listed part
     // heated by the game's own model (ThermalModel): Kepler coast to the interface, then RK2
     // (midpoint) with drag 0.5·ρ·|v_air|²·CdA·DragScale/m against v_air = v − ω×r, as
     // ReentryPredictor, until the terrain. The vessel is assumed to hold surface retrograde (the drag
-    // table and the parts' areas are at retrograde). Pure maths, tested in EditMode.
+    // table and the parts' areas are at retrograde). The peak is the engines' (ThermalPart.IsEngine);
+    // the other parts' peak is kept apart, for the log. Pure maths, tested in EditMode.
     public static class HeatingPredictor
     {
+        /// <summary>The heating is judged only when an engine is among the heated parts.</summary>
+        public static bool Judges(ThermalPart[] parts)
+        {
+            if (parts == null)
+                return false;
+            foreach (ThermalPart p in parts)
+                if (p.IsEngine)
+                    return true;
+            return false;
+        }
+
         public const double Step = 0.5;                     // s
         public const double SampleEvery = 2;                // s
         public const double MaxAtmosphereTime = 4 * 3600;   // s
@@ -112,7 +129,15 @@ namespace K2D2.Landing.Heating
                 temps[i] = parts[i].Temperature;
                 double ratio = parts[i].Ratio;
                 pred.PartPeaks[i] = ratio;
-                if (ratio > pred.PeakRatio)
+                if (!parts[i].IsEngine)
+                {
+                    if (ratio > pred.OtherPeakRatio)
+                    {
+                        pred.OtherPeakRatio = ratio;
+                        pred.OtherPeakPart = parts[i].Name;
+                    }
+                }
+                else if (ratio > pred.PeakRatio)
                 {
                     pred.PeakRatio = ratio;
                     pred.PeakPart = parts[i].Name;
@@ -238,7 +263,15 @@ namespace K2D2.Landing.Heating
                 double ratio = p.MaxTemp > 0 ? temps[i] / p.MaxTemp : 0;
                 if (ratio > pred.PartPeaks[i])
                     pred.PartPeaks[i] = ratio;
-                if (ratio > pred.PeakRatio)
+                if (!p.IsEngine)
+                {
+                    if (ratio > pred.OtherPeakRatio)
+                    {
+                        pred.OtherPeakRatio = ratio;
+                        pred.OtherPeakPart = p.Name;
+                    }
+                }
+                else if (ratio > pred.PeakRatio)
                 {
                     pred.PeakRatio = ratio;
                     pred.PeakPart = p.Name;

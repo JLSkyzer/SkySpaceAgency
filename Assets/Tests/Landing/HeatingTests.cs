@@ -96,6 +96,21 @@ public class HeatingPredictorTests
         DragCoefficient = new DragTable { Mach = new double[] { 0 }, CdA = new double[] { 1 } },
         WettedArea = 6,
         Emissivity = 0.4,
+        IsEngine = true,
+    };
+
+    // A radial battery as the model sees it: exposure 1 on its own drag-cube face, a tiny thermal
+    // mass (5 kg dry: 2.5 kJ/K) for that area. Illustrative values, not read from the game.
+    internal static ThermalPart Battery(double maxTemp = 1200, double area = 0.1) => new ThermalPart
+    {
+        Name = "battery",
+        ThermalMass = 0.005 * 500,
+        MaxTemp = maxTemp,
+        Temperature = 290,
+        AirstreamArea = new DragTable { Mach = new double[] { 0 }, CdA = new double[] { area } },
+        DragCoefficient = new DragTable { Mach = new double[] { 0 }, CdA = new double[] { 1 } },
+        WettedArea = 0.3,
+        Emissivity = 0.4,
     };
 
     internal static DescentVehicle Stage(params ThermalPart[] parts) => new DescentVehicle
@@ -171,6 +186,31 @@ public class HeatingPredictorTests
         Assert.That(p.StartsInAir, Is.True);
         Assert.That(p.PeakRatio, Is.EqualTo(900 / 2000.0).Within(1e-9), "the start is the peak");
         Assert.That(p.PeakFlux, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Predict_OnlyEnginesAreJudged_TheOtherPartsAreKeptApart()
+    {
+        Entry(30000, out Vector3d r, out Vector3d v);
+        HeatPrediction p = HeatingPredictor.Predict(r, v, UT, ReentryPredictorTests.Kerbin(true), Air(), Stage(Engine(), Battery()), null);
+        Assert.That(p.Ok, Is.True, p.Reason);
+        Assert.That(p.PeakPart, Is.EqualTo("engine"));
+        Assert.That(p.OtherPeakPart, Is.EqualTo("battery"));
+        // Exposure 1 on a tiny thermal mass: the battery heats far faster than the engine.
+        Assert.That(p.OtherPeakRatio, Is.GreaterThan(p.PeakRatio), p.ToString());
+        Assert.That(p.PartPeaks[1], Is.EqualTo(p.OtherPeakRatio).Within(1e-12));
+        foreach (DescentSample s in p.Samples)
+            Assert.That(s.PeakPart, Is.Null.Or.EqualTo("engine"), "the samples' peak is the engines'");
+        TestContext.WriteLine("engine + battery entry: " + p);
+    }
+
+    [Test]
+    public void Judges_OnlyWithAnEngine()
+    {
+        Assert.That(HeatingPredictor.Judges(null), Is.False);
+        Assert.That(HeatingPredictor.Judges(new ThermalPart[0]), Is.False);
+        Assert.That(HeatingPredictor.Judges(new[] { Battery() }), Is.False);
+        Assert.That(HeatingPredictor.Judges(new[] { Battery(), Engine() }), Is.True);
     }
 
     [Test]
@@ -318,7 +358,51 @@ public class DescentPlannerTests
         ThermalPart part = HeatingPredictorTests.Engine(maxTemp: 300);
         DescentPlan plan = DescentPlanner.Plan(Kerbin(HeatingPredictorTests.Stage(part)));
         Assert.That(plan.Ok, Is.False);
-        Assert.That(plan.Reason, Does.Contain("too hot"));
+        Assert.That(plan.Reason, Does.StartWith("Reentry too hot for the engines: even braking "));
+        Assert.That(plan.Reason, Does.Contain("the engine engine reaches"));
+        Assert.That(plan.Reason, Does.EndWith("(limit 70 %)."));
+    }
+
+    // 2026-11-04 in game: "even braking 3164 m/s before the atmosphere, storage_0v_battery_electricity_radial
+    // reaches 193 %". The battery is no engine: it is logged, never refused on.
+    [Test]
+    public void Atmospheric_AHotBatteryDoesNotRefuse()
+    {
+        DescentPlan plan = DescentPlanner.Plan(Kerbin(HeatingPredictorTests.Stage(HeatingPredictorTests.Engine(), HeatingPredictorTests.Battery())));
+        Assert.That(plan.Ok, Is.True, plan.Reason + " | " + plan.Candidates);
+        Assert.That(plan.HeatModelled, Is.True);
+        Assert.That(plan.HeatPeakPart, Is.EqualTo("engine"));
+        Assert.That(plan.HeatPeak, Is.LessThanOrEqualTo(DescentPlanner.HeatLimit));
+        Assert.That(plan.Heat.OtherPeakPart, Is.EqualTo("battery"));
+        Assert.That(plan.Candidates, Does.Contain("(battery, not judged)"));
+        TestContext.WriteLine("engine + battery plan: " + plan.Candidates);
+    }
+
+    // What the old rule did with the same battery: judged like an engine, no pre-brake up to 95 % of
+    // the air speed at the interface keeps it under 70 %, so the refusal quotes that upper bound.
+    [Test]
+    public void Atmospheric_ABatteryJudgedLikeAnEngine_IsRefusedAtTheMaxPreBrake()
+    {
+        ThermalPart judged = HeatingPredictorTests.Battery();
+        judged.IsEngine = true;
+        DescentPlan plan = DescentPlanner.Plan(Kerbin(HeatingPredictorTests.Stage(HeatingPredictorTests.Engine(), judged)));
+        Assert.That(plan.Ok, Is.False, plan.Candidates);
+        Assert.That(plan.Reason, Does.Contain("the engine battery reaches"));
+        TestContext.WriteLine("battery judged: " + plan.Reason + " | " + plan.Candidates);
+    }
+
+    [Test]
+    public void Atmospheric_WithoutAnEngine_PassesWithANote()
+    {
+        DescentPlan plan = DescentPlanner.Plan(Kerbin(HeatingPredictorTests.Stage(HeatingPredictorTests.Battery())));
+        Assert.That(plan.Ok, Is.True, plan.Reason + " | " + plan.Candidates);
+        Assert.That(plan.HeatModelled, Is.False);
+        Assert.That(plan.HeatNote, Is.EqualTo(DescentPlanner.NoEngineNote));
+        Assert.That(plan.NeedsPreBrake, Is.False);
+        Assert.That(plan.Candidates, Does.Contain("no engine: heating not judged"));
+        FeasibilityResult r = DescentFeasibility.Check(plan, 20, 9.81, 1e5, new Vehicle { ThrustKN = 200, MassT = 8, Isp = 300 });
+        Assert.That(r.Ok, Is.True, r.Error);
+        Assert.That(r.Warning, Is.EqualTo(DescentPlanner.NoEngineNote));
     }
 
     [Test]
@@ -433,6 +517,38 @@ public class HeatGuardTests
         dry.Update(0.8, 3, 0, false);
         Assert.That(dry.NoThrust, Is.True);
         Assert.That(dry.Throttle, Is.EqualTo(0));
-        Assert.That(HeatGuard.OverheatMessage("engine", 0.92), Is.EqualTo("Overheating: engine at 92 % of its max temperature, cannot slow down enough."));
+        Assert.That(HeatGuard.OverheatMessage("LV-T45", 0.92), Is.EqualTo("Overheating: the engine LV-T45 at 92 % of its max temperature, cannot slow down enough."));
+    }
+}
+
+public class HottestPartsTests
+{
+    [Test]
+    public void TheEngineIsJudged_EvenWhenAnotherPartIsHotter()
+    {
+        var h = new HottestParts();
+        h.Add("battery", 2316, 1200, false);   // 193 %
+        h.Add("engine A", 900, 2000, true);
+        h.Add("engine B", 1300, 2000, true);
+        h.Add("fuel tank", 500, 2000, false);
+        Assert.That(h.Engines, Is.EqualTo(2));
+        Assert.That(h.Engine, Is.EqualTo("engine B"));
+        Assert.That(h.EngineRatio, Is.EqualTo(0.65).Within(1e-12));
+        Assert.That(h.Other, Is.EqualTo("battery"));
+        Assert.That(h.OtherRatio, Is.EqualTo(1.93).Within(1e-12));
+        var g = new HeatGuard();
+        Assert.That(g.Update(h.EngineRatio, 3, 0, true), Is.EqualTo(HeatGuardEvent.None), "the battery never fires the guard");
+    }
+
+    [Test]
+    public void WithoutAnEngine_NothingIsJudged()
+    {
+        var h = new HottestParts();
+        h.Add("battery", 2316, 1200, false);
+        h.Add("no max", 500, 0, true);
+        Assert.That(h.Engines, Is.EqualTo(0));
+        Assert.That(h.Engine, Is.Null);
+        Assert.That(h.EngineRatio, Is.EqualTo(0));
+        Assert.That(new HeatGuard().Update(h.EngineRatio, 3, 0, true), Is.EqualTo(HeatGuardEvent.None));
     }
 }

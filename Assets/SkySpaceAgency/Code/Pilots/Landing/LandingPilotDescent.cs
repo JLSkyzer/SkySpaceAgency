@@ -191,9 +191,12 @@ namespace K2D2.Landing
             if (!ctx.Atmospheric)
                 return;
             logger.LogInfo($"[Landing] heat: {what}: " + (plan.HeatModelled
-                ? $"predicted peak {plan.HeatPeak * 100:n0} % of the max temperature on {plan.HeatPeakPart ?? "?"} before the brake " +
+                ? $"predicted engine peak {plan.HeatPeak * 100:n0} % of the max temperature on {plan.HeatPeakPart ?? "?"} before the brake " +
                   $"(limit {DescentPlanner.HeatLimit * 100:n0} %; {plan.Heat.PeakRatio * 100:n0} % if it never braked) | {plan.Heat} | {plan.AeroBrake}"
-                : $"heating not modelled | {plan.Heat} | {plan.AeroBrake}") + (plan.HeatWarning != null ? $" | {plan.HeatWarning}" : ""));
+                : $"{plan.HeatNote ?? "heating not modelled"} | {plan.Heat} | {plan.AeroBrake}") + (plan.HeatWarning != null ? $" | {plan.HeatWarning}" : ""));
+            if (plan.Heat.OtherPeakPart != null)
+                logger.LogInfo($"[Landing] heat: {what}: hottest other part (not judged, only engines are): {plan.Heat.OtherPeakPart} " +
+                    $"{plan.Heat.OtherPeakRatio * 100:n0} % of its max temperature over the unbraked descent");
             if (!string.IsNullOrEmpty(plan.Candidates))
                 logger.LogInfo($"[Landing] heat: {what}: entries: {plan.Candidates}");
         }
@@ -512,7 +515,7 @@ namespace K2D2.Landing
             {
                 logger.LogInfo($"[Landing] heat: brake at altitude {vessel.AltitudeFromSeaLevel:n0} m, speed {current_vessel.VesselVehicle.SurfaceSpeed:n0} m/s, " +
                     $"Mach {vessel.MachNumber:n2} ({(double.IsNaN(aero_brake_UT) ? "vacuum start" : $"predicted with drag, Δv {aero_brake_dv:n0} m/s")}) | " +
-                    $"Δv used so far {burn_dV.burned_dV:n0} m/s, hottest part peak {heat_guard.PeakRatio * 100:n0} %");
+                    $"Δv used so far {burn_dV.burned_dV:n0} m/s, hottest engine peak {heat_guard.PeakRatio * 100:n0} %");
                 setMode(Mode.Brake);
             }
         }
@@ -532,17 +535,22 @@ namespace K2D2.Landing
             double sea = vessel.AltitudeFromSeaLevel;
             if (!body.hasAtmosphere || sea > body.atmosphereDepth)
                 return;
-            double ratio = ReadHottest(vessel, out string part);
+            HottestParts hottest = ReadHottest(vessel);
+            double ratio = hottest.EngineRatio;
+            string part = hottest.Engine;
+            string other = hottest.Other != null ? $"{hottest.Other} {hottest.OtherRatio * 100:n0} %" : "-";
             double mach = vessel.MachNumber;
             double angle = RetrogradeAngle();
             bool hasThrust = burn_dV.active_dv > 0;
             bool wasActive = heat_guard.Active;
             HeatGuardEvent ev = heat_guard.Update(ratio, mach, angle, hasThrust);
-            heat_readout = $"{part ?? "?"} {ratio * 100:n0} % (peak {heat_guard.PeakRatio * 100:n0} %)" + (heat_guard.Active ? ", guard on" : "");
+            heat_readout = hottest.Engines == 0
+                ? "no engine read: not judged"
+                : $"{part ?? "?"} {ratio * 100:n0} % (peak {heat_guard.PeakRatio * 100:n0} %)" + (heat_guard.Active ? ", guard on" : "");
 
             if (ev == HeatGuardEvent.Started)
             {
-                logger.LogWarning($"[Landing] heat: guard on in {mode}: {part} at {ratio * 100:n0} % of its max temperature, altitude {sea:n0} m, " +
+                logger.LogWarning($"[Landing] heat: guard on in {mode}: engine {part} at {ratio * 100:n0} % of its max temperature (hottest other part {other}, not judged), altitude {sea:n0} m, " +
                     $"speed {current_vessel.VesselVehicle.SurfaceSpeed:n0} m/s, Mach {mach:n2}, {angle:n0}° from retrograde, Δv left {F(vessel.VesselDeltaV?.TotalDeltaVActual ?? double.NaN)} m/s");
                 if (CoastingMode(mode) && mode != Mode.AeroCoast)
                     setMode(Mode.AeroCoast);
@@ -574,28 +582,24 @@ namespace K2D2.Landing
             {
                 next_heat_guard_log = now_real + HeatLogPeriod;
                 logger.LogInfo($"[Landing] heat: {mode}: altitude {sea:n0} m, speed {current_vessel.VesselVehicle.SurfaceSpeed:n0} m/s, Mach {mach:n2}, " +
-                    $"hottest {part ?? "?"} {ratio * 100:n0} % (peak {heat_guard.PeakRatio * 100:n0} %), guard {(heat_guard.Active ? $"on, throttle {heat_guard.Throttle * 100:n0} %" : "off")}, " +
+                    $"hottest engine {part ?? "?"} {ratio * 100:n0} % (peak {heat_guard.PeakRatio * 100:n0} %, {hottest.Engines} engine(s)), hottest other part {other} (not judged), " +
+                    $"guard {(heat_guard.Active ? $"on, throttle {heat_guard.Throttle * 100:n0} %" : "off")}, " +
                     $"{angle:n0}° from retrograde | predicted {F(aero_predicted_peak * 100)} % before the brake" + (heat_message != null ? $" | {heat_message}" : ""));
             }
         }
 
-        // The hottest part of the active vessel (Temperature / MaxTemp), 0 when none can be read.
-        static double ReadHottest(VesselComponent vessel, out string name)
+        // The hottest engine of the active vessel (Temperature / MaxTemp: what the guard judges) and the
+        // hottest other part (logged only); 0 when none can be read.
+        static HottestParts ReadHottest(VesselComponent vessel)
         {
-            name = null;
-            double hottest = 0;
+            var hottest = new HottestParts();
             try
             {
                 foreach (PartComponent part in vessel.SimulationObject.PartOwner.Parts)
                 {
-                    if (part == null || !(part.MaxTemp > 0))
+                    if (part == null)
                         continue;
-                    double ratio = part.Temperature / part.MaxTemp;
-                    if (ratio > hottest)
-                    {
-                        hottest = ratio;
-                        name = part.PartName;
-                    }
+                    hottest.Add(part.PartName, part.Temperature, part.MaxTemp, part.TryGetModule<PartComponentModule_Engine>(out _));
                 }
             }
             catch (Exception) { /* temperatures not readable: 0 */ }

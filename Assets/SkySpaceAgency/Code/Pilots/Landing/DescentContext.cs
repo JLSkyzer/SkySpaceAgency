@@ -40,8 +40,10 @@ namespace K2D2.Landing
         public string AeroNote;          // why the heating is not modelled, or what was read (log)
         public string BodyName;
 
-        // Parts integrated by the predictor: the most at risk (Heating.HeatRisk).
+        // Parts integrated by the predictor: every engine (judged; the most at risk first, Heating.HeatRisk)
+        // up to MaxHeatedParts, and the MaxOtherParts most at risk among the others (logged only).
         public const int MaxHeatedParts = 12;
+        public const int MaxOtherParts = 3;
         static readonly float[] MachSamples = { 0.5f, 1, 2, 3, 5, 8, 12, 20 };
 
         public static bool TryBuild(LandingPilot pilot, bool withAero, out DescentContext ctx, out string reason)
@@ -226,8 +228,10 @@ namespace K2D2.Landing
         }
 
         // The parts at retrograde: airstream area and Cd of their drag cube against Mach (as attached,
-        // the faces covered by neighbours counting less), and their thermal data. The MaxHeatedParts
-        // with the highest risk are kept.
+        // the faces covered by neighbours counting less), and their thermal data. Only engines are
+        // judged (ThermalPart.IsEngine: a PartComponentModule_Engine, as StagingPilot finds them): the
+        // per-part exposure 1 of the model over-heats light parts sticking out (radial batteries);
+        // engines lead at retrograde, and losing them ends the landing.
         static ThermalPart[] ReadHeatedParts(VesselComponent vessel, PartOwnerComponent owner, out string note)
         {
             var behavior = vessel.SimulationObject?.objVesselBehavior;
@@ -286,6 +290,7 @@ namespace K2D2.Landing
                     if (wetted == 0)
                         noWetted++;
                     double emissive = part.PartData != null ? part.PartData.emissiveConstant : 0;
+                    bool isEngine = part.TryGetModule<PartComponentModule_Engine>(out _);
                     var machs = MachSamples.Select(x => (double)x).ToArray();
                     var tp = new ThermalPart
                     {
@@ -297,10 +302,12 @@ namespace K2D2.Landing
                         DragCoefficient = new DragTable { Mach = machs, CdA = cd },
                         WettedArea = wetted,
                         Emissivity = emissive,
+                        IsEngine = isEngine,
                     };
                     read++;
                     double risk = HeatRisk(tp);
-                    if (risk > 0)
+                    // An engine is kept even out of the flow: its start temperature still counts.
+                    if (risk > 0 || isEngine)
                         candidates.Add((tp, risk));
                 }
                 catch (Exception)
@@ -308,9 +315,16 @@ namespace K2D2.Landing
                     skipped++;
                 }
             }
-            ThermalPart[] kept = candidates.OrderByDescending(c => c.risk).Take(MaxHeatedParts).Select(c => c.part).ToArray();
-            note = $"heated parts: {kept.Length} of {read} read ({candidates.Count} facing the flow, {skipped} skipped, {noWetted} without wetted area: no cooling counted)" +
-                (kept.Length > 0 ? ": " + string.Join(", ", kept.Select(p => $"{p.Name} {p.Temperature:n0}/{p.MaxTemp:n0} K, A {p.AirstreamArea.At(5):0.00} m², Cd {p.DragCoefficient.At(5):0.00}, C {p.ThermalMass:n0} kJ/K")) : "");
+            var ordered = candidates.OrderByDescending(c => c.risk).ToList();
+            ThermalPart[] engines = ordered.Where(c => c.part.IsEngine).Take(MaxHeatedParts).Select(c => c.part).ToArray();
+            ThermalPart[] others = ordered.Where(c => !c.part.IsEngine).Take(MaxOtherParts).Select(c => c.part).ToArray();
+            ThermalPart[] kept = engines.Concat(others).ToArray();
+            string Describe(ThermalPart p) =>
+                $"{p.Name} {p.Temperature:n0}/{p.MaxTemp:n0} K, A {p.AirstreamArea.At(5):0.00} m², Cd {p.DragCoefficient.At(5):0.00}, C {p.ThermalMass:n0} kJ/K";
+            note = $"heated parts: {engines.Length} engine(s) judged and {others.Length} other part(s) logged of {read} read " +
+                $"({candidates.Count} kept as candidates, {skipped} skipped, {noWetted} without wetted area: no cooling counted)" +
+                (engines.Length > 0 ? ": engines " + string.Join(", ", engines.Select(Describe)) : ": " + DescentPlanner.NoEngineNote) +
+                (others.Length > 0 ? " | not judged: " + string.Join(", ", others.Select(Describe)) : "");
             return kept;
         }
 

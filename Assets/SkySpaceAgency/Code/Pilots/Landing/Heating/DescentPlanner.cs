@@ -40,12 +40,14 @@ namespace K2D2.Landing.Heating
         public double BrakeDeltaV;
         public double BrakeStartUT;
         public double TotalDeltaV;
-        // Atmospheric: the predicted descent after every planned burn, and whether heating was modelled.
+        // Atmospheric: the predicted descent after every planned burn, and whether heating was judged
+        // (an engine among the heated parts: only engines are judged).
         public bool HeatModelled;
         public HeatPrediction Heat;
         public double HeatPeak;                  // the predicted peak up to the brake start (what the limit is checked on)
         public string HeatPeakPart;
         public string HeatWarning;               // hot, but nothing can be planned about it (already in the air)
+        public string HeatNote;                  // parts heated but no engine among them: not judged
         public double InterfaceUT;
         public AeroBrakeResult AeroBrake;
         public StopPrediction Stop;              // airless brake (staged details)
@@ -68,13 +70,15 @@ namespace K2D2.Landing.Heating
     {
         // Planned peak of Temperature / MaxTemp. Under the live guard's 75 % on purpose: planning up to
         // the 90 % ceiling would make the guard fire on every nominal entry, spending Δv the start check
-        // did not count.
+        // did not count. Judged on the engines only (ThermalPart.IsEngine): the other parts are logged.
         public const double HeatLimit = 0.70;
         public const double PreBrakeMargin = 15;       // s between the pre-brake's end and the interface
         public const double PreBrakeMaxFraction = 0.95; // of the air speed at the interface
         public const int PreBrakeIterations = 16;
         public const double PreBrakePrecision = 2;     // m/s
         public static readonly double[] EntryFractions = { 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0 };
+
+        public const string NoEngineNote = "No engine among the heated parts: the reentry heating is not judged.";
 
         public static DescentPlan Plan(DescentInput input)
         {
@@ -193,7 +197,9 @@ namespace K2D2.Landing.Heating
             }
             Body bodyT = AeroBrake.BodyAt(body, input.UT, t);
             double limit = input.HeatLimit > 0 ? input.HeatLimit : HeatLimit;
-            plan.HeatModelled = aero.Parts != null && aero.Parts.Length > 0;
+            plan.HeatModelled = HeatingPredictor.Judges(aero.Parts);
+            if (!plan.HeatModelled && aero.Parts != null && aero.Parts.Length > 0)
+                plan.HeatNote = NoEngineNote;
 
             PreBrakeResult pre = FindPreBrake(r, v, t, bodyT, input.Air, aero, vehicle, limit, ref predictions);
             plan.Heat = pre.Heat;
@@ -211,7 +217,7 @@ namespace K2D2.Landing.Heating
             }
             if (pre.HotInAir)
                 plan.HeatWarning = string.Format(CultureInfo.InvariantCulture,
-                    "Predicted heating {0:0} % of the max temperature on {1}: already in the air, the heat guard will slow down.",
+                    "Predicted heating {0:0} % of the max temperature on the engine {1}: already in the air, the heat guard will slow down.",
                     pre.Peak * 100, pre.PeakPart);
             plan.BrakeDeltaV = pre.Brake.DeltaV;
             plan.BrakeStartUT = pre.Brake.StartUT;
@@ -228,9 +234,12 @@ namespace K2D2.Landing.Heating
                 plan.Reason = reason;
             }
             string heat = plan.HeatModelled && plan.Heat.PartPeaks != null
-                ? string.Format(CultureInfo.InvariantCulture, ", peak {0:0} % ({1}) before the brake, {2:0} % unbraked",
+                ? string.Format(CultureInfo.InvariantCulture, ", engine peak {0:0} % ({1}) before the brake, {2:0} % unbraked",
                     plan.HeatPeak * 100, plan.HeatPeakPart ?? "-", plan.Heat.PeakRatio * 100)
-                : ", heating not modelled";
+                : plan.HeatNote != null ? ", no engine: heating not judged" : ", heating not modelled";
+            if (plan.Heat.OtherPeakPart != null)
+                heat += string.Format(CultureInfo.InvariantCulture, ", other parts {0:0} % ({1}, not judged)",
+                    plan.Heat.OtherPeakRatio * 100, plan.Heat.OtherPeakPart);
             string line = plan.Ok
                 ? string.Format(CultureInfo.InvariantCulture, "{0}: {1}, total {2:0} m/s{3}", label, plan.Breakdown, plan.TotalDeltaV, heat)
                 : $"{label}: refused ({reason})";
@@ -290,7 +299,7 @@ namespace K2D2.Landing.Heating
                 result.Reason = trial0.Heat.Reason;
                 return result;
             }
-            bool modelled = aero.Parts != null && aero.Parts.Length > 0;
+            bool modelled = HeatingPredictor.Judges(aero.Parts);
             bool hot = modelled && trial0.Peak > limit;
             if (!hot || trial0.Heat.StartsInAir)
             {
@@ -328,9 +337,16 @@ namespace K2D2.Landing.Heating
                 result.Heat = shown.Heat;
                 result.Peak = shown.Peak;
                 result.PeakPart = shown.PeakPart;
-                result.Reason = string.Format(CultureInfo.InvariantCulture,
-                    "Reentry too hot: even braking {0:0} m/s before the atmosphere, {1} reaches {2:0} % of its max temperature (limit {3:0} %).",
-                    hi, shown.PeakPart, shown.Peak * 100, limit * 100);
+                // Say what failed: the prediction or the brake after the hardest pre-brake are not heat.
+                if (!hiTrial.Heat.Ok)
+                    result.Reason = string.Format(CultureInfo.InvariantCulture,
+                        "Reentry too hot for the engines ({0} at {1:0} %, limit {2:0} %), and the descent after a {3:0} m/s pre-brake cannot be predicted ({4}).",
+                        trial0.PeakPart, trial0.Peak * 100, limit * 100, hi, hiTrial.Heat.Reason);
+                else if (!hiTrial.Brake.Ok)
+                    result.Reason = LandingFeasibility.CannotStopMessage + " (after a " + hi.ToString("0", CultureInfo.InvariantCulture) +
+                        " m/s pre-brake against the engines' heating: " + hiTrial.Brake.Reason + ")";
+                else
+                    result.Reason = TooHotMessage(hi, shown.PeakPart, shown.Peak, limit);
                 return result;
             }
             Trial best = hiTrial;
@@ -356,6 +372,10 @@ namespace K2D2.Landing.Heating
             result.PeakPart = best.PeakPart;
             return result;
         }
+
+        public static string TooHotMessage(double preBrake, string engine, double peak, double limit) => string.Format(CultureInfo.InvariantCulture,
+            "Reentry too hot for the engines: even braking {0:0} m/s before the atmosphere, the engine {1} reaches {2:0} % of its max temperature (limit {3:0} %).",
+            preBrake, engine, peak * 100, limit * 100);
 
         static DescentPlan Refuse(DescentPlan plan, string reason)
         {
@@ -394,7 +414,7 @@ namespace K2D2.Landing.Heating
                     double speed = drops != null && drops.Count > 0 ? drops[drops.Count - 1].SurfaceSpeed : double.NaN;
                     return Refuse(StagedBrakePlan.CannotBrakeMessage(stages.Length, speed, landing.DeltaV));
                 }
-                return new FeasibilityResult { Ok = true, Warning = plan.HeatWarning };
+                return new FeasibilityResult { Ok = true, Warning = plan.HeatWarning ?? plan.HeatNote };
             }
 
             if (!(deltaVRemaining > 0))
@@ -402,7 +422,7 @@ namespace K2D2.Landing.Heating
             double needed = LandingFeasibility.DeltaVMargin * plan.TotalDeltaV;
             if (needed > deltaVRemaining)
                 return Refuse(RefusalMessage(deltaVRemaining, plan));
-            return new FeasibilityResult { Ok = true, Warning = plan.HeatWarning };
+            return new FeasibilityResult { Ok = true, Warning = plan.HeatWarning ?? plan.HeatNote };
         }
 
         public static string RefusalMessage(double deltaVRemaining, DescentPlan plan) => string.Format(CultureInfo.InvariantCulture,
