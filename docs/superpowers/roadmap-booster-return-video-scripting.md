@@ -208,6 +208,13 @@ parachutes.
   - no control;
   - heat.
 - Also usable alone: drop a booster by hand, switch, then press Return. This tests R2 without R3.
+- **Shared guidance, two users** (user's decision, 2026-11-15):
+  - the atmospheric powered descent to a point (aerodynamic descent steered to the target, then
+    the landing burn) is built as a shared component, not inside the Return tab;
+  - Return uses it for boosters;
+  - the **Land tab** uses it for precision landing in Propulsive mode on bodies with an
+    atmosphere (a Duna lander, for example). That mode is greyed out until then.
+  - R2 is done only when both work.
 - Warp: 1x or low physics warp only, per the user's rule for landings and reentry.
 - Missing items added:
   - an abort and divert mode (land anywhere safe, or ditch in the sea) when the margin runs out;
