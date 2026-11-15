@@ -56,11 +56,15 @@ public class WarpGateTests
     [Test]
     public void Watchdog_DropsAGameBurnWeDidNotAskFor()
     {
-        Assert.IsTrue(WarpGatePolicy.DropUnaskedRailsBurn(7, physicsMode: false, underThrustOnRails: true, railsBurnAsked: false));
-        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(7, false, true, railsBurnAsked: true), "our own rails burn");
-        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(7, false, false, false), "coasting on rails");
-        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(2, physicsMode: true, true, false), "physics warp");
-        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(0, false, true, false), "1x");
+        // A burn nobody commands: throttle 0, yet the game flies a burn on rails (residual force).
+        Assert.IsTrue(WarpGatePolicy.DropUnaskedRailsBurn(7, physicsMode: false, underThrustOnRails: true, railsBurnAsked: false, throttle: 0));
+        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(7, false, true, railsBurnAsked: true, throttle: 0), "our own rails burn");
+        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(7, false, false, false, 0), "coasting on rails");
+        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(2, physicsMode: true, true, false, 0), "physics warp");
+        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(0, false, true, false, 0), "1x");
+        // 26w46a: the player's own burn under rails warp (a native node, throttle up) is the game's
+        // business now: left alone.
+        Assert.IsFalse(WarpGatePolicy.DropUnaskedRailsBurn(4, false, true, false, throttle: 1), "the player's burn");
     }
 
     [Test]

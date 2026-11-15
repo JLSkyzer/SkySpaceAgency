@@ -2,6 +2,17 @@
 
 ## Unreleased (SkySpaceAgency)
 
+### Changed
+
+- **Native rails warp during burns, now the default** (every closed-loop burn: Transfer, Orbit, Circularize, Node, Lift, Rendezvous away from the target; 2026-11-15, for Redux 26w46a; not yet flown in game). Redux 26w46a fixed the game's rails warp under thrust: the burn now follows the lit engines, is rebuilt when their thrust or direction changes, and stops when they stop (read in the game's code on 2026-11-15; players confirm native nodes warp correctly). Before, it was a fixed burn to the stage's burnout, which burned ~500 m/s per injection in our 2026-10-24 test.
+  - **Node tab → ADVANCED → "Warp during burns"**: Off (1x) / Physics (x4) / **Rails (native)**, the new default. A settings file without the key, or with the old "Physics + rails" value, reads as Rails; a saved Off or Physics is kept.
+  - **How a Rails burn flies**: alignment and ignition at 1x; after 1 s aligned within 1° at full throttle, the game's rails warp at the highest of x100, x50 or x10 that still leaves 8 s of real time before the exit; the game steers nothing on rails, the burn keeps its direction. Near the end the warp steps down one level at a time, then drops to 1x 15 s of burn (or 10 s of stage) before the end, plus 2 s of real time at the rate, and the closed loop finishes the burn on the target orbit. One rails stretch per burn.
+  - **Guards**: if the game does not take the burn within 3 frames, stops flying it, or the trajectory does not speed up (under half the modelled acceleration after 3 s and 10 frames), the burn drops to 1x at once and finishes without warp (log "rails burn: the game does not take the burn …"). Leaving the atmosphere's or the surface envelope's margin, the aim drifting 5° from the burn direction, or a rendezvous target within 2 km also end the stretch.
+  - **Removed**: the 2-minute minimum burn, the physics-warp stretches around the rails stretch, and the check of the game's private burn patches (`_numBurnPatches`, read by reflection). The physics warp stays available as its own mode.
+  - **Never on rails while burning**: every landing burn (deorbit, braking, final descent, precision and reentry phases), the heat guard, anything in an atmosphere or under the surface envelope, and rendezvous burns within 2 km of the target and docking. They stay at 1x (or physics x4 in the Physics mode).
+  - **Warp watchdog**: it now drops only a rails burn nobody commands (throttle at 0, an engine still giving force when the warp started). A burn the player flies by hand under rails warp (a native node) is left to the game. The rule "throttle 0 and no engine force for 1 s before a coast rails warp" stays: in 26w46a the game still starts a burn from a leftover engine force.
+  - Transfer log: the energy accounting of the previous burn ends at the next ignition, so the physics switches of a rails stretch are not reported as a burn nobody commanded.
+
 ### Fixed
 
 - **Land tab: the reentry heating judges the engines only** (2026-11-04, after the first in-game try; not yet flown again). Brake from a Kerbin orbit was refused with "Reentry too hot: even braking 3164 m/s before the atmosphere, storage_0v_battery_electricity_radial reaches 193 % of its max temperature". The model gives every part the full airflow on its own face (the game's shock-cone shading is not modelled), so a light radial part (a battery: almost no thermal mass for its area) came out far too hot, and the 3164 m/s was only the largest pre-brake tried (95 % of the air speed at the interface), not a need.

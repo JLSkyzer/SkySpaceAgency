@@ -271,6 +271,9 @@ namespace K2D2.KSPService
             {
                 o.logger?.LogInfo($"{o.Prefix} the burn was not updated this frame (stopped, failed, scene change or staging pause): leaving");
                 o.Leave(true);
+                // A rails stretch of that burn ended with the warp at 1x: no rails burn of ours left
+                // for the watchdog to spare.
+                WarpGate.RailsBurnAsked = false;
             }
             owner = null;
         }

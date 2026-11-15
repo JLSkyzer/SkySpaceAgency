@@ -29,12 +29,17 @@ namespace K2D2.Node
     /// alignment lead before the burn start (BurnWarp.AlignmentLead from the angle still to turn
     /// and the measured turn rate, 20 to 120 s), stop the warp instantly there, and ignite at the
     /// start time once within 10° (a late alignment delays the ignition, the closed loop corrects
-    /// the orbit). While burning the warp is physics warp, x4 at most (PhysicsWarpPolicy, under
-    /// BurnWarp.MaxBurnRate), given back as the player had it on every end path; with
-    /// allow_rails_warp a long steady middle stretch (more than 120 s left) runs once on rails at
-    /// x10 or x50, flown by the game's own precomputed burn (RailsBurnPolicy, RailsBurn: guarded
-    /// within 2 frames, left 15 s of burn or 10 s of stage before the end), and the throttle
-    /// is frame-aware (BurnWarp.Throttle). Refusals go through Fail(). CircularizeBurn derives from it
+    /// the orbit). While burning, the warp follows the player's mode (BurnWarpSettings, read at
+    /// ignition): Off keeps 1x; Physics uses physics warp, x4 at most (PhysicsWarpPolicy, under
+    /// BurnWarp.MaxBurnRate); Rails (the default) keeps 1x at ignition, then, once aligned at full
+    /// throttle for 1 s, hands the middle of the burn to the game's native rails warp (x10 to
+    /// x100, one stretch per burn, RailsBurnPolicy, RailsBurn: the game must fly the burn within
+    /// 3 frames and push as modelled), and drops back to 1x 15 s of burn or 10 s of stage before
+    /// the end (plus 2 s of real time at the rate) to finish in closed loop. allow_rails_warp
+    /// (off for landing and reentry burns) and near_target (Rendezvous, within 2 km) forbid rails;
+    /// so do the atmosphere and the game's surface envelope. The warp is given back as the player
+    /// had it on every end path, and the throttle is frame-aware (BurnWarp.Throttle). Refusals go
+    /// through Fail(). CircularizeBurn derives from it
     /// with its own target (circular at the current radius) and start time (centered on the apsis).
     ///
     /// With stage_when_dry (off by default, set by the transfer pilot only) a burn whose engines
@@ -88,12 +93,12 @@ namespace K2D2.Node
         // stages, as before (the Node tab, Orbit, Lift and Landing leave it off).
         public bool stage_when_dry = false;
 
-        // Rails warp (x10, x50) for the long middle of a burn, with the game's own precomputed
-        // burn (RailsBurnPolicy, RailsBurn). False for landing and reentry burns (PrecisionPhase):
-        // they stay at physics x4 at most.
+        // The game's native rails warp (x10 to x100) for the middle of a burn, in the Rails mode
+        // (RailsBurnPolicy, RailsBurn). False for landing and reentry burns (PrecisionPhase): they
+        // stay at 1x, or physics x4 at most in the Physics mode.
         public bool allow_rails_warp = true;
         // The player's burn time warp mode for this burn (BurnWarpSettings, read at ignition).
-        BurnWarpMode burn_warp_mode = BurnWarpMode.Off;
+        BurnWarpMode burn_warp_mode = BurnWarpModes.Default;
         // Within 2 km of a rendezvous target, set every frame by the Rendezvous pilot: never rails.
         public bool near_target = false;
 
@@ -261,7 +266,7 @@ namespace K2D2.Node
         protected bool BeginRun()
         {
             // A restart in the middle of a physics-warped burn gives the warp back first.
-            // Rails warp first (index 0, which also ends the game's precomputed burn).
+            // Rails warp first (index 0, which also ends the game's burn).
             if (rails.Entered)
                 rails.Leave();
             rails.Reset();
@@ -588,7 +593,8 @@ namespace K2D2.Node
                 UpdateRun();
             // Done, refused, aborted or failed: the rails warp, then the physics warp go back to
             // 1x and the player's mode. A burn stopped from outside (its Update no longer called)
-            // is caught by PhysicsWarp.ReleaseIfAbandoned instead (index 0 ends rails warp too).
+            // is caught by PhysicsWarp.ReleaseIfAbandoned instead (index 0 ends rails warp too; the
+            // Rails mode takes the warp over at 1x for that, see ManageBurnWarp).
             if (finished && rails.Entered && current_vessel?.VesselComponent != null)
                 ExitRails(GeneralTools.Current_UT, "the burn ended");
             if (finished && physics_warp.Active)
@@ -683,8 +689,8 @@ namespace K2D2.Node
 
         void Burn(double now)
         {
-            // On rails the game flies its precomputed burn: no steering, no throttle, only the
-            // exit conditions are watched.
+            // On rails the game flies the burn: no steering, no throttle (a throttle change would
+            // make it rebuild its burn), only the exit conditions are watched.
             if (rails.Entered)
             {
                 BurnOnRails(now);
@@ -805,7 +811,7 @@ namespace K2D2.Node
 
             status_line = stalled ? StallStatus : BurningStatus(remaining_dv);
 
-            // After the physics warp: a long, steady stretch may go on rails.
+            // After the warp of this frame: a steady stretch may go on rails (Rails mode).
             UpdateSteady();
             ConsiderRails(now, dv, accel);
         }
@@ -838,7 +844,7 @@ namespace K2D2.Node
         // burn's own flag (off for landing and reentry).
         bool RailsAllowed => allow_warp && allow_rails_warp && BurnWarpModes.AllowsRails(burn_warp_mode);
 
-        // Off rails, once the physics warp is managed: asks RailsBurnPolicy, enters rails when it
+        // Off rails, once the warp of the frame is managed: asks RailsBurnPolicy, enters rails when it
         // says so. The aim drift (a path integration) is computed only when every cheaper
         // condition already holds.
         void ConsiderRails(double now, Vector3d dv, double accel)
@@ -858,8 +864,7 @@ namespace K2D2.Node
             bool low = LowOrInAtmosphere(body, r.magnitude, r.magnitude);
 
             double drift = double.NaN;
-            if (allowed && !near_target && !low && burnLeft > RailsBurnPolicy.MinBurnLeft
-                && steady_real >= RailsBurnPolicy.MinSteadySeconds && planned > 0)
+            if (allowed && !near_target && !low && steady_real >= RailsBurnPolicy.MinSteadySeconds && planned > 0)
             {
                 drift = RailsBurnPolicy.PredictAimDrift((rr, vv, t) => GuidanceDeltaV(rr, vv, t, mu), r, v, now, mu, accel,
                     planned, out double minRadius);
@@ -909,8 +914,8 @@ namespace K2D2.Node
             string from = $"index {TimeWarpTools.CurrentRateIndex} x{TimeWarpTools.CurrentRate:0.##}";
             int index = step.WantedIndex;
             bool entered = rails.TryEnter(index);
-            // x50 refused (an acceleration or event bound of the game): x10 once, unless the
-            // game's setting refuses every rails index under thrust.
+            // A high rate refused (an acceleration or event bound of the game): x10 once, unless
+            // the game's setting refuses every rails index under thrust.
             if (!entered && index > RailsBurnPolicy.LowRailsIndex && !rails.RefusedBySetting)
             {
                 index = RailsBurnPolicy.LowRailsIndex;
@@ -927,8 +932,8 @@ namespace K2D2.Node
                 $"x{RailsBurnPolicy.RateAt(rates, index):0}) from {from}: {step.Reason}; " +
                 $"dv {remaining_dv:n1} m/s, burn left {burnLeft:n1} s, stage burn left {stageLeft:n1} s, aim drift {drift:n2}° " +
                 $"until the exit, planned dv on rails {PlannedRailsDv(planned):n1} m/s, " +
-                $"{rails.ManeuverNodeCount()} maneuver node(s) on the vessel (never changed while on rails); {RailsBurn.ReflectionStatus()}");
-            // Frame 0: a game that already switched without a burn trajectory drops at once.
+                $"{rails.ManeuverNodeCount()} maneuver node(s) on the vessel (never changed while on rails)");
+            // Frame 0: the guard is read at once (the game may need a few frames to take the burn).
             BurnOnRails(now, entryFrame: true);
         }
 
@@ -949,14 +954,15 @@ namespace K2D2.Node
         // Shortest game time between two samples of the measured acceleration.
         const double MeasuredAccelMinDt = 0.05;
 
-        // Measured thrust acceleration on rails: successive states of the burn trajectory, minus
-        // gravity, smoothed.
+        // Measured thrust acceleration on rails: successive states of the trajectory the game
+        // flies, minus gravity, smoothed. A trajectory that does not speed up reads near 0 (the
+        // push check of RailsBurnPolicy).
         void MeasureRailsAccel(double now, Vector3d r, Vector3d v, double mu)
         {
             if (!double.IsNaN(rails_last_ut) && now - rails_last_ut >= MeasuredAccelMinDt)
             {
                 double a = RailsBurnPolicy.MeasuredAccel(rails_last_r, rails_last_v, r, v, now - rails_last_ut, mu);
-                if (a > 0)
+                if (a >= 0)
                     rails_measured_accel = double.IsNaN(rails_measured_accel) ? a
                         : rails_measured_accel + MeasuredAccelWeight * (a - rails_measured_accel);
             }
@@ -968,8 +974,8 @@ namespace K2D2.Node
             }
         }
 
-        // A frame on rails: guard, state from the burn trajectory, exit conditions. No steering,
-        // no throttle command. entryFrame: the frame of TryEnter (frame 0, not counted).
+        // A frame on rails: guard, state from the trajectory the game flies, exit conditions. No
+        // steering, no throttle command. entryFrame: the frame of TryEnter (frame 0, not counted).
         void BurnOnRails(double now, bool entryFrame = false)
         {
             if (!entryFrame)
@@ -996,7 +1002,7 @@ namespace K2D2.Node
                     // The burn trajectory against the conic the game also writes back (both Zup).
                     IKeplerPatch conic = current_vessel.VesselComponent.Orbit;
                     double gap = (conic.GetRelativePositionAtUTZup(now) - r).magnitude;
-                    logger.LogInfo($"{text}; burn ends in {rails.BurnEndUT() - now:n1} s (stage estimate {rails_stage_seconds - (now - rails_entry_UT):n1} s), " +
+                    logger.LogInfo($"{text}; the game's burn ends in {rails.BurnEndUT() - now:n1} s (stage estimate {rails_stage_seconds - (now - rails_entry_UT):n1} s), " +
                         $"trajectory vs conic {gap:n1} m");
                 }
                 else
@@ -1037,6 +1043,9 @@ namespace K2D2.Node
                 GuardOk = guard,
                 GuardPending = pending,
                 FramesSinceRailsEntry = frames,
+                RailsGameSeconds = now - rails_entry_UT,
+                MeasuredAccel = rails_measured_accel,
+                ModelledAccel = modelled,
                 Rates = RailsBurn.Rates,
                 RealFrameSeconds = Time.unscaledDeltaTime,
                 CurrentIndex = TimeWarpTools.CurrentRateIndex,
@@ -1046,8 +1055,8 @@ namespace K2D2.Node
             switch (step.Action)
             {
                 case RailsAction.DropGuard:
-                    logger.LogWarning($"{BurnLogTag} rails burn: guard failed at frame {frames}, back to physics warp, " +
-                        $"no rails again in this burn: {step.Reason} ({detail})");
+                    logger.LogWarning($"{BurnLogTag} rails burn: the game does not take the burn (frame {frames}), back to 1x, " +
+                        $"the burn ends in closed loop without rails: {step.Reason} ({detail})");
                     ExitRails(now, step.Reason);
                     return;
                 case RailsAction.LeaveRails:
@@ -1063,9 +1072,9 @@ namespace K2D2.Node
             status_line = $"Rails warp x{TimeWarpTools.CurrentRate:0}: {BurningStatus(remaining_dv)}";
         }
 
-        // Leaves rails (index 0: the vessel goes back to RigidBody, the closed loop and the
-        // physics warp resume on the next frame) and logs the Δv applied, planned against actual.
-        // One rails stretch per burn.
+        // Leaves rails (index 0: the vessel goes back to RigidBody, the closed loop resumes at 1x
+        // on the next frame) and logs the Δv applied, planned against actual. One rails stretch
+        // per burn.
         void ExitRails(double now, string reason)
         {
             double t = now - rails_entry_UT;
@@ -1118,26 +1127,29 @@ namespace K2D2.Node
             }
         }
 
-        // Warp while burning, steered by this controller: physics warp only. (A long, steady middle
-        // stretch may go on rails afterwards, under the guards of ConsiderRails / BurnOnRails,
-        // RailsBurnPolicy.) On rails warp the game replaces
-        // thrust by a burn it precomputes once when the warp starts (HandleOrbitalPhysicsUnder-
-        // ThrustStart, IL): fixed direction, the stage's flow until it is empty, and steering or
-        // throttle changes ignored. In game on 2026-10-24, three transfer injections warped to x4
-        // on rails right after ignition burned ~500 m/s of fuel each while the orbit stayed
-        // 100 x 100 km. Physics warp (TimeWarp.ToggleTimeWarpMode at 1x, then x2 or x4) keeps the
-        // vessel RigidBody, so steering and throttle keep working.
+        // Warp while burning and steered by this controller (off rails). The rails stretch of the
+        // Rails mode is decided afterwards, in ConsiderRails / BurnOnRails (RailsBurnPolicy).
         //
-        // PhysicsWarpPolicy decides each frame: a rails index, physics mode off or a vessel no
-        // longer RigidBody drop to 1x at once; otherwise the cap is BurnWarp.MaxBurnRate (5 % of
-        // the remaining Δv per frame of real time, at least 10 s of real time left), x4 at most,
-        // x2 under 30 s of game time left, 1x when not aligned. With allow_warp the warp is raised
-        // to the cap, otherwise the player's warp is only lowered.
+        // Off: 1x, whatever warp is set (lowered at once). Rails: 1x too, through PhysicsWarp with
+        // a cap of 1 and no raise, so the burn owns the warp: PhysicsWarp.ReleaseIfAbandoned then
+        // brings a burn stopped from outside back to 1x, rails stretch included. Physics: the
+        // game's physics warp (TimeWarp.ToggleTimeWarpMode at 1x, then x2 or x4) keeps the vessel
+        // RigidBody, so steering and throttle keep working; PhysicsWarpPolicy decides each frame:
+        // a rails index, physics mode off or a vessel no longer RigidBody drop to 1x at once;
+        // otherwise the cap is BurnWarp.MaxBurnRate (5 % of the remaining Δv per frame of real
+        // time, at least 10 s of real time left), x4 at most, x2 under 30 s of game time left, 1x
+        // when not aligned. With allow_warp the warp is raised to the cap, otherwise the player's
+        // warp is only lowered.
         void ManageBurnWarp(double remainingDv, double accel, bool aligned)
         {
+            double burnLeft = accel > 0 ? remainingDv / accel : double.PositiveInfinity;
+            if (BurnWarpModes.AllowsRails(burn_warp_mode))
+            {
+                physics_warp.Update(1, aligned, burnLeft, false);
+                return;
+            }
             if (!BurnWarpModes.AllowsPhysics(burn_warp_mode))
             {
-                // Off: 1x while the engines push, whatever warp is set (lowered at once).
                 if (physics_warp.Active)
                     physics_warp.Leave(true);
                 if (TimeWarpTools.CurrentRateIndex != 0)
@@ -1145,7 +1157,6 @@ namespace K2D2.Node
                 return;
             }
             double frame = Time.unscaledDeltaTime;
-            double burnLeft = accel > 0 ? remainingDv / accel : double.PositiveInfinity;
             double cap = 1;
             if (aligned && accel > 0 && burnLeft >= BurnWarp.MinRealBurnTime)
                 cap = BurnWarp.MaxBurnRate(remainingDv, accel, frame);

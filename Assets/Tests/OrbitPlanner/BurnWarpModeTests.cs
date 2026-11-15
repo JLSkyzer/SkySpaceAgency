@@ -9,16 +9,27 @@ public class BurnWarpModeTests
     {
         Assert.IsFalse(BurnWarpModes.AllowsPhysics(BurnWarpMode.Off));
         Assert.IsFalse(BurnWarpModes.AllowsRails(BurnWarpMode.Off));
-        Assert.AreEqual(BurnWarpMode.Off, default(BurnWarpMode), "Off is the first value, the one a missing setting reads as");
     }
 
     [Test]
-    public void Physics_NoRails_PhysicsAndRails_Both()
+    public void Physics_NoRails_Rails_NoPhysics()
     {
         Assert.IsTrue(BurnWarpModes.AllowsPhysics(BurnWarpMode.Physics));
         Assert.IsFalse(BurnWarpModes.AllowsRails(BurnWarpMode.Physics));
-        Assert.IsTrue(BurnWarpModes.AllowsPhysics(BurnWarpMode.PhysicsAndRails));
-        Assert.IsTrue(BurnWarpModes.AllowsRails(BurnWarpMode.PhysicsAndRails));
+        // Rails (native): 1x around the game's rails warp, no physics warp.
+        Assert.IsFalse(BurnWarpModes.AllowsPhysics(BurnWarpMode.Rails));
+        Assert.IsTrue(BurnWarpModes.AllowsRails(BurnWarpMode.Rails));
+    }
+
+    [Test]
+    public void Default_IsRails_AndTheOldPhysicsAndRailsValueReadsAsTheDefault()
+    {
+        Assert.AreEqual(BurnWarpMode.Rails, BurnWarpModes.Default);
+        // A settings file saved before 26w46a may hold "PhysicsAndRails": it no longer parses, so
+        // the setting reads its default (Rails). "Off" and "Physics" are kept as the player chose.
+        Assert.IsFalse(System.Enum.TryParse<BurnWarpMode>("PhysicsAndRails", out _));
+        Assert.IsTrue(System.Enum.TryParse<BurnWarpMode>("Off", out var off));
+        Assert.AreEqual(BurnWarpMode.Off, off);
     }
 
     [Test]
@@ -26,5 +37,6 @@ public class BurnWarpModeTests
     {
         Assert.AreEqual(System.Enum.GetValues(typeof(BurnWarpMode)).Length, BurnWarpModes.Labels.Split(';').Length);
         StringAssert.Contains("1x", BurnWarpModes.Describe(BurnWarpMode.Off));
+        StringAssert.Contains("native", BurnWarpModes.Labels);
     }
 }

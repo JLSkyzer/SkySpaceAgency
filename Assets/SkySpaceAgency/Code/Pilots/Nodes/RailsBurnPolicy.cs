@@ -9,16 +9,18 @@ namespace K2D2.Node
         // Game seconds of burn left: remaining Δv / current acceleration.
         public double BurnLeftGameSeconds;
         // Game seconds the active stage can still burn: off rails the stage's
-        // OdeSolverStageComponent.MaxPossibleBurnTime (what the game's precomputed burn uses), on
-        // rails the precomputed burn's end (GetEndBurnOrbit().EndUT) minus now.
+        // OdeSolverStageComponent.MaxPossibleBurnTime, on rails the game's burn end (the lit
+        // engines' propellant, GetEndBurnOrbit().EndUT) minus now.
         public double StageBurnLeftSeconds;
         // Real seconds aligned within MaxAlignDeg at a steady full throttle, without a break.
         public double AlignedSteadyRealSeconds;
         // Off rails: predicted largest angle (degrees) between the fixed burn direction (the
         // Δv-to-go now) and the ideal one until the planned exit (PredictAimDrift). On rails: the
-        // angle between the direction fixed at entry and the Δv-to-go now. NaN: unknown.
+        // angle between the direction fixed at entry and the Δv-to-go now. NaN: unknown. The
+        // vessel does not turn on rails, so the game's burn keeps the entry direction.
         public double AimDriftDegAtExit;
-        // TargetOrbitBurn.allow_rails_warp (false for landing and reentry burns).
+        // The burn's mode is Rails, with TargetOrbitBurn.allow_warp and allow_rails_warp (false for
+        // landing and reentry burns).
         public bool RailsAllowed;
         // In the atmosphere, or the path down to the planned exit below the game's surface
         // envelope (EnvelopeAltitude).
@@ -28,13 +30,20 @@ namespace K2D2.Node
         // This burn put the warp on rails, and it is still there (index above the physics range,
         // physics mode off).
         public bool CurrentlyOnRails;
-        // The game's precomputed burn is running (RailsBurn.GuardOk). Null: not read yet.
+        // The game flies the burn (RailsBurn.GuardOk: IsOrbitalPhysicsUnderThrustActive). Null:
+        // not read yet.
         public bool? GuardOk;
-        // The game has not switched to its burn yet (IsOrbitalPhysicsUnderThrustActive still
-        // false): the only failed guard that may wait, until frame GuardFrames.
+        // The game has not taken the burn yet (IsOrbitalPhysicsUnderThrustActive still false):
+        // the only failed guard that may wait, until frame GuardFrames.
         public bool GuardPending;
         // Real frames since TryEnter (the entry frame is 0).
         public int FramesSinceRailsEntry;
+        // Game seconds since TryEnter.
+        public double RailsGameSeconds;
+        // Thrust acceleration (m/s²) measured on the trajectory the game flies (smoothed), and the
+        // one modelled from the entry thrust and mass flow. NaN: unknown.
+        public double MeasuredAccel;
+        public double ModelledAccel;
         // The game's warp rates (TimeWarp.GetWarpRates, index 0 = 1x).
         public float[] Rates;
         // Real seconds of the last frame (Time.unscaledDeltaTime).
@@ -54,30 +63,32 @@ namespace K2D2.Node
     public struct RailsStep
     {
         public RailsAction Action;
-        // EnterRails: the rails index. StepDown: LowRailsIndex. LeaveRails, DropGuard: 0. Stay:
+        // EnterRails: the rails index. StepDown: one index lower. LeaveRails, DropGuard: 0. Stay:
         // the current index.
         public int WantedIndex;
         public string Reason;
     }
 
     /// <summary>
-    /// Rails warp for long burns, with the game's own precomputed burn. Pure, tested in the
-    /// EditMode tests (RailsBurnPolicyTests).
+    /// The game's native rails warp during a burn, as a native maneuver node uses it: ignition and
+    /// the end of the burn at 1x in closed loop, the middle on rails. Pure, tested in the EditMode
+    /// tests (RailsBurnPolicyTests).
     ///
-    /// In the IL (Redux 26w42c, Ksp2Redux.dll): when the warp goes past the physics range with
-    /// physics mode off, VesselBehavior.OnUniverseTimeScaleChanged switches the vessel to Orbital,
-    /// and VesselComponent.SetModelPhysicsMode(Orbital) calls HandleOrbitalPhysicsUnderThrustStart
-    /// when IsUnderEngineThrust (an engine force with a non-zero RelativeForce). That burn is
-    /// solved once: the active stage's first OdeSolverStageComponent (flow, exhaust velocity in a
-    /// fixed direction), from now to now + MaxPossibleBurnTime, so it keeps one direction, ignores
-    /// steering and throttle, and stops at the stage's burnout. Back to RigidBody ends it
-    /// (HandleOrbitalPhysicsUnderThrustEnd). The burn's start and end therefore stay in physics
-    /// warp, where the closed loop steers.
+    /// In the IL (Redux 26w46a, Ksp2Redux.dll, read on 2026-11-15): entering rails with physics
+    /// mode off switches the vessel to Orbital, and VesselComponent.SetModelPhysicsMode(Orbital)
+    /// calls HandleOrbitalPhysicsUnderThrustStart when an engine pushes or is commanded to. It
+    /// builds the burn from the lit engines (TryBuildTrackedEngineBurn: their thrust, direction
+    /// and mass flow, until their propellant runs out), sets IsOrbitalPhysicsUnderThrustActive only
+    /// on success, rebuilds it each frame the thrust (direction included) or the mass flow changes
+    /// (OnUpdateOrbitUnderThrust), and ends it when no engine pushes or asks to, or when its
+    /// trajectory starts away from the conic. The vessel does not turn on rails: the burn keeps the
+    /// direction it had at entry. Back to RigidBody ends it (HandleOrbitalPhysicsUnderThrustEnd).
+    /// In 26w42c it was solved once from the stage's data, kept to the stage's burnout whatever the
+    /// engines did, and reported active even when it built nothing: hence the old 120 s threshold
+    /// and the three-part guard, both gone.
     /// </summary>
     public static class RailsBurnPolicy
     {
-        // Rails only with more than this much game time of burn left.
-        public const double MinBurnLeft = 120;
         // Aligned within this angle (degrees) for MinSteadySeconds of real time.
         public const double MaxAlignDeg = 1;
         public const double MinSteadySeconds = 1;
@@ -94,18 +105,26 @@ namespace K2D2.Node
         // at the current rate.
         public const double StepDownRealSeconds = 5;
         // The rails stretch lasts at least this much real time at the chosen rate.
-        public const double MinRealSeconds = 15;
-        // Rails indices used: x10 and x50 in the game's table.
+        public const double MinRealSeconds = 8;
+        // Rails indices used: x10 to x100 in the game's table (the game lowers the rate itself
+        // near the end of its burn, TimeWarp.ClampRateToOrbitTransitions).
         public const int LowRailsIndex = 3;
-        public const int HighRailsIndex = 4;
+        public const int HighRailsIndex = 5;
         // The guard must hold from this frame after the entry.
-        public const int GuardFrames = 2;
+        public const int GuardFrames = 3;
+        // After this much game time and PushCheckFrames frames on rails (at x100 a frame is 2 s of
+        // game time, and the game's first updates still run on the conic), a measured acceleration
+        // under MinPushShare of the modelled one means the game's burn does not push: back to 1x.
+        public const double PushCheckSeconds = 3;
+        public const int PushCheckFrames = 10;
+        public const double MinPushShare = 0.5;
 
         /// <summary>
-        /// Rails decision for this frame. Off rails: EnterRails at the highest of x50 and x10
-        /// leaving MinRealSeconds of real time before the planned exit, when every condition
+        /// Rails decision for this frame. Off rails: EnterRails at the highest rate from x100 down
+        /// to x10 leaving MinRealSeconds of real time before the planned exit, when every condition
         /// holds. On rails: DropGuard when the game's burn is not confirmed by frame GuardFrames
-        /// (or lost later), LeaveRails at the exit margins or when a safety input turns, else Stay.
+        /// (or lost later) or does not push, LeaveRails at the exit margins or when a safety input
+        /// turns, StepDown one index at a time near the exit, else Stay.
         /// </summary>
         public static RailsStep Decide(RailsInputs i)
         {
@@ -125,8 +144,8 @@ namespace K2D2.Node
                 return Stay(current, "in the atmosphere or below the surface envelope");
             if (current > PhysicsWarpPolicy.MaxPhysicsIndex)
                 return Stay(current, "not in physics warp or at 1x");
-            if (!(i.BurnLeftGameSeconds > MinBurnLeft))
-                return Stay(current, $"{i.BurnLeftGameSeconds:n0} s of burn left (rails above {MinBurnLeft:n0} s)");
+            if (!(i.BurnLeftGameSeconds > 0))
+                return Stay(current, "no burn time left");
             if (!(i.AlignedSteadyRealSeconds >= MinSteadySeconds))
                 return Stay(current, $"not steady yet ({i.AlignedSteadyRealSeconds:n1} s aligned within {MaxAlignDeg}°)");
             if (!(i.AimDriftDegAtExit < MaxAimDriftDeg))
@@ -147,7 +166,7 @@ namespace K2D2.Node
                         Reason = $"x{rate:0}: {stretch:n0} s to the exit, {stretch / rate:n1} s real",
                     };
             }
-            return Stay(current, $"{planned:n0} s to the planned exit: under {MinRealSeconds:n0} s real even at x{RateAt(i.Rates, LowRailsIndex):0}");
+            return Stay(current, $"{planned:n0} s to the planned exit: under {MinRealSeconds:n0} s real even at x{RateAt(i.Rates, LowRailsIndex):0}, stays at 1x");
         }
 
         static RailsStep DecideOnRails(RailsInputs i)
@@ -158,11 +177,16 @@ namespace K2D2.Node
             if (i.GuardOk != true)
             {
                 if (i.GuardPending && i.FramesSinceRailsEntry < GuardFrames)
-                    return Stay(current, "waiting for the guard");
+                    return Stay(current, "waiting for the game to take the burn");
                 return new RailsStep { Action = RailsAction.DropGuard, WantedIndex = 0,
-                    Reason = i.GuardPending ? "the game did not start its precomputed burn in time"
-                        : i.GuardOk == false ? "the game's precomputed burn has no trajectory or patch" : "the guard was not read" };
+                    Reason = i.GuardPending ? "the game is not flying the burn (orbital physics under thrust inactive)"
+                        : "the guard was not read" };
             }
+            if (i.RailsGameSeconds >= PushCheckSeconds && i.FramesSinceRailsEntry >= PushCheckFrames && i.ModelledAccel > 0 && i.MeasuredAccel >= 0
+                && i.MeasuredAccel < MinPushShare * i.ModelledAccel)
+                return new RailsStep { Action = RailsAction.DropGuard, WantedIndex = 0,
+                    Reason = $"the game's burn does not push: {i.MeasuredAccel:n3} m/s² measured on its trajectory for " +
+                        $"{i.ModelledAccel:n3} modelled after {i.RailsGameSeconds:n1} s" };
             if (!i.RailsAllowed)
                 return Leave("rails warp no longer allowed");
             if (i.NearTarget)
@@ -185,7 +209,7 @@ namespace K2D2.Node
             {
                 double left = PlannedRailsSeconds(i.BurnLeftGameSeconds, i.StageBurnLeftSeconds) - real - frame;
                 if (left / rate < StepDownRealSeconds)
-                    return new RailsStep { Action = RailsAction.StepDown, WantedIndex = LowRailsIndex,
+                    return new RailsStep { Action = RailsAction.StepDown, WantedIndex = Math.Max(LowRailsIndex, current - 1),
                         Reason = $"{left:n0} s to the exit at x{rate:0}: {left / rate:n1} s real" };
             }
             return Stay(current, "on rails");

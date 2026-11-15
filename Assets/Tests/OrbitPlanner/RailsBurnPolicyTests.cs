@@ -8,7 +8,7 @@ public class RailsBurnPolicyTests
     // The game's first warp levels (1x, x2, x4, x10, x50, ...).
     static readonly float[] Rates = { 1, 2, 4, 10, 50, 100, 1000 };
 
-    // A long, steady, aligned burn in physics warp, nothing in the way: eligible for rails warp.
+    // A long, steady, aligned burn at 1x, nothing in the way: eligible for rails warp.
     static RailsInputs Eligible()
     {
         return new RailsInputs
@@ -25,8 +25,11 @@ public class RailsBurnPolicyTests
             FramesSinceRailsEntry = 0,
             Rates = Rates,
             RealFrameSeconds = 0.02,
-            CurrentIndex = 2,
+            CurrentIndex = 0,
             RefusedBefore = false,
+            RailsGameSeconds = 0,
+            MeasuredAccel = double.NaN,
+            ModelledAccel = double.NaN,
         };
     }
 
@@ -38,31 +41,57 @@ public class RailsBurnPolicyTests
         i.CurrentIndex = index;
         i.GuardOk = true;
         i.FramesSinceRailsEntry = 100;
+        i.RailsGameSeconds = 100;
         return i;
     }
 
     [Test]
-    public void ShortBurn_StaysPhysics()
+    public void ShortBurn_StaysAt1x()
     {
+        // 100 s left: 85 s to the exit less 20 s (2 s real at x10): 6.5 s real, under 8 s.
         RailsInputs i = Eligible();
-        i.BurnLeftGameSeconds = 120;   // not more than 120 s
+        i.BurnLeftGameSeconds = 100;
         RailsStep step = RailsBurnPolicy.Decide(i);
         Assert.That(step.Action, Is.EqualTo(RailsAction.Stay));
-        Assert.That(step.Reason, Does.Contain("120"));
+        Assert.That(step.Reason, Does.Contain("real"));
+    }
+
+    [Test]
+    public void NoTwoMinuteThreshold_ABurnOfUnderTwoMinutesGoesOnRails()
+    {
+        // 26w46a: the game's rails burn follows the engines, so rails no longer waits for a long
+        // burn. 130 s left: 115 s to the exit less 20 s: 9.5 s real at x10.
+        RailsInputs i = Eligible();
+        i.BurnLeftGameSeconds = 130;
+        RailsStep step = RailsBurnPolicy.Decide(i);
+        Assert.That(step.Action, Is.EqualTo(RailsAction.EnterRails));
+        Assert.That(step.WantedIndex, Is.EqualTo(RailsBurnPolicy.LowRailsIndex));
     }
 
     [Test]
     public void LongSteadyBurn_EntersRailsAtHighestSafeRate()
     {
-        // 1000 s left: 985 s to the exit less 100 s (2 s real at x50): 17.7 s real at x50.
+        // 1000 s left: 985 s to the exit; x100 leaves 7.85 s real (under 8), x50 17.7 s: x50.
         RailsStep step = RailsBurnPolicy.Decide(Eligible());
         Assert.That(step.Action, Is.EqualTo(RailsAction.EnterRails));
         Assert.That(step.WantedIndex, Is.EqualTo(4));
 
-        // Also from 1x.
+        // 3000 s left: 2785 s at x100, 27.9 s real: x100, the highest rails index used.
         RailsInputs i = Eligible();
-        i.CurrentIndex = 0;
+        i.BurnLeftGameSeconds = 3000;
+        step = RailsBurnPolicy.Decide(i);
+        Assert.That(step.Action, Is.EqualTo(RailsAction.EnterRails));
+        Assert.That(step.WantedIndex, Is.EqualTo(RailsBurnPolicy.HighRailsIndex));
+        Assert.That(RailsBurnPolicy.HighRailsIndex, Is.EqualTo(5));
+
+        // Also from physics warp (the Physics mode never goes on rails, but the policy allows it).
+        i = Eligible();
+        i.CurrentIndex = 2;
         Assert.That(RailsBurnPolicy.Decide(i).Action, Is.EqualTo(RailsAction.EnterRails));
+
+        // Never from a rails index already set by someone else.
+        i.CurrentIndex = 3;
+        Assert.That(RailsBurnPolicy.Decide(i).Action, Is.EqualTo(RailsAction.Stay));
     }
 
     [Test]
@@ -141,9 +170,9 @@ public class RailsBurnPolicyTests
     }
 
     [Test]
-    public void GuardFailsWithin2Frames_DropsAndNeverRetries()
+    public void GuardFailsWithin3Frames_DropsAndNeverRetries()
     {
-        // Frame 1 after entering, the game has not switched yet (pending): wait.
+        // Frames 1 and 2 after entering, the game has not taken the burn yet (pending): wait.
         RailsInputs r = OnRails(4);
         r.GuardOk = false;
         r.GuardPending = true;
@@ -151,9 +180,11 @@ public class RailsBurnPolicyTests
         RailsStep step = RailsBurnPolicy.Decide(r);
         Assert.That(step.Action, Is.EqualTo(RailsAction.Stay));
         Assert.That(step.WantedIndex, Is.EqualTo(4));
-
-        // Frame 2, still pending (or never read): drop to 1x.
         r.FramesSinceRailsEntry = 2;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
+
+        // Frame 3, still pending (or never read): drop to 1x.
+        r.FramesSinceRailsEntry = 3;
         step = RailsBurnPolicy.Decide(r);
         Assert.That(step.Action, Is.EqualTo(RailsAction.DropGuard));
         Assert.That(step.WantedIndex, Is.EqualTo(0));
@@ -161,14 +192,15 @@ public class RailsBurnPolicyTests
         r.GuardPending = false;
         Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.DropGuard));
 
-        // Frame 0: the game switched (Active) but with no patch or still on the conic: at once.
+        // Frame 0: the guard unreadable (not pending): at once.
         RailsInputs now = OnRails(4);
         now.GuardOk = false;
         now.GuardPending = false;
         now.FramesSinceRailsEntry = 0;
         Assert.That(RailsBurnPolicy.Decide(now).Action, Is.EqualTo(RailsAction.DropGuard));
 
-        // A guard confirmed then lost (the game ended its burn) drops too.
+        // A guard confirmed then lost (the game ended its burn: no engine thrust, out of
+        // propellant, or its own consistency check) drops too.
         RailsInputs lost = OnRails(4);
         lost.GuardOk = false;
         Assert.That(RailsBurnPolicy.Decide(lost).Action, Is.EqualTo(RailsAction.DropGuard));
@@ -241,7 +273,7 @@ public class RailsBurnPolicyTests
 
         // Whatever the state, a frame that stays leaves room for two more of the longest frames
         // above the margins.
-        foreach (int index in new[] { 3, 4 })
+        foreach (int index in new[] { 3, 4, 5 })
             for (double left = 20; left < 1000; left += 0.5)
             {
                 RailsInputs s = OnRails(index);
@@ -288,18 +320,72 @@ public class RailsBurnPolicyTests
     }
 
     [Test]
-    public void RateLeavesFifteenRealSeconds()
+    public void GameBurnNotPushing_DropsToTheClosedLoop()
     {
-        // 600 s left: 585 s to the exit less 2 s real at the rate: 9.7 s real at x50 (too short),
-        // 56.5 s at x10: x10.
+        // The game took the burn (guard ok) but the trajectory does not speed up: after 3 s of game
+        // time a measured acceleration under half the modelled one drops to 1x at once.
+        RailsInputs r = OnRails(3);
+        r.ModelledAccel = 2;
+        r.MeasuredAccel = 0.1;
+        r.RailsGameSeconds = 5;
+        RailsStep step = RailsBurnPolicy.Decide(r);
+        Assert.That(step.Action, Is.EqualTo(RailsAction.DropGuard));
+        Assert.That(step.WantedIndex, Is.EqualTo(0));
+        Assert.That(step.Reason, Does.Contain("push"));
+
+        // Pushing as modelled (or a bit less): stay.
+        r.MeasuredAccel = 1.5;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
+
+        // Too early to judge (the game's startup frames run on the conic), or nothing measured.
+        r.MeasuredAccel = 0.1;
+        r.RailsGameSeconds = 2;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
+        r.RailsGameSeconds = 20;   // x100: 20 s of game time in 9 frames
+        r.FramesSinceRailsEntry = 9;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
+        r.FramesSinceRailsEntry = 10;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.DropGuard));
+        r.RailsGameSeconds = 5;
+        r.MeasuredAccel = double.NaN;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
+        r.MeasuredAccel = 0.1;
+        r.ModelledAccel = double.NaN;
+        Assert.That(RailsBurnPolicy.Decide(r).Action, Is.EqualTo(RailsAction.Stay));
+    }
+
+    [Test]
+    public void StepDown_OneIndexAtATime()
+    {
+        // x100 with under 5 s real to the exit: x50 next, never below x10.
+        RailsInputs r = OnRails(5);
+        r.BurnLeftGameSeconds = 600;   // 585 - 200 - 0.4 s: 3.8 s real at x100
+        RailsStep step = RailsBurnPolicy.Decide(r);
+        Assert.That(step.Action, Is.EqualTo(RailsAction.StepDown));
+        Assert.That(step.WantedIndex, Is.EqualTo(4));
+
+        RailsInputs low = OnRails(3);
+        low.BurnLeftGameSeconds = 60;
+        Assert.That(RailsBurnPolicy.Decide(low).Action, Is.Not.EqualTo(RailsAction.StepDown));
+    }
+
+    [Test]
+    public void RateLeavesEightRealSeconds()
+    {
+        // 400 s left: 385 s to the exit less 2 s real at the rate: 5.7 s real at x50 (too short),
+        // 36.5 s at x10: x10.
         RailsInputs i = Eligible();
-        i.BurnLeftGameSeconds = 600;
+        i.BurnLeftGameSeconds = 400;
         RailsStep step = RailsBurnPolicy.Decide(i);
         Assert.That(step.Action, Is.EqualTo(RailsAction.EnterRails));
         Assert.That(step.WantedIndex, Is.EqualTo(3));
 
-        // 160 s left: 145 - 20 s, 12.5 s real at x10: no rails.
-        i.BurnLeftGameSeconds = 160;
+        // 600 s left: 485 s at x50, 9.7 s real: x50.
+        i.BurnLeftGameSeconds = 600;
+        Assert.That(RailsBurnPolicy.Decide(i).WantedIndex, Is.EqualTo(4));
+
+        // 100 s left: 85 - 20 s, 6.5 s real at x10: no rails.
+        i.BurnLeftGameSeconds = 100;
         Assert.That(RailsBurnPolicy.Decide(i).Action, Is.EqualTo(RailsAction.Stay));
 
         // The stage limits the stretch too: 300 s of stage, 290 s to the exit, x10 only.

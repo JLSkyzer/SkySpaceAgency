@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using KSP.Game;
 using KSP.Sim;
 using KSP.Sim.DeltaV;
@@ -11,36 +10,32 @@ using ILogger = SpaceWarp2.API.Logging.ILogger;
 namespace K2D2.KSPService
 {
     /// <summary>
-    /// Drives the game's rails warp for a long burn, as decided by RailsBurnPolicy, checks that
-    /// the game's precomputed burn really runs, and reads the state from it.
+    /// Drives the game's native rails warp during a burn, as decided by RailsBurnPolicy, checks
+    /// that the game flies the burn, and reads the state from it.
     ///
-    /// Game members used (Ksp2Redux.dll, Redux 26w42c, read with Cecil on 2026-10-25):
-    /// - public: TimeWarp.ToggleTimeWarpMode(bool), SetRateIndex(int, bool) (clamped to
-    ///   GetMaxRateIndex, true only when the index asked is granted), GetWarpRates(),
-    ///   CurrentRateIndex, IsPhysicsTimeWarp; VesselComponent.IsOrbitalPhysicsUnderThrustActive,
-    ///   Orbiter, GetEndBurnOrbit(), VesselDeltaV; OrbiterComponent.PatchedOrbit and
-    ///   PatchedConicsOrbit; IOrbit.GetRelativePositionAtUTZup / GetOrbitalVelocityAtUTZup /
-    ///   referenceBody; IPatchedOrbit.EndUT; VesselDeltaVComponent.TryGetOdeSolverStageComponents
-    ///   with DeltaVExtensions.CurrentStage; OdeSolverStageComponent.MaxPossibleBurnTime.
-    /// - private, by reflection (cached, a failure fails the guard): VesselComponent._numBurnPatches
-    ///   (int), set to the number of solved burn patches by HandleOrbitalPhysicsUnderThrustStart and
-    ///   to 0 by HandleOrbitalPhysicsUnderThrustEnd.
+    /// Game members used (all public, in the 26w42c imports the mod builds against and in the
+    /// 26w46a game): TimeWarp.ToggleTimeWarpMode(bool), SetRateIndex(int, bool) (clamped to
+    /// GetMaxRateIndex, true only when the index asked is granted), GetWarpRates(),
+    /// CurrentRateIndex, IsPhysicsTimeWarp; VesselComponent.IsOrbitalPhysicsUnderThrustActive,
+    /// Orbiter, GetEndBurnOrbit(), VesselDeltaV; OrbiterComponent.PatchedOrbit;
+    /// IOrbit.GetRelativePositionAtUTZup / GetOrbitalVelocityAtUTZup / referenceBody;
+    /// IPatchedOrbit.StartUT / EndUT; VesselDeltaVComponent.TryGetOdeSolverStageComponents with
+    /// DeltaVExtensions.CurrentStage; OdeSolverStageComponent.MaxPossibleBurnTime.
     ///
-    /// Facts from the IL: HandleOrbitalPhysicsUnderThrustStart sets IsOrbitalPhysicsUnderThrustActive
-    /// first, then returns early with no patch when the stage has no OdeSolverStageComponent (the
-    /// silent case the guard is for); on success Orbiter.PatchedOrbit becomes PatchedNBodyOrbits[0]
-    /// (a PatchedNBodyOrbit, interpolated from the ODE solution) instead of PatchedConicsOrbit,
-    /// and OrbiterComponent.PublishOrbitState writes the burn state back into PatchedConicsOrbit
-    /// each frame. Its last patch ends at the stage's burnout (StartUT + MaxPossibleBurnTime).
-    /// With PhysicsSettings.DisableTimeWarpWhileUnderThrust, GetMaxRateIndexInternal allows only
-    /// index 0 under thrust out of physics mode: SetRateIndex then refuses rails.
+    /// Facts from the 26w46a IL (2026-11-15): HandleOrbitalPhysicsUnderThrustStart sets
+    /// IsOrbitalPhysicsUnderThrustActive only once it has built a burn from the lit engines, so
+    /// that flag alone is the guard (in 26w42c it turned true even when nothing was built, hence
+    /// the old three-part guard and the reflection on _numBurnPatches). Orbiter.PatchedOrbit is the
+    /// conic for at most two startup updates, then the burn's PatchedNBodyOrbit; the flag goes back
+    /// to false when no engine pushes or asks to, when the propellant runs out, or when the burn's
+    /// trajectory does not start on the conic. GetEndBurnOrbit() is the burn's last patch, which
+    /// ends when the lit engines' propellant does. With
+    /// PhysicsSettings.DisableTimeWarpWhileUnderThrust, GetMaxRateIndexInternal allows only index 0
+    /// under thrust out of physics mode: SetRateIndex then refuses rails.
     /// </summary>
     public class RailsBurn
     {
         static TimeWarp Tw => GameManager.Instance?.Game?.ViewController?.TimeWarp;
-
-        static FieldInfo num_burn_patches;
-        static bool reflection_tried;
 
         readonly ILogger logger;
         readonly Func<string> log_tag;
@@ -94,7 +89,7 @@ namespace K2D2.KSPService
 
         /// <summary>
         /// Switches physics mode off and asks the game for index (instant, so the vessel goes
-        /// Orbital and the game solves its burn right away). True when the game granted that very
+        /// Orbital and the game builds its burn right away). True when the game granted that very
         /// index with physics mode off. On a refusal the warp goes back to 1x at once (an index
         /// clamped into the physics range without physics mode would be rails warp too).
         /// </summary>
@@ -124,7 +119,7 @@ namespace K2D2.KSPService
             RefusedBySetting = DisableTimeWarpWhileUnderThrust;
             if (RefusedBySetting)
                 logger?.LogWarning($"{Prefix} refused: the game's DisableTimeWarpWhileUnderThrust setting is on, so it allows no " +
-                    "warp under thrust out of physics mode; burns stay in physics warp");
+                    "warp under thrust out of physics mode; the burn stays at 1x");
             else
                 logger?.LogWarning($"{Prefix} refused by the game: asked index {index}, got index {TimeWarpTools.CurrentRateIndex} " +
                     $"(physics mode {(PhysicsMode ? "on" : "off")}): back to 1x");
@@ -169,8 +164,8 @@ namespace K2D2.KSPService
         }
 
         /// <summary>
-        /// Back to 1x (instant): the vessel goes RigidBody, the game ends its precomputed burn,
-        /// and the physics warp takes over again on the next frame. Does nothing when not entered.
+        /// Back to 1x (instant): the vessel goes RigidBody, the game ends its burn, and the closed
+        /// loop steers again on the next frame. Does nothing when not entered.
         /// </summary>
         public void Leave()
         {
@@ -191,26 +186,10 @@ namespace K2D2.KSPService
             RefusedBySetting = false;
         }
 
-        static int? NumBurnPatches(VesselComponent v)
-        {
-            if (!reflection_tried)
-            {
-                reflection_tried = true;
-                num_burn_patches = typeof(VesselComponent).GetField("_numBurnPatches", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (num_burn_patches == null || num_burn_patches.FieldType != typeof(int))
-                    num_burn_patches = null;
-            }
-            if (num_burn_patches == null || v == null)
-                return null;
-            try { return (int)num_burn_patches.GetValue(v); }
-            catch (Exception) { return null; }
-        }
-
         /// <summary>
-        /// The three checks: IsOrbitalPhysicsUnderThrustActive, Orbiter.PatchedOrbit is the burn
-        /// trajectory (a PatchedNBodyOrbit, not PatchedConicsOrbit), and _numBurnPatches > 0.
-        /// Anything unreadable fails. pending: the game has not switched yet (Active still false),
-        /// the only failure that may wait. detail: the values, for the log.
+        /// The guard: the game flies the burn (IsOrbitalPhysicsUnderThrustActive, true in 26w46a
+        /// only once it built a burn from the lit engines). pending: not yet, the only failure that
+        /// may wait a few frames. Unreadable fails. detail: the values, for the log.
         /// </summary>
         public bool GuardOk(out string detail, out bool pending)
         {
@@ -227,11 +206,8 @@ namespace K2D2.KSPService
                 bool active = v.IsOrbitalPhysicsUnderThrustActive;
                 pending = !active;
                 IPatchedOrbit patched = orbiter.PatchedOrbit;
-                bool trajectory = patched is PatchedNBodyOrbit && !ReferenceEquals(patched, orbiter.PatchedConicsOrbit);
-                int? patches = NumBurnPatches(v);
-                detail = $"under-thrust {(active ? "active" : "inactive")}, PatchedOrbit {(patched == null ? "null" : patched.GetType().Name)}" +
-                    $"{(trajectory ? " (burn trajectory)" : "")}, burn patches {(patches.HasValue ? patches.Value.ToString() : "unreadable")}";
-                return active && trajectory && patches.HasValue && patches.Value > 0;
+                detail = $"under-thrust {(active ? "active" : "inactive")}, PatchedOrbit {(patched == null ? "null" : patched.GetType().Name)}";
+                return active;
             }
             catch (Exception e)
             {
@@ -241,8 +217,10 @@ namespace K2D2.KSPService
         }
 
         /// <summary>
-        /// State (Zup, relative to the reference body) at ut from Orbiter.PatchedOrbit, the burn
-        /// trajectory while on rails. False when it is not a PatchedNBodyOrbit or ut is outside it.
+        /// State (Zup, relative to the reference body) at ut from Orbiter.PatchedOrbit: the burn's
+        /// trajectory while the game flies it, the conic otherwise (its startup updates, or a game
+        /// that does not take the burn, which the measured acceleration then shows). False when ut
+        /// is outside it or a value is not finite.
         /// </summary>
         public bool TryReadState(double ut, out Vector3d r, out Vector3d v, out double mu)
         {
@@ -250,12 +228,12 @@ namespace K2D2.KSPService
             mu = double.NaN;
             try
             {
-                OrbiterComponent orbiter = vessel?.Invoke()?.Orbiter;
-                if (!(orbiter?.PatchedOrbit is PatchedNBodyOrbit burn) || ut < burn.StartUT || ut > burn.EndUT)
+                IPatchedOrbit orbit = vessel?.Invoke()?.Orbiter?.PatchedOrbit;
+                if (orbit == null || ut < orbit.StartUT || ut > orbit.EndUT)
                     return false;
-                r = burn.GetRelativePositionAtUTZup(ut);
-                v = burn.GetOrbitalVelocityAtUTZup(ut);
-                mu = burn.referenceBody.gravParameter;
+                r = orbit.GetRelativePositionAtUTZup(ut);
+                v = orbit.GetOrbitalVelocityAtUTZup(ut);
+                mu = orbit.referenceBody.gravParameter;
                 return !double.IsNaN(r.x + r.y + r.z + v.x + v.y + v.z) && mu > 0;
             }
             catch (Exception)
@@ -264,14 +242,13 @@ namespace K2D2.KSPService
             }
         }
 
-        /// <summary>UT at which the game's precomputed burn ends (its last patch: the stage's burnout). NaN when none.</summary>
+        /// <summary>UT at which the game's burn ends (its last patch: the lit engines' propellant). NaN when it flies none.</summary>
         public double BurnEndUT()
         {
             try
             {
                 VesselComponent v = vessel?.Invoke();
-                int? patches = NumBurnPatches(v);
-                if (v == null || !(patches > 0))
+                if (v == null || !v.IsOrbitalPhysicsUnderThrustActive)
                     return double.NaN;
                 IPatchedOrbit end = v.GetEndBurnOrbit();
                 return end != null ? end.EndUT : double.NaN;
@@ -283,9 +260,8 @@ namespace K2D2.KSPService
         }
 
         /// <summary>
-        /// Game seconds the active stage can burn, as the game's precomputed burn would take it:
-        /// the first OdeSolverStageComponent of VesselDeltaV's current stage, MaxPossibleBurnTime.
-        /// 0 when the game has none (it would then start no burn at all).
+        /// Game seconds the active stage can burn: the first OdeSolverStageComponent of
+        /// VesselDeltaV's current stage, MaxPossibleBurnTime. 0 when the game has none.
         /// </summary>
         public double StageBurnSeconds()
         {
@@ -308,8 +284,8 @@ namespace K2D2.KSPService
 
         /// <summary>
         /// Maneuver nodes on the vessel (ManeuverPlanComponent.GetNodes), -1 when unreadable, for
-        /// the entry log. In the IL only VesselComponent touches Orbiter.PatchedNBodyOrbits, and
-        /// the mod's pilots change nodes only once the burn is finished (rails already left).
+        /// the entry log. The mod's pilots change nodes only once the burn is finished (rails
+        /// already left).
         /// </summary>
         public int ManeuverNodeCount()
         {
@@ -322,13 +298,6 @@ namespace K2D2.KSPService
             {
                 return -1;
             }
-        }
-
-        /// <summary>The reflection target could be bound (for the logs).</summary>
-        public static string ReflectionStatus()
-        {
-            NumBurnPatches(null);
-            return num_burn_patches != null ? "VesselComponent._numBurnPatches bound" : "VesselComponent._numBurnPatches NOT found";
         }
     }
 }

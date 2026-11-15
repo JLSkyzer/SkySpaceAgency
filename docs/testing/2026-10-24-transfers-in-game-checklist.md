@@ -82,7 +82,7 @@ From within 2 km, press "Dock only" (or use "Rendezvous + dock" from further awa
 ## 12. Physics warp during burns
 During a long burn (the Duna injection, for example), the mod should go to x2 and then x4. Look for `[TargetOrbitBurn] physics warp: …` lines: the vessel stays RigidBody and steers normally. The warp level the game reports should be x4. If you press rails warp by hand during the burn, the mod must bring it back to physics or to 1x. After the burn, your usual warp mode is back.
 
-## 13. Rails warp on long burns
+## 13. Rails warp on long burns (replaced by section 18 since Redux 26w46a)
 Use a burn of more than 2 minutes, for example on a low-thrust stage. Check:
 - `[TargetOrbitBurn] rails burn:` entry at x10 or x50, then the guard result (trajectory found, at least one patch);
 - the exit back to x4 before the end, then the closed loop finishing the burn;
@@ -133,3 +133,18 @@ Lines to read: `[Landing] deorbit: …` (plan, start check, phases) and `[Landin
    - In the air, the row is "Hottest Engine". The guard starts only on an engine (`guard on in …: engine …`). Watch whether the battery really burns: the model expects it far hotter than the game will make it (no shock-cone shading in the model).
 2. **Lift "Prepare transfer"** on the pad, target Duna: after `[Lift] plan: …`, `[Lift] pad wait: throttle 1 cut to 0 …` (when the throttle was up), then the clock warps (no `[Warp] waiting for the engines …` line every 5 s), drops to 1x about 30 s before the launch, and the first stage fires at T-0 at full throttle.
    - The target list starts with Moho: Kerbol is no longer offered (Lift and Transfer tabs).
+
+## 18. Native rails warp during burns (Redux 26w46a, default "Rails (native)")
+Node tab → ADVANCED → "Warp during burns" should read **Rails (native)** (also after an old settings file that said "Physics + rails"). Each burn logs `burn warp mode: rails (native warp for the middle of the burn, 1x at both ends)`.
+1. **A transfer injection** (Kerbin → Duna, or a long Mun injection) with a stage that can pay it:
+   - ignition at 1x, then after about 1 s aligned: `[TargetOrbitBurn] rails burn: entering index … (x10, x50 or x100) …` with the burn left and the planned Δv on rails;
+   - `rails burn: guard ok at frame …: under-thrust active, PatchedOrbit PatchedNBodyOrbit; the game's burn ends in … s`;
+   - near the end `rails burn: step down to index …`, then `rails burn: leaving (… s of burn left …)` with `Δv applied … m/s, planned … m/s` (they should agree within a few %), and the closed loop finishes at 1x on the target orbit;
+   - no `[Transfer] state mismatch after the burn` and no `about … m/s nobody commanded`; the SOI change happens when predicted.
+2. **Fuel**: compare the Δv used with the same burn at 1x (or the planned Δv): no large loss as on 2026-10-24.
+3. **Fallback**: if a `rails burn: the game does not take the burn …` line appears, the warp must be back at 1x at once and the burn must finish normally. Note which reason it gives (not flying the burn, or does not push).
+4. **A short burn** (under about 115 s) stays at 1x for its whole length: a `rails burn` line must not appear.
+5. **Never on rails**: Land tab (deorbit, Brake, precision, reentry), a Rendezvous burn within 2 km of the target, docking, a Lift circularization while still in the atmosphere. None may log `rails burn: entering`.
+6. **Stop mid-stretch**: press Stop (or switch vessel) while on rails: the warp must come back to 1x at once (`physics warp: the burn was not updated this frame …`), with no burn going on by itself.
+7. **Native node by hand** (no pilot): create a node, start the burn by hand, rails warp: the mod must not drop the warp (no `[Warp] the game started a burn under rails warp that we did not ask for`). After cutting the throttle, a coast warp still waits about 1 s (`[Warp] waiting for the engines to stop …`).
+8. **The other modes**: "Off (1x)" never warps while the engines push; "Physics (x4)" goes to x2 then x4 as in section 12 and never on rails.

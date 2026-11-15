@@ -14,6 +14,12 @@ namespace K2D2
     /// warp was asked right after a burn ended, while an engine still produced force (throttle
     /// response, spool-down). The game then ran HandleOrbitalPhysicsUnderThrustStart and flew a
     /// precomputed burn with that flow under warp: +8.5 m/s nobody commanded, until it cut the warp.
+    ///
+    /// Still kept in Redux 26w46a (IL read on 2026-11-15): SetModelPhysicsMode(Orbital) still
+    /// starts a burn when IsUnderEngineThrust (any engine force left), and TryBuildTrackedEngineBurn
+    /// builds it from that residual thrust. The burn now ends once no engine thrusts, but how fast
+    /// that happens depends on the engines' thrust being updated on rails, which the IL alone does
+    /// not show. The gate costs one second of 1x after a burn.
     /// </summary>
     public sealed class EngineQuietTimer
     {
@@ -66,10 +72,12 @@ namespace K2D2
 
         /// <summary>
         /// The game flies a burn under rails warp (orbital physics under thrust) that no rails burn of
-        /// ours asked for: drop to 1x.
+        /// ours asked for, with the throttle at 0 (nobody commands it: a residual engine force when
+        /// the warp started): drop to 1x. A burn with the throttle up is the player's own (a native
+        /// node under warp, which works since Redux 26w46a): left to the game.
         /// </summary>
-        public static bool DropUnaskedRailsBurn(int index, bool physicsMode, bool underThrustOnRails, bool railsBurnAsked) =>
-            index > 0 && !physicsMode && underThrustOnRails && !railsBurnAsked;
+        public static bool DropUnaskedRailsBurn(int index, bool physicsMode, bool underThrustOnRails, bool railsBurnAsked, float throttle) =>
+            index > 0 && !physicsMode && underThrustOnRails && !railsBurnAsked && !(throttle > 0);
     }
 
     /// <summary>
@@ -127,7 +135,7 @@ namespace K2D2
                 if (tw == null)
                     return;
                 bool physics = tw.IsPhysicsTimeWarp;
-                if (WarpGatePolicy.DropUnaskedRailsBurn(tw.CurrentRateIndex, physics, vessel.IsOrbitalPhysicsUnderThrustActive, RailsBurnAsked))
+                if (WarpGatePolicy.DropUnaskedRailsBurn(tw.CurrentRateIndex, physics, vessel.IsOrbitalPhysicsUnderThrustActive, RailsBurnAsked, throttle))
                 {
                     tw.SetRateIndex(0, true);
                     log.LogWarning($"[Warp] the game started a burn under rails warp that we did not ask for: dropped (throttle {throttle:0.##}, {forces} engine force(s))");

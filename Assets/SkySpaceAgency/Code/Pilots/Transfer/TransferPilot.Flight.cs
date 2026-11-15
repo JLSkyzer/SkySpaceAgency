@@ -452,6 +452,10 @@ namespace K2D2.Transfer
             if (!burn_ignited && burn.mode == TargetOrbitBurn.Mode.Burn)
             {
                 burn_ignited = true;
+                // The engines push again: the Δv accounting of the previous burn ends here, so the
+                // physics switches of a rails stretch in this burn are not taken for a burn nobody
+                // commanded (WatchPhysics).
+                burn_end_ut = double.NaN;
                 Save();
             }
             if (burn.failure_reason != null)
