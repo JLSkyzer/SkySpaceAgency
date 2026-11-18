@@ -220,7 +220,7 @@ namespace K2D2.Transfer
         /// </summary>
         public void ChoosePlan(bool assist)
         {
-            if (isRunning || job.Running || Choice == null)
+            if (isRunning || job.Running || Choice == null || (Current != Choice.Direct && Current != Choice.Assist))
                 return;
             var plan = assist ? (Choice.Offered ? Choice.Assist : null) : Choice.Direct;
             if (plan == null || !plan.Ok)
@@ -430,7 +430,10 @@ namespace K2D2.Transfer
             int flyby = plan.FlybyBody;
             if (flyby < 0 || flyby >= snap.System.Count)
                 return false;
-            var route = TransferFlight.RouteAssistResume(plan, resumed.StepIndex, snap.Body, periapsisAhead);
+            var body = snap.System[snap.Body];
+            var el = OrbitMath.Elements(snap.R, snap.V, body.Mu);
+            bool closed = el.IsClosed && el.ApoapsisRadius < body.Soi;
+            var route = TransferFlight.RouteAssistResume(plan, resumed.StepIndex, snap.Body, periapsisAhead, closedInDeparture: closed);
             string name = snap.System[flyby].Name;
             logger.LogInfo($"[Transfer] resume of an assist via {name}: route {route}");
             var system = snap.System;
@@ -455,7 +458,7 @@ namespace K2D2.Transfer
                         if (p.Ok)
                             return p;
                         why = p.Refusal;
-                        return TransferSearch.Find(system, q, ct, progress);
+                        return TransferSearch.FindFromExit(system, q, ct, progress);
                     }, replanned =>
                     {
                         OnPlanned(replanned, system, stages, resumed);
@@ -469,7 +472,13 @@ namespace K2D2.Transfer
                     return true;
                 }
                 default:
-                    return false;
+                    // Past the flyby: the plain search, from the SOI exit when the path is still open.
+                    if (!TransferSearch.LeavesItsBody(system, q))
+                        return false;
+                    Status = $"Past the {name} flyby: planning the transfer to {resumed.ToBodyName} again from the {system[snap.Body].Name} SOI exit...";
+                    StartSearchJob(JobKind.Search, ct => TransferSearch.FindFromExit(system, q, ct, progress),
+                        replanned => OnPlanned(replanned, system, stages, resumed));
+                    return true;
             }
         }
 
@@ -580,6 +589,7 @@ namespace K2D2.Transfer
 
         void Begin(TransferPlan plan, int stepIndex, bool prepareOnly, Snapshot snap, string why)
         {
+            Choice = null; // the choice is made: the tab shows the plan flown
             Current = plan;
             StepIndex = stepIndex;
             PrepareOnly = prepareOnly;

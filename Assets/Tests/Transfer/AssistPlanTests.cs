@@ -169,6 +169,16 @@ public class AssistPlanTests
         Assert.AreEqual(AssistResumeRoute.AfterFlyby, TransferFlight.RouteAssistResume(plan, 7, _kerbol, false));
     }
 
+    // Final review I1: burns flown but still in a closed orbit of the departure body (a plane change):
+    // the whole assist search again.
+    [Test]
+    public void RouteAssistResume_ClosedInTheDepartureBody_FullSearch()
+    {
+        var plan = SiblingPlan(300);
+        Assert.AreEqual(AssistResumeRoute.FullSearch, TransferFlight.RouteAssistResume(plan, 1, _kerbin, false, closedInDeparture: true));
+        Assert.AreEqual(AssistResumeRoute.BeforeFlyby, TransferFlight.RouteAssistResume(plan, 1, _kerbin, false, closedInDeparture: false));
+    }
+
     [Test]
     public void DecideResume_FlybyAhead_Replans()
     {

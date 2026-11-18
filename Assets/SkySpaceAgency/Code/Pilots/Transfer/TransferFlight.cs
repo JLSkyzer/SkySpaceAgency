@@ -735,17 +735,19 @@ namespace K2D2.Transfer
         }
 
         // A resume of a gravity-assist plan whose decision is Replan (4.6): where it stands.
-        //  - no burn flown yet: the whole search again (the assist search, the cheaper offer);
+        //  - no burn flown yet, or still in a closed orbit of the departure body (a plane change
+        //    flown, closedInDeparture): the whole search again (the assist search, the cheaper offer);
         //  - the flyby still ahead and the vessel outside the flyby body: cruising to it;
         //  - in the flyby body's SOI with the periapsis ahead: a new excess out, a new burn;
         //  - otherwise (past the periapsis, after the flyby): the plain search.
-        public static AssistResumeRoute RouteAssistResume(TransferPlan plan, int stepIndex, int currentBody, bool periapsisAhead)
+        public static AssistResumeRoute RouteAssistResume(TransferPlan plan, int stepIndex, int currentBody, bool periapsisAhead,
+            bool closedInDeparture = false)
         {
             bool flown = false;
             for (int i = 0; i < stepIndex && i < plan.Steps.Count; i++)
                 if (IsBurn(plan.Steps[i]))
                     flown = true;
-            if (!flown)
+            if (!flown || (closedInDeparture && plan.Request != null && currentBody == plan.Request.FromBody))
                 return AssistResumeRoute.FullSearch;
             int flyby = plan.Steps.FindIndex(st => st.Kind == StepKind.Flyby);
             if (currentBody == plan.FlybyBody)

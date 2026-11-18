@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using K2D2.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
@@ -25,6 +26,11 @@ namespace K2D2.Transfer
             if (q == null)
                 throw new ArgumentNullException(nameof(q));
             ct.ThrowIfCancellationRequested();
+            // Still in the departure body on the escape (after the injection): the cruise starts at the
+            // SOI exit, planned from there.
+            if (route == AssistResumeRoute.BeforeFlyby && flyby >= 0 && flyby < s.Count && q.FromBody != s[flyby].ParentIndex
+                && s[q.FromBody].ParentIndex == s[flyby].ParentIndex)
+                q = ExitRequest(s, q, out _) ?? q;
             var search = new Search(s, q, ct, null);
             TransferPlan plan;
             if (flyby < 0 || flyby >= s.Count)
@@ -41,6 +47,52 @@ namespace K2D2.Transfer
             return plan;
         }
 
+        // The plain search, except on an open path that leaves the vessel's body (a resume after a
+        // departure burn or a flyby periapsis, 4.6): the path is followed to the SOI exit as it is, and
+        // the plan made from there, with a warning. The plain search refuses such a path.
+        public static TransferPlan FindFromExit(BodySystem s, TransferRequest q, CancellationToken ct, IProgress<float> progress = null)
+        {
+            if (s == null)
+                throw new ArgumentNullException(nameof(s));
+            if (q == null)
+                throw new ArgumentNullException(nameof(q));
+            var exit = ExitRequest(s, q, out double exitUT);
+            if (exit == null)
+                return Find(s, q, ct, progress);
+            var plan = Find(s, exit, ct, progress);
+            if (plan.Ok)
+                plan.Warnings.Add(Inv($"Planned from the {s[q.FromBody].Name} SOI exit, in {KerbinCalendar.Duration(exitUT - q.UT0)}: the path until then is flown as it is."));
+            return plan;
+        }
+
+        // Whether q's path is open and leaves its body (FindFromExit plans from the SOI exit).
+        public static bool LeavesItsBody(BodySystem s, TransferRequest q) => s != null && q != null && ExitRequest(s, q, out _) != null;
+
+        // The request from the SOI exit of an open path that leaves q's body for its parent; null
+        // when the path is closed, already at the target, or does not leave.
+        static TransferRequest ExitRequest(BodySystem s, TransferRequest q, out double exitUT)
+        {
+            exitUT = double.NaN;
+            var B = s[q.FromBody];
+            if (q.FromBody == q.ToBody || B.ParentIndex < 0 || !Hyperbola.IsFinite(q.R0) || !Hyperbola.IsFinite(q.V0))
+                return null;
+            var el = OrbitMath.Elements(q.R0, q.V0, B.Mu);
+            if (el.IsClosed && el.ApoapsisRadius < B.Soi)
+                return null;
+            double horizon = q.UT0 + Finite(TimeToRadius(q.R0, q.V0, B.Mu, B.Soi), 0) * 1.2 + 3600;
+            var patches = PatchedPropagator.Propagate(s, q.FromBody, q.R0, q.V0, q.UT0, horizon, null, 3);
+            var after = patches.FirstOrDefault(p => p.Body == B.ParentIndex);
+            if (after == null || patches.Any(p => p.End == PatchEnd.Impact))
+                return null;
+            exitUT = after.StartUT;
+            return new TransferRequest
+            {
+                FromBody = after.Body, ToBody = q.ToBody, R0 = after.StartR, V0 = after.StartV, UT0 = after.StartUT, Arrival = q.Arrival,
+                ArrivalPeriapsisRadius = q.ArrivalPeriapsisRadius, ArrivalApoapsisRadius = q.ArrivalApoapsisRadius,
+                ArrivalInclinationDeg = q.ArrivalInclinationDeg, MaxTripSeconds = q.MaxTripSeconds, ArrivalPlaneNormal = q.ArrivalPlaneNormal,
+            };
+        }
+
         sealed partial class Search
         {
             const double ResumeLead = ExistingCorrectionLead;
@@ -51,7 +103,9 @@ namespace K2D2.Transfer
                 if (early != null)
                     return early.Ok ? Refuse(NoAssist("the vessel is not cruising")) : early;
                 var B = S[flyby];
-                if (From != Ancestor || B.ParentIndex != From || flyby == Down[0])
+                if (B.ParentIndex != Ancestor || flyby == Down[0])
+                    return Refuse(NoAssist($"{B.Name} is not a body on the way around {S[Ancestor].Name}"));
+                if (From != Ancestor)
                     return Refuse(NoAssist($"the vessel does not cruise around {S[B.ParentIndex].Name} toward {B.Name}"));
                 double left = flybyUT - Q.UT0, leg2 = arrivalUT - flybyUT;
                 if (!(left > ResumeLead) || !(leg2 > 0))
@@ -148,6 +202,9 @@ namespace K2D2.Transfer
                 if (CaseName != Siblings && CaseName != DifferentBranches)
                     return Refuse(NoAssist($"the case is {CaseName}"));
                 var B = S[flyby];
+                // A departure flyby (a moon of the departure body) has no sibling leg to re-plan here.
+                if (B.ParentIndex != Ancestor || flyby == Down[0])
+                    return Refuse(NoAssist($"{B.Name} is not a body on the way around {S[Ancestor].Name}"));
                 if (!(Vector3d.Dot(Q.R0, Q.V0) < 0) || VesselEl.IsClosed && VesselEl.ApoapsisRadius < B.Soi)
                     return Refuse(NoAssist($"no {B.Name} flyby periapsis ahead"));
                 int cT = Down[0];

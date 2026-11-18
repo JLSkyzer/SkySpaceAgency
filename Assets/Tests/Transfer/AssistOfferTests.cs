@@ -263,6 +263,79 @@ public class AssistOfferTests
         Assert.IsFalse(string.IsNullOrEmpty(resumed.Refusal));
     }
 
+    // ---------------------------------------------------------------- final review fixes
+
+    // C1: a departure flyby resumed in the moon's SOI is not a sibling flyby: refused with a reason
+    // (the glue then plans from the SOI exit), never re-planned across frames.
+    [Test]
+    public void ResumeAssist_DepartureFlyby_InMoonSoi_Refused()
+    {
+        var q = AssistSearchTests.FromLko(_s, _duna, AssistCases.DunaUT0);
+        int mun = _s["Mun"].Index;
+        var plan = TransferSearch.FindMoonDeparture(_s, q, mun, CancellationToken.None);
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        var flyby = plan.Steps.First(st => st.Kind == StepKind.Flyby);
+        var f = FlyTo(plan, flyby.UT - 600);
+        Assert.AreEqual(mun, f.Body, "inside the Mun's SOI, before the periapsis");
+        var resumed = TransferSearch.ResumeAssist(_s, From(f, plan.Request), AssistResumeRoute.InFlybySoi, mun, flyby.UT, plan.ArrivalUT, CancellationToken.None);
+        Out($"{resumed.Refusal}");
+        Assert.IsFalse(resumed.Ok);
+        StringAssert.Contains("not a body on the way", resumed.Refusal);
+        Assert.AreNotEqual(AssistKind.Sibling, resumed.Assist);
+    }
+
+    // I1: resumed after the injection, still in Kerbin's SOI on the escape: the assist is kept,
+    // planned from the SOI exit.
+    [Test]
+    public void ResumeAssist_BeforeFlyby_FromTheDepartureEscape()
+    {
+        var plan = Pinned();
+        var injection = plan.Steps.First(st => st.Kind == StepKind.Injection);
+        var flyby = plan.Steps.First(st => st.Kind == StepKind.Flyby);
+        var f = FlyTo(plan, injection.UT + 1000);
+        Assert.AreEqual(_kerbin, f.Body);
+        var resumed = TransferSearch.ResumeAssist(_s, From(f, plan.Request), AssistResumeRoute.BeforeFlyby, _eve, flyby.UT, plan.ArrivalUT, CancellationToken.None);
+        foreach (var st in resumed.Steps)
+            Out($"  leg {st.LegIndex} {st.Kind} {_s[st.Body].Name} {st.UT:F0} {st.DeltaVMagnitude:F1}");
+        Assert.IsTrue(resumed.Ok, resumed.Refusal);
+        Assert.AreEqual(AssistKind.Sibling, resumed.Assist);
+        Assert.AreEqual(_kerbol, resumed.Steps[0].Body);
+        Assert.GreaterOrEqual(resumed.Steps[0].UT, f.UT);
+        Assert.IsTrue(resumed.Steps.Any(st => st.Kind == StepKind.Flyby));
+    }
+
+    // I2: past the flyby periapsis, still in Eve's SOI on the way out: planned from the SOI exit.
+    [Test]
+    public void FindFromExit_AfterTheFlybyPeriapsis_PlansFromTheExit()
+    {
+        var plan = Pinned();
+        var flyby = plan.Steps.First(st => st.Kind == StepKind.Flyby);
+        var f = FlyTo(plan, flyby.UT + 3600);
+        Assert.AreEqual(_eve, f.Body);
+        var q = From(f, plan.Request);
+        Assert.IsFalse(TransferSearch.Find(_s, q, CancellationToken.None).Ok, "the plain search refuses an open path");
+        var next = TransferSearch.FindFromExit(_s, q, CancellationToken.None);
+        Out($"{(next.Ok ? FormattableString.Invariant($"{next.TotalDeltaV:F0} m/s") : next.Refusal)}; {string.Join(" | ", next.Warnings)}");
+        Assert.IsTrue(next.Ok, next.Refusal);
+        Assert.AreEqual(_kerbol, next.Request.FromBody);
+        Assert.Greater(next.Request.UT0, f.UT);
+        Assert.IsTrue(next.Warnings.Any(w => w.Contains("Eve SOI exit")));
+    }
+
+    // Answer 2 of the user (4.5 chain): the chosen plan and the alternative are written in the plan.
+    [Test]
+    public void Finder_On_NamesTheAlternative()
+    {
+        var plan = AssistSearch.Finder(true)(_s, ToMoho(), CancellationToken.None, null);
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.AreEqual(AssistKind.Sibling, plan.Assist);
+        var line = plan.Warnings.FirstOrDefault(w => w.StartsWith("Gravity assist:"));
+        Out($"{line}");
+        Assert.IsNotNull(line);
+        StringAssert.Contains("Via Eve", line);
+        StringAssert.Contains("Direct", line);
+    }
+
     // ---------------------------------------------------------------- the lines of the tab
 
     [Test]

@@ -40,8 +40,25 @@ namespace K2D2.Transfer
         // The plain search when the option is off, else the assist search's preselected plan (the 4.5
         // chain takes the cheaper offer by itself).
         public static TransferFinder Finder(bool useAssist) => useAssist
-            ? (TransferFinder)((s, q, ct, p) => Find(s, q, ct, p).Preselected)
+            ? (TransferFinder)((s, q, ct, p) => Chosen(Find(s, q, ct, p), s))
             : (s, q, ct, p) => TransferSearch.Find(s, q, ct, p);
+
+        // The 4.5 chain's plan (the user's answer 2): the preselected plan, with a line naming it and the
+        // alternative, so that the Rendezvous tab shows both.
+        static TransferPlan Chosen(AssistChoice choice, BodySystem s)
+        {
+            var plan = choice.Preselected;
+            if (plan == null || !plan.Ok || choice.Direct == null)
+                return plan;
+            var other = plan == choice.Assist ? choice.Direct : choice.Assist;
+            string Line(TransferPlan p) => TransferReadout.AssistLine(TransferReadout.AssistLabel(p, s), p, p == plan);
+            string text = other != null
+                ? $"Gravity assist: {Line(plan)}; {Line(other)}"
+                : $"Gravity assist: {Line(plan)}; {choice.NotOffered}";
+            if (!plan.Warnings.Contains(text))
+                plan.Warnings.Add(text);
+            return plan;
+        }
 
         public static AssistChoice Find(BodySystem s, TransferRequest q, CancellationToken ct, IProgress<float> progress = null,
             double timeBudgetSeconds = TimeBudgetSeconds, TransferFinder directSearch = null)

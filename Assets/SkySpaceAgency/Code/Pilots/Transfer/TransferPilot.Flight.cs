@@ -754,6 +754,15 @@ namespace K2D2.Transfer
                         double vin = Math.Sqrt(Math.Max(0, snap.V.sqrMagnitude - 2 * B.Mu / snap.R.magnitude));
                         logger.LogInfo(Inv($"[Transfer] leg {leg} starts in {B.Name}: flyby, periapsis {(rPe.magnitude - B.Radius) / 1000:F1} km predicted (planned {(planned - B.Radius) / 1000:F1}), excess in {vin:F0} m/s"));
                         step.UT = peUT;
+                        // Never warped into the atmosphere: a periapsis that drifted under the floor stops
+                        // the flight here, before any warp to the flyby (powered or not).
+                        double floor = B.LowOrbitRadius - 10_000;
+                        if (rPe.magnitude < floor)
+                        {
+                            StopWarp();
+                            Fail(Inv($"the {B.Name} flyby periapsis ({(rPe.magnitude - B.Radius) / 1000:F1} km) is below its atmosphere or terrain ({(floor - B.Radius) / 1000:F1} km): raise it by hand (radial out), then Resume"));
+                            return;
+                        }
                     }
                     else
                         logger.LogInfo($"[Transfer] leg {leg} starts in {B.Name}: flyby, no periapsis read yet");

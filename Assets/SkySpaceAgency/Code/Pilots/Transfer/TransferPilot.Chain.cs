@@ -39,6 +39,7 @@ namespace K2D2.Transfer
 
         void ClearChain()
         {
+            Choice = null;
             Chain = null;
             ChainPlan = null;
             ChainBudget = null;
@@ -437,8 +438,27 @@ namespace K2D2.Transfer
             var system = snap.System;
             var snapStages = snap.Stages;
             progress.Report(0);
-            RunJob(JobKind.Search, ct => FarRendezvous.Plan(system, fq, AssistSearch.Finder(TransferSettings.gravity_assist.V), ct, progress),
-                t => OnChainPlanned(t, system, snapStages, chain, resumed.PrepareOnly, resumed));
+            // A chain whose transfer had a gravity assist (4.6): an open path is planned from its SOI exit,
+            // and the status says when the assist is not kept.
+            var assist = resumed.Plan?.Assist ?? AssistKind.None;
+            var finder = AssistSearch.Finder(TransferSettings.gravity_assist.V);
+            if (assist != AssistKind.None)
+            {
+                var inner = finder;
+                finder = (s, tq, ct, p) => TransferSearch.LeavesItsBody(s, tq) ? TransferSearch.FindFromExit(s, tq, ct, p) : inner(s, tq, ct, p);
+            }
+            string flybyName = assist != AssistKind.None && resumed.Plan.FlybyBody >= 0 && resumed.Plan.FlybyBody < system.Count
+                ? system[resumed.Plan.FlybyBody].Name : null;
+            RunJob(JobKind.Search, ct => FarRendezvous.Plan(system, fq, finder, ct, progress), t =>
+            {
+                OnChainPlanned(t, system, snapStages, chain, resumed.PrepareOnly, resumed);
+                if (flybyName != null && (Current == null || !Current.Steps.Exists(st => st.Kind == StepKind.Flyby)))
+                {
+                    string text = $"The gravity assist via {flybyName} cannot be kept from here: planned again without it.";
+                    logger.LogInfo("[Transfer] chain: " + text);
+                    Status = text + " " + Status;
+                }
+            });
             return true;
         }
 

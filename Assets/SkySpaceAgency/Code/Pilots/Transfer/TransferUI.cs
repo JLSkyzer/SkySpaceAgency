@@ -283,8 +283,9 @@ namespace K2D2.Transfer
         void UpdateAssistChoice(TransferPlan shown)
         {
             var choice = pilot.Choice;
-            assist_choice.Show(choice != null);
-            if (choice == null)
+            bool mine = choice != null && (shown == choice.Direct || shown == choice.Assist);
+            assist_choice.Show(mine);
+            if (!mine)
                 return;
             bool idle = !pilot.isRunning && !pilot.Searching;
             var system = pilot.System;
