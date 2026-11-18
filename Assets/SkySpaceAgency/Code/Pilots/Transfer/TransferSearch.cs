@@ -224,6 +224,20 @@ namespace K2D2.Transfer
 
             public TransferPlan Run()
             {
+                var early = Setup();
+                if (early != null)
+                    return early;
+                if (To == Ancestor)
+                    return ToAncestor();
+                if (From == Ancestor)
+                    return CheaperWithExisting(ToDescendant());
+                return Porkchop();
+            }
+
+            // The request's bodies, case and vessel orbit. Non-null: the plan to return at once (a
+            // refusal, or the cases that need no search: already in the target's SOI, escaping).
+            TransferPlan Setup()
+            {
                 var target = S[To];
                 ArrRp = double.IsNaN(Q.ArrivalPeriapsisRadius) ? target.LowOrbitRadius : Q.ArrivalPeriapsisRadius;
                 ArrRa = double.IsNaN(Q.ArrivalApoapsisRadius) ? ArrRp : Q.ArrivalApoapsisRadius;
@@ -265,12 +279,7 @@ namespace K2D2.Transfer
                 if (VesselEl.PeriapsisRadius < Floor(From))
                     return Refuse(LowOrbit(S[From].Name));
                 VesselPeriod = VesselEl.Period;
-
-                if (To == Ancestor)
-                    return ToAncestor();
-                if (From == Ancestor)
-                    return CheaperWithExisting(ToDescendant());
-                return Porkchop();
+                return null;
             }
 
             // ---------------------------------------------------------------- shared
