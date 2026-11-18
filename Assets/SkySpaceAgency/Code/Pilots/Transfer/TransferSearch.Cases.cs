@@ -265,6 +265,7 @@ namespace K2D2.Transfer
                 var arr = ChooseArrival(v2 - vC, t + tof, 0, true, From, rV, v1, t);
                 plan.Steps.AddRange(arr.Steps);
                 plan.Warnings.AddRange(arr.Warnings);
+                plan.FinalLegRequest = arr.FinalLegRequest;
                 double latest = entry != null ? entry.EndUT : t + tof;
                 AddCorrections(plan.Steps, From, 0, arr.FirstTarget, t, t, Math.Min(arr.ArrivalUT, t + tof), latest, arr.Notes);
                 return Finish(built, plan, t, arr.ArrivalUT, new Dictionary<int, Target> { [0] = arr.FirstTarget });
@@ -491,6 +492,7 @@ namespace K2D2.Transfer
                 plan.Steps.AddRange(flight.Steps);
                 plan.Steps.AddRange(arr.Steps);
                 plan.Warnings.AddRange(arr.Warnings);
+                plan.FinalLegRequest = arr.FinalLegRequest;
                 if (flight.Ok && !double.IsNaN(aimPe) && double.IsNaN(predicted))
                     plan.Warnings.Add($"Departure could not be aimed at the arrival periapsis at {S[cT].Name}: the corrections will do it.");
                 var arrival = S[cT];

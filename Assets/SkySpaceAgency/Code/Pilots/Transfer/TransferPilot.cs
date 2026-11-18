@@ -792,6 +792,7 @@ namespace K2D2.Transfer
             ArrivalApoapsisRadius = q.ArrivalApoapsisRadius,
             ArrivalInclinationDeg = q.ArrivalInclinationDeg,
             MaxTripSeconds = q.MaxTripSeconds,
+            ArrivalPlaneNormal = q.ArrivalPlaneNormal,
         };
 
         static string Inv(FormattableString f) => f.ToString(CultureInfo.InvariantCulture);

@@ -448,6 +448,77 @@ public class TransferSearchTests
         Assert.Greater(ike.UT, duna.UT);
     }
 
+    // ---------------------------------------------------------------- arrival plane (4.5, Task 2)
+
+    static readonly Vector3d PlaneN = new Vector3d(Math.Sin(30 * Deg) * Math.Sin(70 * Deg), -Math.Sin(30 * Deg) * Math.Cos(70 * Deg), Math.Cos(30 * Deg));
+
+    [Test]
+    public void KerbinToDuna_PlaneNormal_OnTheFinalTargetSteps()
+    {
+        var plain = Find(Request("Kerbin", "Duna", 700_000), "Kerbin -> Duna");
+        var q = Request("Kerbin", "Duna", 700_000);
+        q.ArrivalPlaneNormal = PlaneN;
+        var plan = Find(q, "Kerbin -> Duna, plane");
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        int duna = B("Duna");
+        Assert.IsTrue(plan.Steps.Any(st => st.TargetBody == duna));
+        foreach (var st in plan.Steps)
+        {
+            var expected = st.TargetBody == duna ? PlaneN : Vector3d.zero;
+            Assert.AreEqual(0, (st.TargetPlaneNormal - expected).magnitude, 1e-12, $"{st.Kind} at UT {st.UT:F0}");
+        }
+        Assert.AreEqual(plain.TotalDeltaV, plan.TotalDeltaV, 1e-6, "the plane costs nothing at the search");
+        Assert.IsNull(plan.FinalLegRequest, "a direct arrival has no last-leg request");
+    }
+
+    [Test]
+    public void KerbinToIke_StagedArrival_KeepsTheLastLegRequest()
+    {
+        TransferPlan staged = null;
+        for (double turn = 0; turn < 360 && staged == null; turn += 90)
+        {
+            _s = KerbolFixture.Build();
+            var ike = _s["Ike"];
+            ike.Mu = 1e8;
+            var r = RotateZ(ike.EpochPosition, turn * Deg);
+            var v = RotateZ(ike.EpochVelocity, turn * Deg);
+            ike.EpochPosition = r;
+            ike.EpochVelocity = K2D2.OrbitPlanning.OrbitMath.Rotate(v, r.normalized, 90 * Deg);
+            var q = Request("Kerbin", "Ike", 700_000);
+            q.ArrivalPlaneNormal = PlaneN;
+            var plan = TransferSearch.Find(_s, q, CancellationToken.None);
+            Assert.IsTrue(plan.Ok, plan.Refusal);
+            if (plan.Steps.Any(st => st.Kind == StepKind.Capture && st.Body == B("Duna")))
+                staged = plan;
+            else
+                Assert.IsNull(plan.FinalLegRequest, "a direct descent has no last-leg request");
+        }
+        Assert.IsNotNull(staged, "no staged arrival");
+        TestContext.Out.WriteLine($"staged: {Describe(staged)}");
+        var last = staged.FinalLegRequest;
+        Assert.IsNotNull(last);
+        Assert.AreEqual(B("Duna"), last.FromBody);
+        Assert.AreEqual(B("Ike"), last.ToBody);
+        Assert.AreEqual(0, (last.ArrivalPlaneNormal - PlaneN).magnitude, 1e-12);
+        var ikeSteps = staged.Steps.Where(st => st.TargetBody == B("Ike")).ToList();
+        Assert.IsNotEmpty(ikeSteps);
+        foreach (var st in ikeSteps)
+            Assert.AreEqual(0, (st.TargetPlaneNormal - PlaneN).magnitude, 1e-12, $"{st.Kind} at UT {st.UT:F0}");
+    }
+
+    [Test]
+    public void TargetIsCurrentBody_PlaneNormal_GivesItsInclination()
+    {
+        var q = Request("Kerbin", "Kerbin", 700_000);
+        q.ArrivalPeriapsisRadius = q.ArrivalApoapsisRadius = 720_000;
+        q.ArrivalPlaneNormal = new Vector3d(0, -Math.Sin(40 * Deg), Math.Cos(40 * Deg));
+        var plan = Find(q, "Kerbin -> Kerbin, plane at 40°");
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.AreEqual(TransferSearch.InTarget, plan.CaseName);
+        Assert.AreEqual(40, plan.Steps.Last().TargetInclinationDeg, 1e-9);
+        Assert.AreEqual(0, (plan.Steps.Last().TargetPlaneNormal - q.ArrivalPlaneNormal).magnitude, 1e-12);
+    }
+
     [Test]
     public void KerbinToMinmus_FromLko()
     {

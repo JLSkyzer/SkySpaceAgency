@@ -134,6 +134,7 @@ namespace K2D2.Transfer
             ["requiredExcess"] = V(plan.RequiredExcess),
             ["request"] = plan.Request == null ? JValue.CreateNull() : RequestJson(plan.Request),
             ["steps"] = new JArray((plan.Steps ?? new List<PlanStep>()).Select(StepJson).Cast<object>().ToArray()),
+            ["finalLegRequest"] = plan.FinalLegRequest == null ? JValue.CreateNull() : RequestJson(plan.FinalLegRequest),
         };
 
         static JObject RequestJson(TransferRequest q) => new JObject
@@ -148,6 +149,7 @@ namespace K2D2.Transfer
             ["arrivalApoapsisRadius"] = D(q.ArrivalApoapsisRadius),
             ["arrivalInclinationDeg"] = D(q.ArrivalInclinationDeg),
             ["maxTripSeconds"] = D(q.MaxTripSeconds),
+            ["arrivalPlaneNormal"] = V(q.ArrivalPlaneNormal),
         };
 
         static JObject StepJson(PlanStep s) => new JObject
@@ -164,6 +166,7 @@ namespace K2D2.Transfer
             ["targetInclinationDeg"] = D(s.TargetInclinationDeg),
             ["legIndex"] = s.LegIndex,
             ["replanAtLegStart"] = s.ReplanAtLegStart,
+            ["targetPlaneNormal"] = V(s.TargetPlaneNormal),
         };
 
         // Doubles are written with "G17", which always reads back to the same bits. The values JSON
@@ -281,11 +284,18 @@ namespace K2D2.Transfer
             };
             var q = Field(o, "request");
             plan.Request = q.Type == JTokenType.Null ? null : ReadRequest(Obj(q, "request"));
+            // Optional (4.5): absent in a file written before, null when there is none.
+            if (o.ContainsKey("finalLegRequest"))
+            {
+                var f = Field(o, "finalLegRequest");
+                plan.FinalLegRequest = f.Type == JTokenType.Null ? null : ReadRequest(Obj(f, "finalLegRequest"));
+            }
             return plan;
         }
 
         static TransferRequest ReadRequest(JObject o) => new TransferRequest
         {
+            ArrivalPlaneNormal = o.ContainsKey("arrivalPlaneNormal") ? Vec(o, "arrivalPlaneNormal") : Vector3d.zero,
             FromBody = Int(o, "fromBody"),
             ToBody = Int(o, "toBody"),
             R0 = Vec(o, "r0"),
@@ -316,6 +326,7 @@ namespace K2D2.Transfer
                     TargetInclinationDeg = Dbl(o, "targetInclinationDeg"),
                     LegIndex = Int(o, "legIndex"),
                     ReplanAtLegStart = Bool(o, "replanAtLegStart"),
+                    TargetPlaneNormal = o.ContainsKey("targetPlaneNormal") ? Vec(o, "targetPlaneNormal") : Vector3d.zero,
                 };
             }
             catch (FormatException e)

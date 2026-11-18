@@ -130,12 +130,17 @@ namespace K2D2.Transfer
                     ArrivalPeriapsisRadius = Q.ArrivalPeriapsisRadius,
                     ArrivalApoapsisRadius = Q.ArrivalApoapsisRadius,
                     ArrivalInclinationDeg = Q.ArrivalInclinationDeg,
+                    ArrivalPlaneNormal = Q.ArrivalPlaneNormal,
                 };
                 var plan = new Search(S, sub, Ct, null).Run();
                 if (!plan.Ok)
                     return null;
 
-                var arr = new Arrival { ArrivalUT = plan.ArrivalUT, FirstTarget = new Target(x, rp, rp, double.NaN) };
+                var arr = new Arrival
+                {
+                    ArrivalUT = plan.ArrivalUT, FirstTarget = new Target(x, rp, rp, double.NaN),
+                    FinalLegRequest = plan.FinalLegRequest ?? sub,
+                };
                 double capture = Oberth(mu, rp, Math.Sqrt(mu / rp), vinf);
                 string why = double.IsInfinity(saving) || double.IsNaN(saving)
                     ? "no direct arrival works"
@@ -174,7 +179,7 @@ namespace K2D2.Transfer
                 double captureAp = z == To && Q.Arrival == ArrivalKind.Orbit ? ArrRa : double.NaN;
                 double horizon = inside.StartUT + Math.Max(3 * (arriveUT - inside.StartUT), S.OrbitalPeriod(z));
                 if (!ArrivalTargeting.Solve(S, x, inside.StartR, inside.StartV, inside.StartUT, z, step.TargetPeriapsisRadius,
-                        step.TargetInclinationDeg, horizon, double.NaN, captureAp,
+                        step.TargetInclinationDeg, step.TargetPlaneNormal, horizon, double.NaN, captureAp, ArrivalTargeting.MaxDeltaV,
                         out var dv, out _, out _, out double arrival, out double capture, out _))
                     return false;
                 step.UT = inside.StartUT;

@@ -27,8 +27,8 @@ namespace K2D2.Transfer
                 double span = Math.Max(VesselPeriod, S.OrbitalPeriod(To));
                 double horizon = burnUT + Math.Min(1.25 * span, double.IsInfinity(MaxTrip) ? double.PositiveInfinity : MaxTrip);
                 double captureAp = Q.Arrival == ArrivalKind.Orbit ? ArrRa : double.NaN;
-                if (!ArrivalTargeting.Solve(S, From, r, v, burnUT, To, ArrRp, ArrInc, horizon, double.NaN, captureAp,
-                        out var dv, out double pe, out _, out double arrivalUT, out double capture, out bool converged))
+                if (!ArrivalTargeting.Solve(S, From, r, v, burnUT, To, ArrRp, ArrInc, ArrPlane, horizon, double.NaN, captureAp,
+                        ArrivalTargeting.MaxDeltaV, out var dv, out double pe, out _, out double arrivalUT, out double capture, out bool converged))
                 {
                     Trace?.Invoke("existing encounter: no correction within the limit");
                     return null;

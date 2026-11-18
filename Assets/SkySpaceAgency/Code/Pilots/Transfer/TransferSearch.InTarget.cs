@@ -21,6 +21,13 @@ namespace K2D2.Transfer
             // The burns are orbit changes with a planned vector: the pilot flies each toward the orbit
             // its vector gives from the state at its time (TransferFlight.GuidanceFor), and a resume
             // plans again from the actual state.
+            // The inclination asked for in the target's SOI: the request's, else that of its arrival
+            // plane (4.5; OrbitPlanner aims an inclination only, the Rendezvous pilot's plane match
+            // does the node), else free.
+            double InTargetInc => !double.IsNaN(ArrInc) ? ArrInc
+                : ArrPlane.magnitude > 0 ? Math.Acos(Math.Max(-1, Math.Min(1, ArrPlane.normalized.z))) * 180 / Math.PI
+                : double.NaN;
+
             TransferPlan InTargetSoi()
             {
                 CaseName = InTarget;
@@ -41,7 +48,7 @@ namespace K2D2.Transfer
                 {
                     PeAltitude = ArrRp - body.Radius,
                     ApAltitude = ArrRa - body.Radius,
-                    InclinationDeg = double.IsNaN(ArrInc) ? (double?)null : ArrInc,
+                    InclinationDeg = double.IsNaN(InTargetInc) ? (double?)null : InTargetInc,
                 };
                 var orbit = OrbitPlanner.Plan(r, v, ut, info, targets);
                 if (!orbit.Ok)
@@ -54,7 +61,7 @@ namespace K2D2.Transfer
                 {
                     var st = Burn(StepKind.OrbitChange, To, burn.UT, toCommon * burn.DeltaV,
                         Inv($"{burn.Label}: {Km(To, burn.Target.Rp)} × {Km(To, burn.Target.Ra)} km (the Orbit tab's plan, the vessel being in the {body.Name} SOI)"), 0);
-                    new Target(To, burn.Target.Rp, burn.Target.Ra, ArrInc).ApplyTo(st);
+                    new Target(To, burn.Target.Rp, burn.Target.Ra, InTargetInc, ArrPlane).ApplyTo(st);
                     plan.Steps.Add(st);
                 }
                 return Finish(new Built(), plan, orbit.Burns[0].UT, orbit.Burns[orbit.Burns.Count - 1].UT, null).Plan;

@@ -90,6 +90,55 @@ public class PlanStoreTests
         return back;
     }
 
+    // 4.5, Task 2: the arrival plane (request and steps) and a staged arrival's last-leg request.
+    [Test]
+    public void RoundTrip_KeepsThePlaneNormalsAndTheLastLegRequest()
+    {
+        var p = Saved(1);
+        var n = new Vector3d(0.1, -0.2, Math.Sqrt(1 - 0.05));
+        p.Plan.Request.ArrivalPlaneNormal = n;
+        p.Plan.Steps[2].TargetPlaneNormal = n;
+        p.Plan.Steps[3].TargetPlaneNormal = n;
+        p.Plan.FinalLegRequest = new TransferRequest
+        {
+            FromBody = B("Duna"), ToBody = B("Ike"), R0 = new Vector3d(420_000, 1.0 / 3.0, 0), V0 = new Vector3d(0, 846.5, 1e-7),
+            UT0 = 4.9e6, ArrivalPeriapsisRadius = 1.0 / 7.0 * 1e6, ArrivalPlaneNormal = n,
+        };
+        var b = RoundTrip(p);
+        SameBits(n, b.Plan.Request.ArrivalPlaneNormal, "request plane");
+        SameBits(Vector3d.zero, b.Plan.Steps[0].TargetPlaneNormal, "step 0 plane");
+        SameBits(n, b.Plan.Steps[2].TargetPlaneNormal, "step 2 plane");
+        SameBits(n, b.Plan.Steps[3].TargetPlaneNormal, "step 3 plane");
+        var f = b.Plan.FinalLegRequest;
+        Assert.IsNotNull(f);
+        Assert.AreEqual(B("Duna"), f.FromBody);
+        Assert.AreEqual(B("Ike"), f.ToBody);
+        SameBits(p.Plan.FinalLegRequest.R0, f.R0, "last leg R0");
+        SameBits(p.Plan.FinalLegRequest.V0, f.V0, "last leg V0");
+        SameBits(4.9e6, f.UT0, "last leg UT0");
+        SameBits(p.Plan.FinalLegRequest.ArrivalPeriapsisRadius, f.ArrivalPeriapsisRadius, "last leg Pe");
+        SameBits(n, f.ArrivalPlaneNormal, "last leg plane");
+    }
+
+    // Review Focus 4: a file written before 4.5 reads as before.
+    [Test]
+    public void OldFile_WithoutTheNewKeys_ReadsAsBefore()
+    {
+        var o = JObject.Parse(PlanStore.ToJson(Saved(2)));
+        ((JObject)o["plan"]).Remove("finalLegRequest");
+        ((JObject)o["plan"]["request"]).Remove("arrivalPlaneNormal");
+        foreach (JObject st in (JArray)o["plan"]["steps"])
+            st.Remove("targetPlaneNormal");
+        StringAssert.DoesNotContain("PlaneNormal", o.ToString());
+        StringAssert.DoesNotContain("finalLegRequest", o.ToString());
+        Assert.IsTrue(PlanStore.TryFromJson(o.ToString(), out var b, out string error), error);
+        Assert.IsNull(b.Plan.FinalLegRequest);
+        SameBits(Vector3d.zero, b.Plan.Request.ArrivalPlaneNormal, "request plane");
+        foreach (var st in b.Plan.Steps)
+            SameBits(Vector3d.zero, st.TargetPlaneNormal, "step plane");
+        Assert.AreEqual(4, b.Plan.Steps.Count);
+    }
+
     [Test]
     public void RoundTrip_KeepsEveryField()
     {

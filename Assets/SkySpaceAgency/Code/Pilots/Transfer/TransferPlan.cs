@@ -22,6 +22,9 @@ namespace K2D2.Transfer
         public double ArrivalInclinationDeg = double.NaN;
         // ∞: no cap.
         public double MaxTripSeconds = double.PositiveInfinity;
+        // The plane wanted at the arrival (4.5): a unit orbit normal in the target body's own frame;
+        // zero: none. The arrival corrections aim the plane closest to it that the arrival allows.
+        public Vector3d ArrivalPlaneNormal = Vector3d.zero;
     }
 
     // Injection: a burn toward a hyperbolic excess vector (or, inside one SOI, the transfer burn).
@@ -46,6 +49,9 @@ namespace K2D2.Transfer
         public double TargetPeriapsisRadius = double.NaN;
         public double TargetApoapsisRadius = double.NaN;
         public double TargetInclinationDeg = double.NaN;
+        // The plane the leg aims at (4.5): unit, the target body's own frame; zero: none. Set on the
+        // steps whose TargetBody is the request's ToBody.
+        public Vector3d TargetPlaneNormal = Vector3d.zero;
 
         // Multi-level plans are flown leg by leg: a new leg starts at each SOI change of the climb, at
         // each SOI entry of a direct descent, and after a staged capture. Every leg after the first is
@@ -74,6 +80,11 @@ namespace K2D2.Transfer
         // frame), toward the transfer at the common ancestor. -1 / zero when there is no such climb.
         public int ExcessBody = -1;
         public Vector3d RequiredExcess = Vector3d.zero;
+
+        // A staged arrival (a capture around an intermediate body, then a leg to the target): the
+        // request of that last leg, from the planned low orbit (an estimate, never flown), so that the
+        // arrival geometry can be predicted. Null when the last leg starts from Request.
+        public TransferRequest FinalLegRequest;
 
         public double TripSeconds => ArrivalUT - DepartureUT;
     }

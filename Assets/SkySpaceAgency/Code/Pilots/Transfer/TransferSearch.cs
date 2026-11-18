@@ -88,13 +88,17 @@ namespace K2D2.Transfer
         {
             public int Body;
             public double Pe, Ap, Inc;
+            public Vector3d Plane; // unit, the body's own frame; zero: none (4.5)
 
-            public Target(int body, double pe, double ap, double inc)
+            public Target(int body, double pe, double ap, double inc) : this(body, pe, ap, inc, Vector3d.zero) { }
+
+            public Target(int body, double pe, double ap, double inc, Vector3d plane)
             {
                 Body = body;
                 Pe = pe;
                 Ap = ap;
                 Inc = inc;
+                Plane = plane;
             }
 
             public void ApplyTo(PlanStep step)
@@ -103,6 +107,7 @@ namespace K2D2.Transfer
                 step.TargetPeriapsisRadius = Pe;
                 step.TargetApoapsisRadius = Ap;
                 step.TargetInclinationDeg = Inc;
+                step.TargetPlaneNormal = Plane;
             }
         }
 
@@ -151,6 +156,7 @@ namespace K2D2.Transfer
             public double Cost;
             public double ArrivalUT;
             public Target FirstTarget;
+            public TransferRequest FinalLegRequest; // a staged arrival's last leg (4.5), else null
             public bool DirectDescent;       // straight at the moon from the first descent level
             public PlanStep EntryCorrection; // that leg's correction on entering the intermediate SOI
             public PlanStep FinalCapture;    // the capture at the target, when there is one
@@ -193,6 +199,7 @@ namespace K2D2.Transfer
             readonly List<int> Down = new List<int>(); // [child of A, …, To]; empty when To = A
             readonly HashSet<int> Planned = new HashSet<int>();
             double ArrRp, ArrRa, ArrInc, MaxTrip;
+            Vector3d ArrPlane; // the request's arrival plane, zero: none (4.5)
             OrbitElements VesselEl;
             double VesselPeriod;
             string CaseName = "";
@@ -223,6 +230,7 @@ namespace K2D2.Transfer
                 if (ArrRa < ArrRp)
                     (ArrRp, ArrRa) = (ArrRa, ArrRp);
                 ArrInc = Q.ArrivalInclinationDeg;
+                ArrPlane = Q.ArrivalPlaneNormal;
                 if (!(ArrRp >= Floor(To)))
                     return Refuse(LowCapture(target.Name));
                 MaxTrip = double.IsNaN(Q.MaxTripSeconds) ? double.PositiveInfinity : Q.MaxTripSeconds;
@@ -269,7 +277,7 @@ namespace K2D2.Transfer
 
             double Floor(int body) => S[body].LowOrbitRadius - SafetyMargin;
 
-            Target FinalTarget() => new Target(To, ArrRp, ArrRa, ArrInc);
+            Target FinalTarget() => new Target(To, ArrRp, ArrRa, ArrInc, ArrPlane);
 
             // Three placeholders on the given leg, solved in flight: after the SOI exit, at mid-course,
             // on the approach. They aim at the leg's first arrival body.
