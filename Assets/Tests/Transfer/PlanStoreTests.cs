@@ -120,6 +120,50 @@ public class PlanStoreTests
         SameBits(n, f.ArrivalPlaneNormal, "last leg plane");
     }
 
+    // 4.5, Task 4: the chain of a transfer + rendezvous.
+    static SavedChain Chain() => new SavedChain
+    {
+        TargetId = "5f0c2b1e-7d3a-4f6e-9b21-0c8d7e6f5a43", TargetName = "Station Δ", TargetBodyName = "Duna", Mode = "RendezvousAndDock",
+        PlaneNormal = new Vector3d(0.1, -0.2, Math.Sqrt(0.95)), ParkingRadius = 510_000.0 / 3.0 * 3.0 + 0.1, RendezvousDeltaV = 1.0 / 3.0 * 1000, DockReserve = 10,
+    };
+
+    [Test]
+    public void RoundTrip_KeepsTheChain()
+    {
+        var p = Saved(1);
+        p.Chain = Chain();
+        var b = RoundTrip(p);
+        Assert.IsNotNull(b.Chain);
+        Assert.AreEqual(p.Chain.TargetId, b.Chain.TargetId);
+        Assert.AreEqual(p.Chain.TargetName, b.Chain.TargetName);
+        Assert.AreEqual("Duna", b.Chain.TargetBodyName);
+        Assert.AreEqual("RendezvousAndDock", b.Chain.Mode);
+        SameBits(p.Chain.PlaneNormal, b.Chain.PlaneNormal, "plane");
+        SameBits(p.Chain.ParkingRadius, b.Chain.ParkingRadius, "parking");
+        SameBits(p.Chain.RendezvousDeltaV, b.Chain.RendezvousDeltaV, "rendezvous");
+        SameBits(10, b.Chain.DockReserve, "dock reserve");
+    }
+
+    [Test]
+    public void Chain_UnknownMode_Refused()
+    {
+        var p = Saved(1);
+        p.Chain = Chain();
+        p.Chain.Mode = "Teleport";
+        Assert.IsFalse(PlanStore.TryFromJson(PlanStore.ToJson(p), out var b, out string error));
+        Assert.IsNull(b);
+        StringAssert.Contains("Teleport", error);
+    }
+
+    [Test]
+    public void NoChainKey_ChainNull()
+    {
+        string json = PlanStore.ToJson(Saved(1));
+        StringAssert.DoesNotContain("\"chain\"", json);
+        Assert.IsTrue(PlanStore.TryFromJson(json, out var b, out string error), error);
+        Assert.IsNull(b.Chain);
+    }
+
     // Review Focus 4: a file written before 4.5 reads as before.
     [Test]
     public void OldFile_WithoutTheNewKeys_ReadsAsBefore()

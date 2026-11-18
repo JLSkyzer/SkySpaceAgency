@@ -393,4 +393,70 @@ public class FarRendezvousTests
         cts.Cancel();
         Assert.Throws<OperationCanceledException>(() => FarRendezvous.Plan(_s, Request(_duna), Find, cts.Token));
     }
+
+    // ------------------------------------------------------------ chain rules and texts (Task 4)
+
+    [Test]
+    public void IsFar_BothKnownAndDifferent()
+    {
+        Assert.IsTrue(FarRendezvous.IsFar("Kerbin", "Mun"));
+        Assert.IsFalse(FarRendezvous.IsFar("Kerbin", "Kerbin"));
+        Assert.IsFalse(FarRendezvous.IsFar(null, "Mun"));
+        Assert.IsFalse(FarRendezvous.IsFar("Kerbin", null));
+        Assert.IsFalse(FarRendezvous.IsFar("", "Mun"));
+        Assert.IsTrue(FarRendezvous.IsFar("mun", "Mun"), "ordinal");
+    }
+
+    [Test]
+    public void FarHint_Text()
+    {
+        Assert.AreEqual("Station orbits Mun: Transfer + rendezvous + dock plans the transfer, the rendezvous and the docking.",
+            FarRendezvous.FarHint("Station", "Mun"));
+    }
+
+    [Test]
+    public void HandoffRefusal_Texts()
+    {
+        Assert.IsNull(FarRendezvous.HandoffRefusal(true, false, true, "Mun"));
+        Assert.AreEqual("the target vessel no longer exists (recovered, destroyed, or docked elsewhere)", FarRendezvous.HandoffRefusal(false, false, true, "Mun"));
+        Assert.AreEqual("the target is landed", FarRendezvous.HandoffRefusal(true, true, true, "Mun"));
+        Assert.AreEqual("the target no longer orbits Mun", FarRendezvous.HandoffRefusal(true, false, false, "Mun"));
+    }
+
+    [Test]
+    public void ChainStopped_BeforeAndAfterTheArrival()
+    {
+        Assert.AreEqual("Transfer + rendezvous with Station stopped during the injection: Stop pressed. Left to do: press Resume (Rendezvous or Transfer tab): "
+            + "the transfer is planned again from here, then the rendezvous follows",
+            FarRendezvous.ChainStopped("the injection", "Station", "Stop pressed.", false));
+        Assert.AreEqual("Transfer + rendezvous with Station stopped during the hand-over: the target is landed. Left to do: the vessel is in its parking orbit: "
+            + "choose a target in the Rendezvous tab and start the rendezvous there",
+            FarRendezvous.ChainStopped("the hand-over", "Station", "the target is landed", true));
+    }
+
+    [Test]
+    public void HandoffStarted_Texts()
+    {
+        Assert.AreEqual("In the parking orbit: the Rendezvous pilot takes over (rendezvous + docking with Station), see the Rendezvous tab",
+            FarRendezvous.HandoffStarted("Station", true, false));
+        Assert.AreEqual("In the parking orbit: the Rendezvous pilot takes over (rendezvous only with Station, Prepare only), see the Rendezvous tab",
+            FarRendezvous.HandoffStarted("Station", false, true));
+    }
+
+    [Test]
+    public void ResumeOffer_AddsTheRendezvous()
+    {
+        Assert.AreEqual("Resume plan to Mun (next: correction). Then the rendezvous with Station.",
+            FarRendezvous.ResumeOffer("Resume plan to Mun (next: correction).", "Station"));
+    }
+
+    [Test]
+    public void PlaneChanged_AboveTheLogThreshold()
+    {
+        var n = new Vector3d(0, 0, 1);
+        Assert.IsFalse(FarRendezvous.PlaneChanged(n, OrbitMath.Rotate(n, new Vector3d(1, 0, 0), 0.005 * Deg), out double small));
+        Assert.AreEqual(0.005, small, 1e-9);
+        Assert.IsTrue(FarRendezvous.PlaneChanged(n, OrbitMath.Rotate(n, new Vector3d(1, 0, 0), 0.02 * Deg), out double big));
+        Assert.AreEqual(0.02, big, 1e-9);
+    }
 }

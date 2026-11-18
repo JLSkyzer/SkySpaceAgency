@@ -41,6 +41,9 @@ namespace K2D2.Transfer
 
         // Kind "rendezvous" (sub-project 4.3) only; null for a transfer. Optional in the file.
         public SavedRendezvous Rendezvous;
+        // A transfer followed by a rendezvous with a target around the arrival body (4.5); null for a
+        // plain transfer. Optional in the file.
+        public SavedChain Chain;
 
         public const string KindTransfer = "transfer", KindRendezvous = "rendezvous";
     }
@@ -55,6 +58,18 @@ namespace K2D2.Transfer
         public string Phase;          // RvPhase's name when saved
         public string OurPortId;      // the docking pair the player picked; null = automatic
         public string TargetPortId;
+    }
+
+    // What the transfer of "Transfer + rendezvous (+ dock)" hands over at the arrival (4.5): the
+    // target, the mode, the plane aimed at and what the budget counted for the rendezvous.
+    public class SavedChain
+    {
+        public string TargetId;          // the target vessel's GUID
+        public string TargetName;
+        public string TargetBodyName;    // the body it orbited when planned
+        public string Mode;              // RvMode's name
+        public Vector3d PlaneNormal;     // the target's plane, its body's own frame
+        public double ParkingRadius, RendezvousDeltaV, DockReserve;
     }
 
     public enum ResumeVerdict { Resume, Replan, Mismatch }
@@ -116,6 +131,18 @@ namespace K2D2.Transfer
                     ["phase"] = p.Rendezvous.Phase,
                     ["ourPortId"] = p.Rendezvous.OurPortId,
                     ["targetPortId"] = p.Rendezvous.TargetPortId,
+                };
+            if (p.Chain != null)
+                o["chain"] = new JObject
+                {
+                    ["targetId"] = p.Chain.TargetId,
+                    ["targetName"] = p.Chain.TargetName,
+                    ["targetBody"] = p.Chain.TargetBodyName,
+                    ["mode"] = p.Chain.Mode,
+                    ["planeNormal"] = V(p.Chain.PlaneNormal),
+                    ["parkingRadius"] = D(p.Chain.ParkingRadius),
+                    ["rendezvousDeltaV"] = D(p.Chain.RendezvousDeltaV),
+                    ["dockReserve"] = D(p.Chain.DockReserve),
                 };
             return o.ToString(Formatting.Indented);
         }
@@ -241,6 +268,23 @@ namespace K2D2.Transfer
                         OurPortId = Str(r, "ourPortId", allowNull: true),
                         TargetPortId = Str(r, "targetPortId", allowNull: true),
                     };
+                }
+                if (o.ContainsKey("chain"))
+                {
+                    var c = Obj(Field(o, "chain"), "chain");
+                    saved.Chain = new SavedChain
+                    {
+                        TargetId = Str(c, "targetId", allowNull: false),
+                        TargetName = Str(c, "targetName", allowNull: true),
+                        TargetBodyName = Str(c, "targetBody", allowNull: false),
+                        Mode = Str(c, "mode", allowNull: false),
+                        PlaneNormal = Vec(c, "planeNormal"),
+                        ParkingRadius = Dbl(c, "parkingRadius"),
+                        RendezvousDeltaV = Dbl(c, "rendezvousDeltaV"),
+                        DockReserve = Dbl(c, "dockReserve"),
+                    };
+                    if (!System.Enum.TryParse(saved.Chain.Mode, false, out K2D2.Rendezvous.RvMode _) || int.TryParse(saved.Chain.Mode, out _))
+                        throw new FormatException($"the field 'chain.mode' ({saved.Chain.Mode}) is not a rendezvous mode");
                 }
                 bool rendezvous = saved.Kind == SavedPlan.KindRendezvous;
                 if (rendezvous && saved.Rendezvous == null)

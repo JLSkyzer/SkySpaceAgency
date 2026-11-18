@@ -439,6 +439,55 @@ namespace K2D2.Rendezvous
             return text;
         }
 
+        // ------------------------------------------------------------ chain rules and texts
+
+        // The target orbits another body than ours: the far button, not 4.3's.
+        public static bool IsFar(string ourBody, string targetBody) =>
+            !string.IsNullOrEmpty(ourBody) && !string.IsNullOrEmpty(targetBody) && !string.Equals(ourBody, targetBody, StringComparison.Ordinal);
+
+        public static string FarHint(string target, string targetBody) =>
+            $"{target} orbits {targetBody}: Transfer + rendezvous + dock plans the transfer, the rendezvous and the docking.";
+
+        // The target at the hand-over, in the parking orbit: null when it can still be met.
+        public static string HandoffRefusal(bool exists, bool landed, bool aroundArrivalBody, string arrivalBody)
+        {
+            if (!exists)
+                return "the target vessel no longer exists (recovered, destroyed, or docked elsewhere)";
+            if (landed)
+                return "the target is landed";
+            if (!aroundArrivalBody)
+                return $"the target no longer orbits {arrivalBody}";
+            return null;
+        }
+
+        // What a stop of the chain says (6b): the step, why, and what is left to do.
+        public static string ChainStopped(string stepName, string target, string why, bool afterArrival)
+        {
+            string reason = (why ?? "").Trim().TrimEnd('.');
+            string left = afterArrival
+                ? "the vessel is in its parking orbit: choose a target in the Rendezvous tab and start the rendezvous there"
+                : "press Resume (Rendezvous or Transfer tab): the transfer is planned again from here, then the rendezvous follows";
+            return $"Transfer + rendezvous with {target} stopped during {stepName}: {reason}. Left to do: {left}";
+        }
+
+        public static string HandoffStarted(string target, bool dock, bool prepareOnly) =>
+            $"In the parking orbit: the Rendezvous pilot takes over ({(dock ? "rendezvous + docking" : "rendezvous only")} with {target}{(prepareOnly ? ", Prepare only" : "")}), see the Rendezvous tab";
+
+        public static string ResumeOffer(string transferOffer, string target) =>
+            transferOffer + " Then the rendezvous with " + target + ".";
+
+        // Whether the target's plane moved by more than PlaneChangeLogDeg; deg is the angle.
+        public static bool PlaneChanged(Vector3d before, Vector3d now, out double deg)
+        {
+            deg = double.NaN;
+            if (!(before.magnitude > 0) || !(now.magnitude > 0))
+                return false;
+            var a = before.normalized;
+            var b = now.normalized;
+            deg = Math.Atan2(Vector3d.Cross(a, b).magnitude, Vector3d.Dot(a, b)) / Deg;
+            return deg > PlaneChangeLogDeg;
+        }
+
         static string Inv(FormattableString f) => f.ToString(CultureInfo.InvariantCulture);
     }
 }
