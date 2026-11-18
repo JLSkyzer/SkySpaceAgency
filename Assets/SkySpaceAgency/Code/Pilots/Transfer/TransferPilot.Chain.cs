@@ -142,7 +142,7 @@ namespace K2D2.Transfer
                 PlaneNormal = n, ParkingRadius = parking,
             };
             progress.Report(0);
-            RunJob(JobKind.Search, ct => FarRendezvous.Plan(system, q, TransferSearch.Find, ct, progress),
+            RunJob(JobKind.Search, ct => FarRendezvous.Plan(system, q, AssistSearch.Finder(TransferSettings.gravity_assist.V), ct, progress),
                 t => OnChainPlanned(t, system, snapStages, chain, prepareOnly, resume: null));
         }
 
@@ -437,7 +437,7 @@ namespace K2D2.Transfer
             var system = snap.System;
             var snapStages = snap.Stages;
             progress.Report(0);
-            RunJob(JobKind.Search, ct => FarRendezvous.Plan(system, fq, TransferSearch.Find, ct, progress),
+            RunJob(JobKind.Search, ct => FarRendezvous.Plan(system, fq, AssistSearch.Finder(TransferSettings.gravity_assist.V), ct, progress),
                 t => OnChainPlanned(t, system, snapStages, chain, resumed.PrepareOnly, resumed));
             return true;
         }

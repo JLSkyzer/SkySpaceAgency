@@ -64,6 +64,8 @@ namespace K2D2.Transfer
         public double ApoapsisAltitude = double.NaN;
         public double InclinationDeg = double.NaN;
         public double MaxTripSeconds = double.PositiveInfinity;
+        // 4.6: also search plans with one flyby (AssistSearch); false: the plain search, as before.
+        public bool UseGravityAssist;
 
         // The request against the bodies the pilot plans with (its own snapshot).
         public bool Resolve(BodySystem s, out TransferRequest request, out string error)

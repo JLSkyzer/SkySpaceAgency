@@ -64,6 +64,9 @@ namespace K2D2.Transfer
 
         // A leg whose correction is solved without the stale planned arrival (direct descent).
         int free_arrival_step = -1;
+
+        // The UT the vessel entered the flyby body's SOI (4.6): the long-burn rule of the flyby burn.
+        double flyby_entry_ut = double.NaN;
         float next_snapshot_retry;
 
         void ResetFlight(int body)
@@ -199,10 +202,12 @@ namespace K2D2.Transfer
             }
         }
 
-        static bool IsBurnAction(FlightAction a) => a == FlightAction.Burn || a == FlightAction.Solve || a == FlightAction.Capture;
+        static bool IsBurnAction(FlightAction a) =>
+            a == FlightAction.Burn || a == FlightAction.Solve || a == FlightAction.Capture || a == FlightAction.Flyby;
 
         static FlightAction ActionFor(PlanStep step) =>
             step.Kind == StepKind.Capture ? FlightAction.Capture
+            : step.Kind == StepKind.Flyby ? FlightAction.Flyby
             : step.Kind == StepKind.Correction && !(step.DeltaV.sqrMagnitude > 0) ? FlightAction.Solve
             : FlightAction.Burn;
 
@@ -319,6 +324,9 @@ namespace K2D2.Transfer
                 case FlightAction.Capture:
                     StartCapture(i, snap);
                     return;
+                case FlightAction.Flyby:
+                    StartFlyby(i, snap);
+                    return;
                 default:
                     StartPlannedBurn(i, snap);
                     return;
@@ -385,6 +393,57 @@ namespace K2D2.Transfer
             Ignite(i, guidance, peUT, dv.magnitude, snap, period);
         }
 
+        // The burn at the flyby periapsis (4.6): toward the excess the step wants out, closed loop, at
+        // 1x (the geometry turns fast there). A periapsis below the floor is never flown: the
+        // approach correction should have refused it (JudgeCorrection), this is the last stop.
+        void StartFlyby(int i, Snapshot snap)
+        {
+            var plan = Current;
+            var step = plan.Steps[i];
+            var B = System[snap.Body];
+            double mu = B.Mu;
+            if (!ArrivalPeriapsis(snap, out double peUT, out var rPe, out var vPe))
+            {
+                Fail($"no flyby periapsis ahead around {B.Name}");
+                return;
+            }
+            var guidance = TransferFlight.GuidanceFor(plan, i, rPe, vPe, mu, B.Soi);
+            var dv = guidance.DeltaVToGo(rPe, vPe, peUT, mu);
+            if (!Hyperbola.IsFinite(dv))
+            {
+                Fail($"the flyby burn cannot be computed ({guidance.Describe()})");
+                return;
+            }
+            double floor = B.LowOrbitRadius - 10_000;
+            double planned = PlannedFlybyPeriapsis(plan, i);
+            var w = step.TargetExcess;
+            logger.LogInfo(Inv($"[Transfer] flyby of {B.Name}: periapsis predicted {(rPe.magnitude - B.Radius) / 1000:F1} km (planned {(planned - B.Radius) / 1000:F1}, floor {(floor - B.Radius) / 1000:F1}), at UT {peUT:F0}; burn {dv.magnitude:F1} m/s toward excess ({w.x:F1}, {w.y:F1}, {w.z:F1}) m/s"));
+            if (rPe.magnitude < floor)
+            {
+                Fail(Inv($"the {B.Name} flyby periapsis ({(rPe.magnitude - B.Radius) / 1000:F1} km) is below its atmosphere or terrain"));
+                return;
+            }
+            step.UT = peUT;
+            if (PrepareOnly)
+            {
+                MakeNode(i, peUT, dv, rPe, vPe, snap);
+                return;
+            }
+            // The long-burn rule against the fall from the SOI entry to the periapsis.
+            double fall = peUT - (double.IsNaN(flyby_entry_ut) ? snap.UT : flyby_entry_ut);
+            Ignite(i, guidance, peUT, dv.magnitude, snap, fall, allowWarp: false);
+        }
+
+        // The flyby periapsis the plan aimed at: the target of the corrections before the flyby.
+        static double PlannedFlybyPeriapsis(TransferPlan plan, int i)
+        {
+            int body = plan.Steps[i].Body;
+            for (int k = i - 1; k >= 0; k--)
+                if (plan.Steps[k].TargetBody == body && !double.IsNaN(plan.Steps[k].TargetPeriapsisRadius))
+                    return plan.Steps[k].TargetPeriapsisRadius;
+            return double.NaN;
+        }
+
         // The next periapsis on the current conic.
         bool ArrivalPeriapsis(Snapshot snap, out double peUT, out Vector3d rPe, out Vector3d vPe)
         {
@@ -403,7 +462,7 @@ namespace K2D2.Transfer
         }
 
         // Starts TargetOrbitBurn centred on centreUT. Staging when dry is on for transfer burns.
-        void Ignite(int i, IBurnGuidance guidance, double centreUT, double dv, Snapshot snap, double orbitPeriod)
+        void Ignite(int i, IBurnGuidance guidance, double centreUT, double dv, Snapshot snap, double orbitPeriod, bool allowWarp = true)
         {
             var plan = Current;
             string name = TransferFlight.StepName(plan, i);
@@ -417,7 +476,7 @@ namespace K2D2.Transfer
                     plan.Warnings.Add(w);
             }
             burn.stage_when_dry = true;
-            burn.allow_warp = true;
+            burn.allow_warp = allowWarp;
             burn_ignited = false;
             // The plan is in the system's shared frame; TargetOrbitBurn reads the vessel in its body's.
             burn.Start(CelestialFrames.InLocalFrame(guidance, System[snap.Body].FrameToCommon), start);
@@ -682,6 +741,24 @@ namespace K2D2.Transfer
                 case LegReplan.AimExcess:
                     logger.LogInfo($"[Transfer] leg {leg}: the re-aim burn aims at the required excess {plan.RequiredExcess.magnitude:F1} m/s");
                     break;
+                case LegReplan.Flyby:
+                {
+                    // Nothing to re-plan: the burn is closed-loop at the periapsis.
+                    flyby_entry_ut = GeneralTools.Current_UT;
+                    var step = plan.Steps[i];
+                    var B = System[body];
+                    double planned = PlannedFlybyPeriapsis(plan, i);
+                    if (TakeSnapshot(out var snap, out _, out _) && snap.Body == body && ArrivalPeriapsis(snap, out double peUT, out var rPe, out _))
+                    {
+                        Adopt(snap);
+                        double vin = Math.Sqrt(Math.Max(0, snap.V.sqrMagnitude - 2 * B.Mu / snap.R.magnitude));
+                        logger.LogInfo(Inv($"[Transfer] leg {leg} starts in {B.Name}: flyby, periapsis {(rPe.magnitude - B.Radius) / 1000:F1} km predicted (planned {(planned - B.Radius) / 1000:F1}), excess in {vin:F0} m/s"));
+                        step.UT = peUT;
+                    }
+                    else
+                        logger.LogInfo($"[Transfer] leg {leg} starts in {B.Name}: flyby, no periapsis read yet");
+                    break;
+                }
                 case LegReplan.PlannedImpulse:
                 {
                     string w = $"Leg {leg}: the re-aim burn in {System[body].Name} uses its planned vector; the next correction absorbs the difference.";
@@ -881,8 +958,11 @@ namespace K2D2.Transfer
             late_state = null;
             StopWarp();
             UpdateSoiPrediction("after the SOI change");
-            // On entering the capture's SOI, the capture goes to the periapsis really ahead.
+            // On leaving a flyby body (4.6): the excess out against the wanted one.
             var plan = Current;
+            if (plan != null && plan.Assist != AssistKind.None && from == plan.FlybyBody && System != null)
+                LogFlybyDone(plan, from, now);
+            // On entering the capture's SOI, the capture goes to the periapsis really ahead.
             if (plan != null && StepIndex < plan.Steps.Count && plan.Steps[StepIndex].Kind == StepKind.Capture && plan.Steps[StepIndex].Body == to
                 && TakeSnapshot(out var snap, out _, out _) && snap.Body == to && ArrivalPeriapsis(snap, out double peUT, out var rPe, out _))
             {
@@ -892,6 +972,25 @@ namespace K2D2.Transfer
                 plan.Steps[StepIndex].UT = peUT;
             }
             Save();
+        }
+
+        void LogFlybyDone(TransferPlan plan, int flyby, double now)
+        {
+            var step = plan.Steps.Find(st => st.Kind == StepKind.Flyby);
+            if (step == null || !TakeSnapshot(out var snap, out _, out _))
+                return;
+            var B = System[flyby];
+            if (snap.System[flyby].ParentIndex != snap.Body)
+                return;
+            snap.System.StateRelativeToParent(flyby, snap.UT, out var rB, out var vB);
+            var asymptote = Hyperbola.Asymptote(snap.R - rB, snap.V - vB, B.Mu);
+            var want = step.TargetExcess;
+            double deg = want.sqrMagnitude > 0 && asymptote.sqrMagnitude > 0
+                ? Math.Atan2(Vector3d.Cross(asymptote, want).magnitude, Vector3d.Dot(asymptote, want)) * 180 / Math.PI
+                : double.NaN;
+            string next = StepIndex < plan.Steps.Count ? TransferFlight.StepName(plan, StepIndex) : "the end of the plan";
+            logger.LogInfo(Inv($"[Transfer] flyby of {B.Name} done: excess out {asymptote.magnitude:F1} m/s, {deg:F2}° from the wanted one ({want.magnitude:F1} m/s); next: {next}"));
+            flyby_entry_ut = double.NaN;
         }
 
         // ---------------------------------------------------------------- late SOI changes

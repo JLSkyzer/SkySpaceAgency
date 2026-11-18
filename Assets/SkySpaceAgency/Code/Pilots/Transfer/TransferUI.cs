@@ -22,6 +22,7 @@ namespace K2D2.Transfer
         public static ClampSetting<float> inc_deg = new("transfer.inc_deg", 0, 0, 180);
         public static Setting<bool> prepare_only = new("transfer.prepare_only", false);
         public static Setting<string> max_trip_days = new("transfer.max_trip_days", "");
+        public static Setting<bool> gravity_assist = new("transfer.gravity_assist", false);
     }
 
     // Transfer tab (spec 4.1): the choices, the buttons, and the plan of TransferPilot (case, dates,

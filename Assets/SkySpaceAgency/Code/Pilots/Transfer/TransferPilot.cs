@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -41,6 +42,13 @@ namespace K2D2.Transfer
 
         public TransferPhase Phase { get; private set; } = TransferPhase.Planned;
         public TransferPlan Current { get; private set; }
+
+        // The last search with gravity assists (4.6): the direct plan and the assist, for the
+        // tab's choice. Null after a plain search.
+        public AssistChoice Choice { get; private set; }
+
+        // The assist search logs on the worker thread: its lines are written here, on the main one.
+        readonly ConcurrentQueue<string> assist_log = new ConcurrentQueue<string>();
         public string Status { get; private set; } = "";
         // The per-stage check of the current plan (from the step it is at), null before a plan.
         public BudgetResult Budget { get; private set; }
@@ -83,6 +91,7 @@ namespace K2D2.Transfer
             node = new PrepareOnlyNode(logger, "[Transfer]");
             burn.stage_when_dry = true;
             burn.allow_warp = true;
+            AssistSearch.Log = line => assist_log.Enqueue(line);
         }
 
         internal static string PlansFolder => K2D2_Plugin.PlansFolder;
@@ -164,6 +173,7 @@ namespace K2D2.Transfer
                 return;
             CancelJob();
             ClearChain(); // a plain transfer: no rendezvous follows
+            Choice = null;
             if (!TakeSnapshot(out var snap, out string error, out _))
             {
                 Status = "Cannot plan: " + error;
@@ -191,7 +201,37 @@ namespace K2D2.Transfer
             logger.LogInfo($"[Transfer] search: {snap.System[q.FromBody].Name} -> {snap.System[q.ToBody].Name}, {q.Arrival}, " +
                 Inv($"Pe {q.ArrivalPeriapsisRadius:F0} m Ap {q.ArrivalApoapsisRadius:F0} m inc {q.ArrivalInclinationDeg:F1}°, max trip {q.MaxTripSeconds:F0} s"));
             var system = snap.System;
+            if (input.UseGravityAssist)
+            {
+                logger.LogInfo("[Transfer] search with gravity assists");
+                StartAssistSearch(system, q, choice =>
+                {
+                    Choice = choice;
+                    OnPlanned(choice.Preselected, system, snap.Stages, resume: null);
+                });
+                return;
+            }
             StartSearch(system, q, JobKind.Search, plan => OnPlanned(plan, system, snap.Stages, resume: null));
+        }
+
+        /// <summary>
+        /// The player's choice between the direct plan and the offered gravity assist (4.6). Refused
+        /// while flying or searching, or when that plan is absent or refused.
+        /// </summary>
+        public void ChoosePlan(bool assist)
+        {
+            if (isRunning || job.Running || Choice == null)
+                return;
+            var plan = assist ? (Choice.Offered ? Choice.Assist : null) : Choice.Direct;
+            if (plan == null || !plan.Ok)
+                return;
+            Current = plan;
+            Budget = BudgetFor(plan, 0);
+            logger.LogInfo($"[Transfer] assist: chosen {TransferReadout.AssistLabel(plan, System)} by the player");
+            Status = Budget.Ok
+                ? $"{plan.CaseName}: {plan.TotalDeltaV:F0} m/s, departure in {StrTool.DurationToString(Math.Max(0, plan.DepartureUT - GeneralTools.Current_UT))}, " +
+                  $"trip {StrTool.DurationToString(plan.TripSeconds)}."
+                : Budget.Refusal;
         }
 
         public void CancelSearch()
@@ -274,6 +314,7 @@ namespace K2D2.Transfer
                 return;
             Save();
             isRunning = false;
+            Choice = null;
             checked_vessel = null; // offer the saved plan
             Status = "Stopped. Resume continues from the actual state.";
             logger.LogInfo($"[Transfer] stopped by the player in {Phase}, step {StepIndex}");
@@ -343,6 +384,8 @@ namespace K2D2.Transfer
                     }
                     if (ReplanChain(resumed, snap, q))
                         return;
+                    if (resumed.Plan.Assist != AssistKind.None && ResumeAssistPlan(resumed, snap, q, periapsisAhead))
+                        return;
                     Status = $"Planning the transfer to {resumed.ToBodyName} again from the actual state...";
                     var system = snap.System;
                     var goneChain = chainGone != null ? Chain : null;
@@ -371,6 +414,62 @@ namespace K2D2.Transfer
                     free_arrival_step = resumed.FreeArrivalStep;
                     return;
                 }
+            }
+        }
+
+        // A gravity-assist plan to plan again from the actual state (4.6, decision 6): before the
+        // departure, the assist search again (the cheaper offer is flown); cruising to the flyby or in
+        // its SOI before the periapsis, the assist re-planned from here (TransferSearch.ResumeAssist),
+        // and when it cannot be kept, the plain search with a status that says so; after the flyby,
+        // the plain search. False: the plain search (the caller's path).
+        bool ResumeAssistPlan(SavedPlan resumed, Snapshot snap, TransferRequest q, bool periapsisAhead)
+        {
+            var plan = resumed.Plan;
+            if (!TransferFlight.RemapBodies(resumed, snap.System))
+                return false;
+            int flyby = plan.FlybyBody;
+            if (flyby < 0 || flyby >= snap.System.Count)
+                return false;
+            var route = TransferFlight.RouteAssistResume(plan, resumed.StepIndex, snap.Body, periapsisAhead);
+            string name = snap.System[flyby].Name;
+            logger.LogInfo($"[Transfer] resume of an assist via {name}: route {route}");
+            var system = snap.System;
+            var stages = snap.Stages;
+            switch (route)
+            {
+                case AssistResumeRoute.FullSearch:
+                    Status = $"Planning the transfer to {resumed.ToBodyName} again, gravity assists included...";
+                    StartAssistSearch(system, q, choice => OnPlanned(choice.Preselected, system, stages, resumed));
+                    return true;
+                case AssistResumeRoute.BeforeFlyby:
+                case AssistResumeRoute.InFlybySoi:
+                {
+                    var flybyStep = plan.Steps.Find(st => st.Kind == StepKind.Flyby);
+                    double flybyUT = flybyStep?.UT ?? double.NaN;
+                    double arrivalUT = plan.ArrivalUT;
+                    string why = null;
+                    Status = $"Planning the gravity assist via {name} again from the actual state...";
+                    StartSearchJob(JobKind.Search, ct =>
+                    {
+                        var p = TransferSearch.ResumeAssist(system, q, route, flyby, flybyUT, arrivalUT, ct);
+                        if (p.Ok)
+                            return p;
+                        why = p.Refusal;
+                        return TransferSearch.Find(system, q, ct, progress);
+                    }, replanned =>
+                    {
+                        OnPlanned(replanned, system, stages, resumed);
+                        if (why != null)
+                        {
+                            string text = $"The gravity assist via {name} cannot be kept from here ({why}): planned again without it.";
+                            logger.LogInfo("[Transfer] " + text);
+                            Status = text + (replanned.Ok ? "" : " " + Status);
+                        }
+                    });
+                    return true;
+                }
+                default:
+                    return false;
             }
         }
 
@@ -618,7 +717,14 @@ namespace K2D2.Transfer
         // Only pure code runs on the worker: the snapshot was read before.
         void RunJob<T>(JobKind kind, Func<CancellationToken, T> work, Action<Task<T>> done) => job.Run(work, done, kind);
 
-        void PollJob() => job.Poll(e =>
+        void PollJob()
+        {
+            while (assist_log.TryDequeue(out string line))
+                logger.LogInfo(line);
+            PollSearchJob();
+        }
+
+        void PollSearchJob() => job.Poll(e =>
         {
             logger.LogError($"[Transfer] {e}");
             if (isRunning)
@@ -629,10 +735,17 @@ namespace K2D2.Transfer
 
         void CancelJob() => job.Cancel();
 
-        void StartSearch(BodySystem system, TransferRequest q, JobKind kind, Action<TransferPlan> onPlan)
+        void StartSearch(BodySystem system, TransferRequest q, JobKind kind, Action<TransferPlan> onPlan) =>
+            StartSearchJob(kind, ct => TransferSearch.Find(system, q, ct, progress), onPlan);
+
+        // The search with gravity assists (4.6), on the same worker job (progress, cancel).
+        void StartAssistSearch(BodySystem system, TransferRequest q, Action<AssistChoice> onChoice) =>
+            StartSearchJob(JobKind.Search, ct => AssistSearch.Find(system, q, ct, progress), onChoice);
+
+        void StartSearchJob<T>(JobKind kind, Func<CancellationToken, T> work, Action<T> onPlan)
         {
             progress.Report(0);
-            RunJob(kind, ct => TransferSearch.Find(system, q, ct, progress), t =>
+            RunJob(kind, work, t =>
             {
                 if (!PilotJob.Result(t, out var plan, out string error, out bool canceled))
                 {
