@@ -435,7 +435,7 @@ namespace K2D2.Rendezvous
                 steps_el.Clear();
                 foreach (var row in FarRendezvous.Rows(chain, Transfer.System, GeneralTools.Current_UT, Transfer.isRunning ? Transfer.StepIndex : 0))
                     steps_el.Add(StepElement(row));
-                var chainBudget = Transfer.Budget;
+                var chainBudget = Transfer.ChainBudget ?? Transfer.Budget;
                 totals_label.text = FarRendezvous.Totals(chain, chainBudget);
                 totals_label.style.color = chainBudget == null || chainBudget.Ok ? new StyleColor(StyleKeyword.Null) : new StyleColor(new UnityEngine.Color(1f, 0.55f, 0.4f));
                 FillStages(RendezvousReadout.Stages(null, 0, chainStages, null));

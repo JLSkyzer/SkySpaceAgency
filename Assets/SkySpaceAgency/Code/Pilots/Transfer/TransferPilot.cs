@@ -312,6 +312,9 @@ namespace K2D2.Transfer
             ClearChain();
             Chain = resumed.Chain;
             ChainStatusShown = Chain != null;
+            string chainGone = ChainTargetWhy();
+            if (chainGone != null)
+                DropChainRendezvous(resumed.Plan, chainGone);
             switch (action)
             {
                 case ResumeAction.Refuse:
@@ -338,11 +341,11 @@ namespace K2D2.Transfer
                         Status = PlanStore.MismatchMessage;
                         return;
                     }
-                    if (ReplanChain(resumed, snap, q.ToBody))
+                    if (ReplanChain(resumed, snap, q))
                         return;
                     Status = $"Planning the transfer to {resumed.ToBodyName} again from the actual state...";
                     var system = snap.System;
-                    var goneChain = Chain;
+                    var goneChain = chainGone != null ? Chain : null;
                     StartSearch(system, q, JobKind.Search, plan =>
                     {
                         OnPlanned(plan, system, snap.Stages, resumed);
@@ -355,7 +358,7 @@ namespace K2D2.Transfer
                 {
                     var plan = resumed.Plan;
                     if (Chain != null)
-                        logger.LogInfo($"[Transfer] chain: resume: target {(RendezvousSnapshot.FindVessel(Chain.TargetId) != null ? "found" : "gone")}, Continue");
+                        logger.LogInfo($"[Transfer] chain: resume: target {(chainGone == null ? "found" : "gone (" + chainGone + ")")}, Continue");
                     var budget = BudgetFor(plan, resumed.StepIndex);
                     Current = plan;
                     Budget = budget;
@@ -408,7 +411,8 @@ namespace K2D2.Transfer
             double horizon = Math.Max(Math.Max(plan.ArrivalUT, legArrival) + 0.25 * Math.Max(0, plan.TripSeconds), burnUT + 3600);
             double captureAp = TransferFlight.CaptureApoapsis(plan, i);
             double wanted = step.TargetPeriapsisRadius, inc = step.TargetInclinationDeg;
-            var plane = step.TargetPlaneNormal;
+            // A chain's final target: its plane read now (the saved one may be another session's frame).
+            var plane = ReadTargetPlane(i, step, TransferFlight.CorrectionNumber(plan, i));
             logger.LogInfo($"[Transfer] resume after a failed correction: correcting the current path to {name} within {budget:F0} m/s " +
                 $"(the plan's correction allowance {plan.ReserveDeltaV:F0} m/s, or {TransferFlight.ExistingCorrectionShare * 100:F0} % of what it still needs), planned and nearest passes");
             Status = $"Correcting the current path to {name} (up to {budget:F0} m/s)...";

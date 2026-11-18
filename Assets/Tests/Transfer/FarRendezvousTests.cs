@@ -450,6 +450,57 @@ public class FarRendezvousTests
             FarRendezvous.ResumeOffer("Resume plan to Mun (next: correction).", "Station"));
     }
 
+    // ------------------------------------------------------------ final review fixes
+
+    // C1: a resume in the target's SOI (a failed capture) cannot go through the chain's search, which
+    // refuses a target around our own body: the plain search (an orbit there) with the target's plane.
+    [Test]
+    public void Resume_Route()
+    {
+        Assert.AreEqual(FarRendezvous.ResumeRoute.ChainSearch, FarRendezvous.RouteForResume(_kerbol, _duna, null));
+        Assert.AreEqual(FarRendezvous.ResumeRoute.PlainWithTargetPlane, FarRendezvous.RouteForResume(_duna, _duna, null));
+        Assert.AreEqual(FarRendezvous.ResumeRoute.PlainNoPlane, FarRendezvous.RouteForResume(_kerbol, _duna, "the target is landed"));
+        Assert.AreEqual(FarRendezvous.ResumeRoute.PlainNoPlane, FarRendezvous.RouteForResume(_duna, _duna, "the target is landed"));
+    }
+
+    // I1: the rendezvous counts in the go/no-go only while the departure is still ahead (the vessel
+    // can stop safely); in cruise or at the capture, the transfer goes on to the parking orbit.
+    [Test]
+    public void GatesOnChain_OnlyBeforeTheDeparture()
+    {
+        var plan = HandPlan();
+        Assert.IsTrue(FarRendezvous.GatesOnChain(plan, 0), "the injection is ahead");
+        Assert.IsFalse(FarRendezvous.GatesOnChain(plan, 1), "in cruise");
+        Assert.IsFalse(FarRendezvous.GatesOnChain(plan, 2), "at the capture");
+        Assert.IsFalse(FarRendezvous.GatesOnChain(plan, 3), "done");
+        var inTarget = new TransferPlan
+        {
+            Ok = true, CaseName = TransferSearch.InTarget,
+            Steps = { new PlanStep { Kind = StepKind.OrbitChange, Body = _duna, DeltaVMagnitude = 300 } },
+        };
+        Assert.IsFalse(FarRendezvous.GatesOnChain(inTarget, 0), "a capture planned in the target's SOI is not a departure");
+        var replanned = new TransferPlan
+        {
+            Ok = true, CaseName = "Existing encounter",
+            Steps = { new PlanStep { Kind = StepKind.Correction, Body = _kerbol, DeltaVMagnitude = 20 }, new PlanStep { Kind = StepKind.Capture, Body = _duna, DeltaVMagnitude = 600 } },
+        };
+        Assert.IsFalse(FarRendezvous.GatesOnChain(replanned, 0), "a re-plan in cruise");
+        Assert.IsFalse(FarRendezvous.GatesOnChain(null, 0));
+    }
+
+    // I4: on a resume, a chain plan whose transfer is fine but whose rendezvous cannot be planned
+    // falls back to the transfer alone (the hand-over decides at the arrival).
+    [Test]
+    public void ResumeFallback_TransferOkRendezvousRefused()
+    {
+        var p = new FarRendezvousPlan { Ok = false, Refusal = "No rendezvous with Station from the 190 km orbit at Duna: x.", Transfer = HandPlan() };
+        Assert.IsTrue(FarRendezvous.TransferAloneOnResume(p));
+        p.Transfer.Ok = false;
+        Assert.IsFalse(FarRendezvous.TransferAloneOnResume(p), "no transfer either");
+        Assert.IsFalse(FarRendezvous.TransferAloneOnResume(new FarRendezvousPlan { Ok = false, Refusal = "The target is landed." }));
+        Assert.IsFalse(FarRendezvous.TransferAloneOnResume(HandChain(1)), "an Ok plan needs no fallback");
+    }
+
     [Test]
     public void PlaneChanged_AboveTheLogThreshold()
     {

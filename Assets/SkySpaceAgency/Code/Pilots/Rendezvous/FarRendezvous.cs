@@ -441,6 +441,52 @@ namespace K2D2.Rendezvous
 
         // ------------------------------------------------------------ chain rules and texts
 
+        public enum ResumeRoute { ChainSearch, PlainWithTargetPlane, PlainNoPlane }
+
+        // How a chain whose plan must be searched again resumes. The target gone (handoffWhy set): the
+        // plain search, aimed at the periapsis only (no rendezvous follows). Already in the target's
+        // SOI (a failed capture): the plain search, which plans the orbit there, in the target's plane
+        // (the chain's search refuses a target around our own body). Else the chain's search.
+        public static ResumeRoute RouteForResume(int ourBody, int targetBody, string handoffWhy)
+        {
+            if (handoffWhy != null)
+                return ResumeRoute.PlainNoPlane;
+            if (ourBody == targetBody)
+                return ResumeRoute.PlainWithTargetPlane;
+            return ResumeRoute.ChainSearch;
+        }
+
+        // Whether the rendezvous counts in the go/no-go of the stages from step 'from': only while the
+        // departure is still ahead (the first burn left is a plane change, an orbit change or the
+        // injection, outside the target's SOI), when stopping leaves the vessel in a safe orbit. In
+        // cruise or at the capture the transfer goes on to the parking orbit, and the Rendezvous pilot
+        // checks its own budget at the hand-over.
+        public static bool GatesOnChain(TransferPlan plan, int from)
+        {
+            if (plan?.Steps == null || plan.CaseName == TransferSearch.InTarget)
+                return false;
+            for (int i = Math.Max(0, from); i < plan.Steps.Count; i++)
+            {
+                switch (plan.Steps[i].Kind)
+                {
+                    case StepKind.Escape:
+                        continue;
+                    case StepKind.PlaneChange:
+                    case StepKind.OrbitChange:
+                    case StepKind.Injection:
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+            return false;
+        }
+
+        // On a resume, a chain plan refused for its rendezvous only (its transfer is fine): the transfer
+        // alone is flown to the parking orbit, and the hand-over decides there.
+        public static bool TransferAloneOnResume(FarRendezvousPlan p) =>
+            p != null && !p.Ok && p.Transfer != null && p.Transfer.Ok;
+
         // The target orbits another body than ours: the far button, not 4.3's.
         public static bool IsFar(string ourBody, string targetBody) =>
             !string.IsNullOrEmpty(ourBody) && !string.IsNullOrEmpty(targetBody) && !string.Equals(ourBody, targetBody, StringComparison.Ordinal);

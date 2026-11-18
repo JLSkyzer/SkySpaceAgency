@@ -27,8 +27,13 @@ namespace K2D2.Transfer
         // The saved plan of the active vessel is a chain: the Rendezvous tab offers its Resume.
         public bool SavedIsChain => saved?.Chain != null;
 
+        // The chain's per-stage check, rendezvous and docking included, for the tab (Budget is the
+        // go/no-go, which leaves the rendezvous out once the departure is behind: BudgetFor).
+        public BudgetResult ChainBudget { get; private set; }
+
         // The correction steps whose unreadable target was logged already (once per step).
         readonly HashSet<int> chain_plane_unread_logged = new HashSet<int>();
+        bool chain_short_logged;
 
         public void ForgetChainStatus() => ChainStatusShown = false;
 
@@ -36,9 +41,33 @@ namespace K2D2.Transfer
         {
             Chain = null;
             ChainPlan = null;
+            ChainBudget = null;
             ChainStatusShown = false;
             chain_plane_unread_logged.Clear();
+            chain_short_logged = false;
         }
+
+        // On a resume, a target that is gone: no rendezvous follows. Neither budgeted nor aimed at
+        // (its saved plane may be in another session's frame, and it serves nothing now); the
+        // transfer goes on to the parking orbit, the hand-over stops with the reason.
+        void DropChainRendezvous(TransferPlan plan, string why)
+        {
+            if (Chain == null)
+                return;
+            logger.LogInfo($"[Transfer] chain: resume: target gone ({why}): the rendezvous is no longer budgeted nor aimed at");
+            Chain.RendezvousDeltaV = 0;
+            Chain.DockReserve = 0;
+            Chain.PlaneNormal = Vector3d.zero;
+            if (plan?.Request != null)
+                plan.Request.ArrivalPlaneNormal = Vector3d.zero;
+            if (plan?.Steps != null)
+                foreach (var st in plan.Steps)
+                    st.TargetPlaneNormal = Vector3d.zero;
+        }
+
+        // Why the chain's target cannot be met (gone, landed, elsewhere), null when it can.
+        string ChainTargetWhy() =>
+            Chain == null ? null : HandoffWhy(RendezvousSnapshot.FindVessel(Chain.TargetId), Chain.TargetBodyName);
 
         /// <summary>
         /// Plans the transfer into the target's plane, the rendezvous and (mode) the docking, on a
@@ -133,6 +162,33 @@ namespace K2D2.Transfer
             ChainStatusShown = true;
             if (p.Transfer != null)
                 logger.LogInfo(TransferFlight.Describe(p.Transfer, system, last_job_ms));
+            if (!p.Ok && resume != null && FarRendezvous.TransferAloneOnResume(p))
+            {
+                // A resume: the transfer is fine, only the rendezvous cannot be budgeted now. The
+                // transfer goes on to the parking orbit; the Rendezvous pilot plans there.
+                chain.RendezvousDeltaV = 0;
+                chain.DockReserve = 0;
+                Chain = chain;
+                ChainPlan = null;
+                Current = p.Transfer;
+                Budget = BudgetFor(Current, 0);
+                logger.LogInfo($"[Transfer] chain: resume: {p.Refusal} The transfer alone is flown to the parking orbit; " +
+                    $"stage budget {(Budget.Ok ? "ok" : Budget.Refusal)}");
+                if (!Budget.Ok)
+                {
+                    Status = Budget.Refusal;
+                    return;
+                }
+                if (!TakeSnapshot(out var now, out string readError, out _))
+                {
+                    Status = "Cannot resume: " + readError;
+                    return;
+                }
+                Adopt(now);
+                Begin(Current, 0, resume.PrepareOnly, now, "resume (the transfer alone, the rendezvous at the arrival)");
+                Status = $"{p.Refusal} The transfer goes on to the parking orbit; the Rendezvous pilot plans the rendezvous there.";
+                return;
+            }
             if (!p.Ok)
             {
                 Current = null;
@@ -185,12 +241,30 @@ namespace K2D2.Transfer
             StartCore(prepareOnly, "start (transfer + rendezvous)");
         }
 
-        // The per-stage check from step 'from': the rendezvous and the docking reserve on top when a
-        // chain is set.
-        BudgetResult BudgetFor(TransferPlan plan, int from) =>
-            Chain == null
-                ? TransferFlight.RemainingBudget(plan, from, stages)
-                : FarRendezvous.Budget(plan, from, Chain.RendezvousDeltaV, Chain.DockReserve, stages);
+        // The go/no-go per-stage check from step 'from'. With a chain, the rendezvous and the docking
+        // reserve count while the departure is ahead (FarRendezvous.GatesOnChain); after it, a plan that
+        // no longer pays for the rendezvous goes on to the parking orbit (stopping in cruise would leave
+        // the vessel on a flyby), and the Rendezvous pilot checks its own budget at the hand-over.
+        // ChainBudget keeps the whole chain's check for the tab.
+        BudgetResult BudgetFor(TransferPlan plan, int from)
+        {
+            if (Chain == null)
+            {
+                ChainBudget = null;
+                return TransferFlight.RemainingBudget(plan, from, stages);
+            }
+            var chain = FarRendezvous.Budget(plan, from, Chain.RendezvousDeltaV, Chain.DockReserve, stages);
+            ChainBudget = chain;
+            if (FarRendezvous.GatesOnChain(plan, from))
+                return chain;
+            var go = TransferFlight.RemainingBudget(plan, from, stages);
+            if (!chain.Ok && go.Ok && !chain_short_logged)
+            {
+                chain_short_logged = true;
+                logger.LogInfo($"[Transfer] chain: the stages no longer pay for the rendezvous ({chain.Refusal}); the transfer goes on to the parking orbit, the hand-over decides there");
+            }
+            return go;
+        }
 
         // The plane the correction of step i aims at: on a chain's final target, the target's plane
         // read now (a change above PlaneChangeLogDeg is taken and logged); otherwise the stored one.
@@ -277,6 +351,7 @@ namespace K2D2.Transfer
             bool started = rv != null && rv.Start(mode, chain.TargetId, PrepareOnly);
             if (started)
             {
+                ChainStatusShown = false; // the Rendezvous pilot owns the tab from now on
                 Status = FarRendezvous.HandoffStarted(name, RendezvousFlight.Docks(mode), PrepareOnly);
                 logger.LogInfo("[Transfer] chain: hand-over started");
             }
@@ -321,26 +396,36 @@ namespace K2D2.Transfer
         // can be read (estimate and budget again), else the plain search with the saved plane (the
         // transfer goes on to the parking orbit, the hand-over will stop with the reason).
         // False: not a chain, the caller runs its own re-plan.
-        bool ReplanChain(SavedPlan resumed, Snapshot snap, int toBody)
+        // q: the plain re-plan's request, whose plane is set here when the plain route is taken.
+        bool ReplanChain(SavedPlan resumed, Snapshot snap, TransferRequest q)
         {
             var chain = Chain;
+            int toBody = q.ToBody;
             if (chain == null || toBody < 0)
                 return false;
             var target = RendezvousSnapshot.FindVessel(chain.TargetId);
             string why = HandoffWhy(target, chain.TargetBodyName);
-            logger.LogInfo($"[Transfer] chain: resume: target {(why == null ? "found" : "gone (" + why + ")")}, Replan");
-            if (why != null)
+            var route = FarRendezvous.RouteForResume(snap.Body, toBody, why);
+            logger.LogInfo($"[Transfer] chain: resume: target {(why == null ? "found" : "gone (" + why + ")")}, Replan ({route})");
+            double ut = snap.UT;
+            if (route == FarRendezvous.ResumeRoute.PlainNoPlane)
             {
-                // The rendezvous will not follow: not budgeted any more.
-                chain.RendezvousDeltaV = 0;
-                chain.DockReserve = 0;
+                q.ArrivalPlaneNormal = Vector3d.zero; // DropChainRendezvous has run: no plane, no rendezvous budget
                 return false;
             }
-            double ut = snap.UT;
             var rT = target.Orbit.GetRelativePositionAtUTZup(ut);
             var vT = target.Orbit.GetOrbitalVelocityAtUTZup(ut);
+            if (route == FarRendezvous.ResumeRoute.PlainWithTargetPlane)
+            {
+                // In the target's SOI: the plain search plans the orbit there (capture first), in the
+                // target's plane read now; the chain and its budget are kept, the hand-over follows.
+                var n = Vector3d.Cross(rT, vT).normalized;
+                q.ArrivalPlaneNormal = n;
+                chain.PlaneNormal = n;
+                return false;
+            }
             RendezvousFlight.TryParse(chain.Mode, out RvMode mode);
-            var q = new FarRendezvousRequest
+            var fq = new FarRendezvousRequest
             {
                 FromBody = snap.Body, TargetBody = toBody, R0 = snap.R, V0 = snap.V, UT0 = ut,
                 TargetR = rT, TargetV = vT, TargetName = chain.TargetName, Dock = RendezvousFlight.Docks(mode),
@@ -351,7 +436,7 @@ namespace K2D2.Transfer
             var system = snap.System;
             var snapStages = snap.Stages;
             progress.Report(0);
-            RunJob(JobKind.Search, ct => FarRendezvous.Plan(system, q, TransferSearch.Find, ct, progress),
+            RunJob(JobKind.Search, ct => FarRendezvous.Plan(system, fq, TransferSearch.Find, ct, progress),
                 t => OnChainPlanned(t, system, snapStages, chain, resumed.PrepareOnly, resumed));
             return true;
         }
