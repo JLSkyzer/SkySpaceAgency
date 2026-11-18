@@ -362,4 +362,23 @@ public class LaunchWindowTests
         Assert.AreEqual(3, Passes(Ksc(), Normal(6, 0), 4 * Day, 3, 300).Count);
         Assert.AreEqual(3, Passes(new Vector3d(R, 0, 0), new Vector3d(0, 0, 1), Day, 3, 300).Count);
     }
+    [Test]
+    public void AtTime_DueEastNow_ReachedPlaneThroughInsertion()
+    {
+        // A plane of 0.03°, out of reach from the KSC (-0.097°): launch now, due east.
+        var n = Normal(0.03, 40);
+        var w = LaunchWindow.AtTime(R, Mu, Omega(), Rotate(Ksc(), Omega(), 500), 500, n, Orbit, 150, 5 * Deg);
+        Assert.IsTrue(w.Ok, w.Refusal);
+        Assert.AreEqual(500, w.LaunchUT, 1e-9);
+        Assert.AreEqual(650, w.InsertionUT, 1e-9);
+        Assert.AreEqual(PlanePass.Any, w.Pass);
+        Assert.AreEqual(90, w.AzimuthDeg, 1e-6);
+        Assert.Less(Math.Abs(Vector3d.Dot(w.InsertionPoint, w.ReachedPlaneNormal)), 1e-9);
+        double latQ = Math.Abs(Math.Asin(w.InsertionPoint.z)) / Deg;
+        Assert.That(w.PlaneErrorDeg, Is.InRange(latQ - 0.03 - 1e-6, latQ + 0.03 + 1e-6));
+        Assert.AreEqual(2 * Math.Sqrt(Mu / Orbit) * Math.Sin(w.PlaneErrorDeg * Deg / 2), w.PlaneChangeDeltaV, 1e-9);
+
+        var bad = LaunchWindow.AtTime(R, Mu, Omega(), Ksc(), 0, Vector3d.zero, Orbit, 150, 0);
+        Assert.IsFalse(bad.Ok);
+    }
 }

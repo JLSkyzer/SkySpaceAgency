@@ -220,6 +220,36 @@ public class RendezvousLaunchTests
         Assert.Greater(times.Count, 1);
     }
 
+    // Review finding: a station at 0.03° is out of reach from the KSC, but launching at any time costs
+    // at most ~2.4 m/s more than under the plane's vertex: the passes sample one target orbit, not
+    // one pass per Kerbin day.
+    [Test]
+    public void NearlyEquatorialTarget_OutOfReach_LaunchesAnyTime()
+    {
+        var q = Request(720000, 40, 0.03, 40);
+        var plan = Run(q);
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.AreEqual(RendezvousLaunch.MaxPasses, plan.Passes.Count);
+        double period = 2 * Math.PI * Math.Sqrt(Math.Pow(720000, 3) / Mu);
+        for (int k = 0; k < plan.Passes.Count; k++)
+        {
+            Assert.AreEqual(PlanePass.Any, plan.Passes[k].Window.Pass);
+            Assert.AreEqual(q.UT0 + k * period / 12, plan.Passes[k].Window.LaunchUT, 1e-6);
+        }
+        Assert.That(plan.Window.PlaneErrorDeg, Is.InRange(0.06, 0.14));
+        StringAssert.Contains("plane match", plan.Explanation);
+    }
+
+    [Test]
+    public void SlightlyInclinedTarget_Reachable_KeepsThePlanePasses()
+    {
+        // 0.2° is reachable from the KSC; launching any time would cost up to ~16 m/s of plane change.
+        var plan = Run(Request(720000, 40, 0.2, 40));
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.IsTrue(plan.Passes.All(p => p.Window.Pass != PlanePass.Any));
+        Assert.Less(plan.Window.PlaneErrorDeg, 0.01);
+    }
+
     static Vector3d TurnZ(Vector3d p, double deg)
     {
         double c = Math.Cos(deg * Deg), s = Math.Sin(deg * Deg);

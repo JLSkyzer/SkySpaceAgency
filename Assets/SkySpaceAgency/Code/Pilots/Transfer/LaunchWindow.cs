@@ -135,12 +135,43 @@ namespace K2D2.Transfer
             return best;
         }
 
+        // A launch at ut0 itself, due east (west for a retrograde plane), for a plane out of reach:
+        // the plane reached is the one through the insertion point heading east, and its angle to the
+        // target plane is reported as for Find. Refuses the same inputs as Find.
+        public static LaunchWindowResult AtTime(double bodyRadius, double mu, Vector3d bodyAngularVelocity,
+            Vector3d siteAtUT0, double ut0, Vector3d targetPlaneNormal, double orbitRadius,
+            double ascentLeadSeconds, double ascentDownrangeRad)
+        {
+            double start = Finite(ut0) ? ut0 : 0;
+            if (!Finite(ut0) || !(bodyRadius > 0) || !(mu > 0) || !(orbitRadius > 0) || !Finite(bodyRadius)
+                || !Finite(mu) || !Finite(orbitRadius) || !Finite(siteAtUT0) || !(siteAtUT0.magnitude > 0)
+                || !Finite(bodyAngularVelocity))
+                return Refuse(BadInput, start);
+            if (!Finite(targetPlaneNormal) || !(targetPlaneNormal.magnitude > 0))
+                return Refuse(NoPlane, start);
+            double omegaXY = Math.Sqrt(bodyAngularVelocity.x * bodyAngularVelocity.x + bodyAngularVelocity.y * bodyAngularVelocity.y);
+            if (bodyAngularVelocity.magnitude > 0 && Math.Atan2(omegaXY, Math.Abs(bodyAngularVelocity.z)) > 1e-3)
+                return Refuse(TiltedAxis, start);
+            Vector3d up = siteAtUT0.normalized;
+            double cosPhi = Math.Sqrt(up.x * up.x + up.y * up.y);
+            if (cosPhi < 1e-9)
+                return Refuse(AtPole, start);
+            double omega = bodyAngularVelocity.z;
+            double lead = Finite(ascentLeadSeconds) && ascentLeadSeconds > 0 ? ascentLeadSeconds : 0;
+            double downrange = Finite(ascentDownrangeRad) ? ascentDownrangeRad : 0;
+            double vo = Math.Sqrt(mu / orbitRadius);
+            var c = Candidate(PlanePass.Any, up, cosPhi, targetPlaneNormal.normalized, omega, lead, downrange, vo,
+                omega * bodyRadius * cosPhi, start, forceNow: true);
+            c.Ok = true;
+            return c;
+        }
+
         static LaunchWindowResult Candidate(PlanePass pass, Vector3d up, double cosPhi, Vector3d n, double omega,
-            double lead, double downrange, double vo, double ground, double ut0)
+            double lead, double downrange, double vo, double ground, double ut0, bool forceNow = false)
         {
             // Inertial heading at the site; out of reach, due east (west for a retrograde plane).
             double sinBi = n.z / cosPhi;
-            bool reachable = Math.Abs(sinBi) <= 1;
+            bool reachable = !forceNow && Math.Abs(sinBi) <= 1;
             double bi = reachable ? Math.Asin(sinBi) : (n.z >= 0 ? Math.PI / 2 : -Math.PI / 2);
             if (!reachable)
                 pass = PlanePass.Any;
@@ -160,7 +191,7 @@ namespace K2D2.Transfer
             // Launching now, if the insertion point is (nearly) in the plane already, or if waiting
             // cannot change anything (equatorial plane, a body that does not turn).
             Vector3d qNow = Turn(q0, omega * lead);
-            bool degenerate = rho * nh < 1e-12 || Math.Abs(omega) < 1e-15;
+            bool degenerate = forceNow || rho * nh < 1e-12 || Math.Abs(omega) < 1e-15;
             double dt;
             // "Now" also needs the crossing to go the candidate's way: an Ascending heading at the
             // descending crossing reaches a plane about 2i off.
@@ -200,7 +231,7 @@ namespace K2D2.Transfer
             double cosPhiQ = Math.Sqrt(q.x * q.x + q.y * q.y);
             Vector3d reached;
             Vector3d np = n - Vector3d.Dot(n, q) * q;
-            if (np.magnitude > 1e-12 && Math.Abs(np.normalized.z) <= cosPhiQ + 1e-12)
+            if (!forceNow && np.magnitude > 1e-12 && Math.Abs(np.normalized.z) <= cosPhiQ + 1e-12)
                 reached = np.normalized;
             else
             {

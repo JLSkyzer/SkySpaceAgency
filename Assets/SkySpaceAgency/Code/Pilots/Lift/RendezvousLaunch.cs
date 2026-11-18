@@ -151,6 +151,8 @@ namespace K2D2.Lift
             Vector3d site = TurnZ(q.SiteAtUT0, q.Omega.z * delay);
             var windows = LaunchWindow.Passes(q.BodyRadius, q.Mu, q.Omega, site, start, plan.TargetPlaneNormal,
                 plan.ParkingRadius, q.LeadSeconds, q.DownrangeRad, horizon, MaxPasses, step);
+            if (windows.Count > 0 && AnyTimeIsCheap(windows[0], plan.TargetPlaneNormal, plan.ParkingRadius, q.Mu))
+                windows = AnyTimePasses(q, site, start, plan.TargetPlaneNormal, plan.ParkingRadius, step);
             if (windows.Count == 0)
             {
                 var first = LaunchWindow.Find(q.BodyRadius, q.Mu, q.Omega, site, start, plan.TargetPlaneNormal,
@@ -183,6 +185,35 @@ namespace K2D2.Lift
             plan.Ok = true;
             plan.Explanation = Explain(plan, q, elT);
             return plan;
+        }
+
+        // A plane out of reach (the first pass is under its vertex, with a residual): launching at
+        // any other time costs at most the chord of 2i more. When that is within TieDeltaV (a nearly
+        // equatorial target), the passes sample the target's orbit instead of one per rotation.
+        public static bool AnyTimeIsCheap(LaunchWindowResult first, Vector3d targetPlaneNormal, double parkingRadius, double mu)
+        {
+            if (first == null || !first.Ok || first.Pass != PlanePass.Any || !(first.PlaneErrorDeg > 0))
+                return false;
+            double iDeg = Math.Acos(Math.Min(1, Math.Abs(targetPlaneNormal.normalized.z))) / Deg;
+            double vo = Math.Sqrt(mu / parkingRadius);
+            double extra = 2 * vo * (Math.Sin((first.PlaneErrorDeg + 2 * iDeg) * Deg / 2) - Math.Sin(first.PlaneErrorDeg * Deg / 2));
+            return extra <= TieDeltaV;
+        }
+
+        static List<LaunchWindowResult> AnyTimePasses(RendezvousLaunchRequest q, Vector3d siteAtStart, double start,
+            Vector3d planeNormal, double parkingRadius, double step)
+        {
+            var list = new List<LaunchWindowResult>();
+            for (int k = 0; k < MaxPasses; k++)
+            {
+                double t = start + k * step;
+                var w = LaunchWindow.AtTime(q.BodyRadius, q.Mu, q.Omega, TurnZ(siteAtStart, q.Omega.z * (t - start)), t,
+                    planeNormal, parkingRadius, q.LeadSeconds, q.DownrangeRad);
+                if (!w.Ok)
+                    break;
+                list.Add(w);
+            }
+            return list;
         }
 
         static string Explain(RendezvousLaunchPlan plan, RendezvousLaunchRequest q, OrbitElements elT)
