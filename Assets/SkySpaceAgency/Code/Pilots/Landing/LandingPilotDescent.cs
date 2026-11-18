@@ -50,6 +50,12 @@ namespace K2D2.Landing
         float next_heat_guard_log = 0;
         bool heat_reserve_logged = false;
         const float HeatLogPeriod = 5;
+        // The game's heat difficulty (Heating/GameHeat), re-read every HeatPolicyPeriod s of real time
+        // in the air; its note is logged when it changes.
+        GameHeatPolicy heat_policy = GameHeat.Decide(new GameHeatOptions { ReadError = "not read yet" });
+        float next_heat_policy_read = 0;
+        string heat_policy_logged = null;
+        const float HeatPolicyPeriod = 1;
 
         bool DescentPhaseMode(Mode m) => deorbit_run && (m == Mode.Deorbit || m == Mode.PreBrake);
 
@@ -71,6 +77,8 @@ namespace K2D2.Landing
             heat_message = null;
             heat_readout = null;
             heat_reserve_logged = false;
+            next_heat_policy_read = 0;
+            heat_policy_logged = null;
         }
 
         // ---- Start ----
@@ -124,9 +132,13 @@ namespace K2D2.Landing
                 Atmospheric = ctx.Atmospheric, Air = ctx.Air, Aero = ctx.Aero,
                 EarliestBurnUT = EarliestDeorbitUT(ctx, rpGuess),
                 FixedPeriapsisRadius = double.NaN,
+                HeatIgnored = ctx.Heat.IgnoredNote,
             };
             if (ctx.Atmospheric)
+            {
+                LogHeatPolicy(ctx.Heat);
                 logger.LogInfo($"[Landing] heat: model inputs on {body.Name}: {ctx.AeroNote}");
+            }
             var timer = Stopwatch.StartNew();
             DescentPlan plan = DescentPlanner.Plan(input);
             timer.Stop();
@@ -193,7 +205,7 @@ namespace K2D2.Landing
             logger.LogInfo($"[Landing] heat: {what}: " + (plan.HeatModelled
                 ? $"predicted engine peak {plan.HeatPeak * 100:n0} % of the max temperature on {plan.HeatPeakPart ?? "?"} before the brake " +
                   $"(limit {DescentPlanner.HeatLimit * 100:n0} %; {plan.Heat.PeakRatio * 100:n0} % if it never braked) | {plan.Heat} | {plan.AeroBrake}"
-                : $"{plan.HeatNote ?? "heating not modelled"} | {plan.Heat} | {plan.AeroBrake}") + (plan.HeatWarning != null ? $" | {plan.HeatWarning}" : ""));
+                : $"{plan.HeatIgnored ?? plan.HeatNote ?? "heating not modelled"} | {plan.Heat} | {plan.AeroBrake}") + (plan.HeatWarning != null ? $" | {plan.HeatWarning}" : ""));
             if (plan.Heat.OtherPeakPart != null)
                 logger.LogInfo($"[Landing] heat: {what}: hottest other part (not judged, only engines are): {plan.Heat.OtherPeakPart} " +
                     $"{plan.Heat.OtherPeakRatio * 100:n0} % of its max temperature over the unbraked descent");
@@ -314,6 +326,7 @@ namespace K2D2.Landing
                 Atmospheric = ctx.Atmospheric, Air = ctx.Air, Aero = ctx.Aero,
                 EarliestBurnUT = ctx.UT + PrecisionPhases.PlanLead,
                 FixedPeriapsisRadius = descent_rp,
+                HeatIgnored = ctx.Heat.IgnoredNote,
             };
             var timer = Stopwatch.StartNew();
             plan = DescentPlanner.Plan(input);
@@ -535,6 +548,23 @@ namespace K2D2.Landing
             double sea = vessel.AltitudeFromSeaLevel;
             if (!body.hasAtmosphere || sea > body.atmosphereDepth)
                 return;
+            float now_policy = Time.realtimeSinceStartup;
+            if (now_policy >= next_heat_policy_read)
+            {
+                next_heat_policy_read = now_policy + HeatPolicyPeriod;
+                heat_policy = GameHeat.Decide(DescentContext.ReadGameHeat());
+                LogHeatPolicy(heat_policy);
+            }
+            if (!heat_policy.Judged)
+            {
+                // The game's heat cannot destroy anything: no guard, no Δv spent on it.
+                if (heat_guard.Active)
+                    logger.LogInfo($"[Landing] heat: guard off in {mode}: the game's heat no longer destroys parts");
+                heat_guard.Reset();
+                heat_message = null;
+                heat_readout = heat_policy.Simulated ? "game: no part destruction by heat, not judged" : "game: heat disabled, not judged";
+                return;
+            }
             HottestParts hottest = ReadHottest(vessel);
             double ratio = hottest.EngineRatio;
             string part = hottest.Engine;
@@ -586,6 +616,14 @@ namespace K2D2.Landing
                     $"guard {(heat_guard.Active ? $"on, throttle {heat_guard.Throttle * 100:n0} %" : "off")}, " +
                     $"{angle:n0}° from retrograde | predicted {F(aero_predicted_peak * 100)} % before the brake" + (heat_message != null ? $" | {heat_message}" : ""));
             }
+        }
+
+        void LogHeatPolicy(GameHeatPolicy policy)
+        {
+            if (policy.Note == heat_policy_logged)
+                return;
+            heat_policy_logged = policy.Note;
+            logger.LogInfo("[Landing] heat: " + policy.Note);
         }
 
         // The hottest engine of the active vessel (Temperature / MaxTemp: what the guard judges) and the

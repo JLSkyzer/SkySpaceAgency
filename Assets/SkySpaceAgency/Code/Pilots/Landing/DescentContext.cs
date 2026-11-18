@@ -26,8 +26,10 @@ namespace K2D2.Landing
     // - ThermalMass, MaxTemp and Temperature are PartComponent's; WettedArea is the ECS ThermalData's
     //   (the game falls back to PartConfigBlob.ThermalArea), the emissivity PartData.emissiveConstant;
     // - the constants are PhysicsSettings' static members the game's own thermal job reads, the body
-    //   scalar CelestialBodyComponent.reentryHarshness, the difficulty "HeatScaling" through
-    //   SessionManager.TryGetDifficultyOptionState (1 when absent, as the game does).
+    //   scalar CelestialBodyComponent.reentryHarshness;
+    // - the difficulty (ReadGameHeat, Heating/GameHeat.cs): "HeatEnabled", "HeatPartDestruction" and
+    //   "HeatScaling" through SessionManager.TryGetDifficultyOptionState, and
+    //   CheatSystem.GetDisableThermodynamics(), the same calls ThermalSimGroup and ThermalUpdateSystem make.
     public class DescentContext
     {
         public Vector3d R, V;
@@ -39,6 +41,7 @@ namespace K2D2.Landing
         public DescentVehicle Aero;
         public string AeroNote;          // why the heating is not modelled, or what was read (log)
         public string BodyName;
+        public GameHeatPolicy Heat;      // the game's heat difficulty (Heating/GameHeat)
 
         // Parts integrated by the predictor: every engine (judged; the most at risk first, Heating.HeatRisk)
         // up to MaxHeatedParts, and the MaxOtherParts most at risk among the others (logged only).
@@ -119,6 +122,7 @@ namespace K2D2.Landing
             {
                 R = r, V = v, UT = now, Body = bodyIn, Vehicle = vehicle, BodyName = body.Name,
                 Atmospheric = body.hasAtmosphere && body.atmosphereDepth > ReentryContext.SampleStep,
+                Heat = GameHeat.Decide(ReadGameHeat()),
             };
             if (ctx.Atmospheric)
             {
@@ -158,9 +162,16 @@ namespace K2D2.Landing
                 return "The vessel's drag area is zero.";
 
             ThermalConstants constants = ReadConstants(out string constantsNote);
+            constants.HeatScale = ctx.Heat.HeatScale;
             ThermalPart[] parts;
             string partsNote;
-            try
+            if (!ctx.Heat.Simulated)
+            {
+                // The game heats nothing: no part to predict.
+                parts = new ThermalPart[0];
+                partsNote = "heating not modelled: " + ctx.Heat.Note;
+            }
+            else try
             {
                 parts = ReadHeatedParts(vessel, owner, out partsNote);
             }
@@ -184,7 +195,7 @@ namespace K2D2.Landing
                 Harshness = harshness,
             };
             ctx.AeroNote = $"drag at retrograde CdA {table.At(0.5):0.00} / {table.At(2):0.00} / {table.At(5):0.00} m² at Mach 0.5 / 2 / 5 " +
-                $"({drag.partsEvaluated} part(s), {drag.partsSkipped} skipped) | {constants}{constantsNote} | harshness {harshness:0.###} | {partsNote}";
+                $"({drag.partsEvaluated} part(s), {drag.partsSkipped} skipped) | {constants}{constantsNote} | {ctx.Heat.Note} | harshness {harshness:0.###} | {partsNote}";
             return null;
         }
 
@@ -213,18 +224,39 @@ namespace K2D2.Landing
                 c = ThermalConstants.Defaults;
                 note = $" (PhysicsSettings not read: {e.GetType().Name}, the 2026-10-30 defaults used)";
             }
+            return c;
+        }
+
+        /// <summary>The game's heat difficulty for the loaded campaign; never throws (GameHeatOptions.ReadError).</summary>
+        internal static GameHeatOptions ReadGameHeat()
+        {
+            var o = new GameHeatOptions();
             try
             {
-                var session = GeneralTools.Game?.SessionManager;
-                if (session != null && session.TryGetDifficultyOptionState("HeatScaling", out float scale) && scale > 0)
-                    c.HeatScale = scale;
-                note += $" | difficulty HeatScaling {c.HeatScale:0.###}";
+                var game = GeneralTools.Game;
+                var session = game?.SessionManager;
+                if (session == null)
+                {
+                    o.ReadError = "no game session";
+                    return o;
+                }
+                if (session.TryGetDifficultyOptionState("HeatEnabled", out bool enabled))
+                    o.HeatEnabled = enabled;
+                if (session.TryGetDifficultyOptionState("HeatPartDestruction", out bool destruction))
+                    o.PartDestruction = destruction;
+                if (session.TryGetDifficultyOptionState("HeatScaling", out float scale))
+                    o.HeatScaling = scale;
+                try
+                {
+                    o.CheatNoThermodynamics = game.CheatSystem != null && game.CheatSystem.GetDisableThermodynamics();
+                }
+                catch (Exception) { /* the cheat alone: off */ }
             }
             catch (Exception e)
             {
-                note += $" | difficulty HeatScaling not read ({e.GetType().Name}): 1";
+                o = new GameHeatOptions { ReadError = $"{e.GetType().Name}: {e.Message}" };
             }
-            return c;
+            return o;
         }
 
         // The parts at retrograde: airstream area and Cd of their drag cube against Mach (as attached,

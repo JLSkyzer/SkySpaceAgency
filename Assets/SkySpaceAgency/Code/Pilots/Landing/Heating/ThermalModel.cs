@@ -31,8 +31,11 @@ namespace K2D2.Landing.Heating
     //   GLOBAL_POSITIVE_PART_TEMPERATURE_CHANGE_RATE_SCALE (1) when P(T) >= 0, else the NEGATIVE one (5).
     //   No conduction between parts.
     // - Destruction: Temperature > MaxTemp (FinalizeJob), unless the difficulty turns it off.
+    // - The difficulty: HeatScaling is heatScale above (DescentContext reads it, GameHeat); HeatEnabled
+    //   off or the Disable Thermodynamics cheat stop the whole thermal group; HeatPartDestruction off
+    //   sets FinalizeJob.IgnoreMaxTemp (see GameHeat.cs).
     //
-    // Assumed here: the difficulty's HeatScaling is 1 (not read); Ta = Tatm (the air temperature, 0 K
+    // Assumed here: Ta = Tatm (the air temperature, 0 K
     // above the atmosphere); every part's ExposedAreaProportion is 1 on the airstream area of its drag
     // cube as attached (the game shades parts behind the leading one with shock cones, not modelled:
     // conservative). That assumption over-heats light parts sticking out of the flow (a radial battery:
@@ -47,7 +50,7 @@ namespace K2D2.Landing.Heating
         public double StefanBoltzmann;       // W/m²/K⁴
         public double RadiationFactor;
         public double PositiveRateScale, NegativeRateScale;
-        public double HeatScale;             // difficulty HeatScaling (assumed 1)
+        public double HeatScale;             // difficulty HeatScaling (GameHeat), 1 when not read
 
         public static ThermalConstants Defaults => new ThermalConstants
         {
@@ -60,7 +63,7 @@ namespace K2D2.Landing.Heating
 
         public override string ToString() => FormattableString.Invariant(
             $"flux {FluxScale:0.###}·(v/{ReferenceSpeed:0.###})^{VelocityExponent:0.###}·A·ρ^{DensityExponent:0.###}·{SkinFrictionScale:0.###}·Cd^{SkinFrictionExponent:0.###}, ") + FormattableString.Invariant(
-            $"air exchange {AtmosphereFluxScale:0.###}×{AtmConductivity:0.####}, σ {StefanBoltzmann:0.####e0}×{RadiationFactor:0.###}, rate scales +{PositiveRateScale:0.###}/−{NegativeRateScale:0.###}, heat scale {HeatScale:0.###} (assumed)");
+            $"air exchange {AtmosphereFluxScale:0.###}×{AtmConductivity:0.####}, σ {StefanBoltzmann:0.####e0}×{RadiationFactor:0.###}, rate scales +{PositiveRateScale:0.###}/−{NegativeRateScale:0.###}, heat scale {HeatScale:0.###}");
     }
 
     // One part as the predictor heats it.

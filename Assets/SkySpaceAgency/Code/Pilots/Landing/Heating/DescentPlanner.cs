@@ -24,6 +24,9 @@ namespace K2D2.Landing.Heating
         /// <summary>Atmospheric only: the deorbit periapsis radius to use (a re-plan keeps the start's
         /// choice); NaN or <= 0 = choose among DescentPlanner.EntryFractions.</summary>
         public double FixedPeriapsisRadius;
+        /// <summary>Non-null: the game's difficulty makes the heating harmless (heat off, or no part
+        /// destruction, GameHeat): it is predicted and logged but never limits, refuses nor pre-brakes.</summary>
+        public string HeatIgnored;
     }
 
     public struct DescentPlan
@@ -48,6 +51,7 @@ namespace K2D2.Landing.Heating
         public string HeatPeakPart;
         public string HeatWarning;               // hot, but nothing can be planned about it (already in the air)
         public string HeatNote;                  // parts heated but no engine among them: not judged
+        public string HeatIgnored;               // the game's difficulty makes the heating harmless (DescentInput.HeatIgnored)
         public double InterfaceUT;
         public AeroBrakeResult AeroBrake;
         public StopPrediction Stop;              // airless brake (staged details)
@@ -197,11 +201,13 @@ namespace K2D2.Landing.Heating
             }
             Body bodyT = AeroBrake.BodyAt(body, input.UT, t);
             double limit = input.HeatLimit > 0 ? input.HeatLimit : HeatLimit;
-            plan.HeatModelled = HeatingPredictor.Judges(aero.Parts);
-            if (!plan.HeatModelled && aero.Parts != null && aero.Parts.Length > 0)
+            bool engines = HeatingPredictor.Judges(aero.Parts);
+            plan.HeatIgnored = input.HeatIgnored;
+            plan.HeatModelled = engines && input.HeatIgnored == null;
+            if (!engines && input.HeatIgnored == null && aero.Parts != null && aero.Parts.Length > 0)
                 plan.HeatNote = NoEngineNote;
 
-            PreBrakeResult pre = FindPreBrake(r, v, t, bodyT, input.Air, aero, vehicle, limit, ref predictions);
+            PreBrakeResult pre = FindPreBrake(r, v, t, bodyT, input.Air, aero, vehicle, limit, plan.HeatModelled, ref predictions);
             plan.Heat = pre.Heat;
             plan.HeatPeak = pre.Peak;
             plan.HeatPeakPart = pre.PeakPart;
@@ -219,6 +225,9 @@ namespace K2D2.Landing.Heating
                 plan.HeatWarning = string.Format(CultureInfo.InvariantCulture,
                     "Predicted heating {0:0} % of the max temperature on the engine {1}: already in the air, the heat guard will slow down.",
                     pre.Peak * 100, pre.PeakPart);
+            // Harmless heat (the game's difficulty): only a warning when an engine would pass its max temperature.
+            if (input.HeatIgnored != null && engines && pre.Heat.PeakRatio > 1)
+                plan.HeatWarning = GameHeat.OverMaxWarning(pre.Heat.PeakPart, pre.Heat.PeakRatio);
             plan.BrakeDeltaV = pre.Brake.DeltaV;
             plan.BrakeStartUT = pre.Brake.StartUT;
             plan.TotalDeltaV = plan.DeorbitDeltaV + plan.PreBrakeDeltaV + plan.BrakeDeltaV;
@@ -236,6 +245,8 @@ namespace K2D2.Landing.Heating
             string heat = plan.HeatModelled && plan.Heat.PartPeaks != null
                 ? string.Format(CultureInfo.InvariantCulture, ", engine peak {0:0} % ({1}) before the brake, {2:0} % unbraked",
                     plan.HeatPeak * 100, plan.HeatPeakPart ?? "-", plan.Heat.PeakRatio * 100)
+                : plan.HeatIgnored != null ? string.Format(CultureInfo.InvariantCulture,
+                    ", heating not judged (game difficulty), engine peak {0:0} % ({1}) unbraked", plan.Heat.PeakRatio * 100, plan.Heat.PeakPart ?? "-")
                 : plan.HeatNote != null ? ", no engine: heating not judged" : ", heating not modelled";
             if (plan.Heat.OtherPeakPart != null)
                 heat += string.Format(CultureInfo.InvariantCulture, ", other parts {0:0} % ({1}, not judged)",
@@ -290,7 +301,7 @@ namespace K2D2.Landing.Heating
         // interface that keeps the predicted peak, up to the planned brake, under the limit. Bisection:
         // a harder pre-brake enters slower (assumed monotone; the result is the verified side).
         static PreBrakeResult FindPreBrake(Vector3d r, Vector3d v, double t, Body body, Atmosphere air, DescentVehicle aero,
-            Vehicle vehicle, double limit, ref int predictions)
+            Vehicle vehicle, double limit, bool judged, ref int predictions)
         {
             Trial trial0 = Judge(r, v, t, body, air, aero, vehicle, null, ref predictions);
             var result = new PreBrakeResult { Heat = trial0.Heat, Brake = trial0.Brake, Peak = trial0.Peak, PeakPart = trial0.PeakPart };
@@ -299,8 +310,7 @@ namespace K2D2.Landing.Heating
                 result.Reason = trial0.Heat.Reason;
                 return result;
             }
-            bool modelled = HeatingPredictor.Judges(aero.Parts);
-            bool hot = modelled && trial0.Peak > limit;
+            bool hot = judged && trial0.Peak > limit;
             if (!hot || trial0.Heat.StartsInAir)
             {
                 result.HotInAir = hot;

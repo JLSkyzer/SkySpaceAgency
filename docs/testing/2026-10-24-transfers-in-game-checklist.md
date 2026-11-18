@@ -165,3 +165,21 @@ Même essai que le 2026-11-18 : orbite de Minmus (n'importe quelle inclinaison),
 7. **Cible = corps actuel** : en orbite de Kerbin, choisir Kerbin comme cible avec une autre altitude : le plan s'appelle `In the target's SOI` (comme l'onglet Orbit). Déjà sur l'orbite demandée : « Already in the requested orbit around Kerbin. ».
 8. **Non-régression** : un transfert Kerbin → Mun ou Kerbin → Duna doit donner les mêmes lignes qu'avant (`frame turned 0.00°` pour Kerbin et la Mun, `tilted chain vs world` de quelques mètres).
 9. **Lift « Prepare transfer » depuis une lune inclinée** (facultatif) : la ligne `[Lift] plan: plane inclination …°` est maintenant dans le repère de la lune. Le choix de l'inclinaison minimale atteignable depuis le site reste calculé dans le repère commun : à surveiller seulement.
+
+## 20. Réglages de chaleur du jeu (onglet Land, mode Propulsive, 2026-11-18)
+Les options de difficulté de la campagne (Edit Pack / paramètres de la partie) : « Heat » (HeatEnabled), « Heat part destruction » (HeatPartDestruction), « Heat scaling » (HeatScaling). Même essai que la section 16 : vaisseau en orbite de Kerbin à 100 km, Land → Brake. Sauvegarde rapide avant le départ.
+1. **Chaleur désactivée** (HeatEnabled off) :
+   - au départ, `[Landing] heat: game heat disabled, difficulty HeatEnabled off: no heat limit on the plan (Δv only), heat guard off` ;
+   - `[Landing] heat: model inputs …` finit par `heating not modelled: game heat disabled, …`, et la ligne `start plan` ne contient **aucun** `pre-brake` ;
+   - aucun refus « Reentry too hot … », même avec un vaisseau qui était refusé avant (moteurs fragiles, entrée raide) ;
+   - pendant la rentrée : aucune ligne `guard on`, la ligne « Hottest Engine » de l'onglet affiche `game: heat disabled, not judged` ;
+   - les températures des pièces ne bougent pas (fenêtre thermique de DebugTools si besoin).
+2. **Même chose avec le cheat « Disable Thermodynamics »** (chaleur de la difficulté laissée active) : `game heat disabled, cheat Disable Thermodynamics on: …`.
+3. **Destruction des pièces désactivée** (HeatPartDestruction off, chaleur active) :
+   - `[Landing] heat: game part destruction by heat off, difficulty HeatPartDestruction off: …` ;
+   - la ligne `entries:` montre `heating not judged (game difficulty), engine peak … % (…) unbraked` pour chaque entrée, et aucun pré-freinage n'est planifié ;
+   - si un moteur dépasserait 100 % : avertissement au départ « Predicted heating … % on the engine …: above its max temperature, but this campaign's difficulty does not destroy parts by heat. », pas de refus ;
+   - en rentrée, aucune ligne `guard on` ; le moteur peut dépasser sa température max sans exploser, et le freinage se fait normalement.
+4. **Échelle de chaleur** (par exemple 0,5 puis 2, chaleur et destruction actives) : la ligne `model inputs` donne `heat scale 0.5` (ou 2) et `game heat on, part destruction on, heat scaling 0.5`. Le pic prévu (`predicted engine peak …`) doit baisser avec 0,5 et monter avec 2, et rester proche du pic lu en vol (`hottest engine … (peak …)`).
+5. **Changement en cours de vol** (si le jeu permet de modifier l'option en vol) : la ligne `[Landing] heat: …` réapparaît avec le nouvel état dans la seconde, et la garde s'arrête (`guard off in …: the game's heat no longer destroys parts`) si elle tournait.
+6. **Non-régression** (tout actif, échelle 1) : mêmes lignes qu'à la section 16, limite du plan à **70 %** (gardée par l'utilisateur le 2026-11-18), garde à 75 %, alarme à 90 %.
