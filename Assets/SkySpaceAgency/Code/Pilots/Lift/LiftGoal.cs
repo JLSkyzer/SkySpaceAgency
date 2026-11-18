@@ -252,10 +252,13 @@ namespace K2D2.Lift
         }
 
         // What a stop in the chain says: the step, the reason and what is left to do.
-        public static string ChainStopped(LiftPilot.LiftStatus step, string target, string why)
+        // targetLost: the target is gone, landed or elsewhere: the advice is to choose one.
+        public static string ChainStopped(LiftPilot.LiftStatus step, string target, string why, bool targetLost = false)
         {
             string left;
-            switch (step)
+            if (targetLost)
+                left = "choose a target in the Rendezvous tab, then start the rendezvous there";
+            else switch (step)
             {
                 case LiftPilot.LiftStatus.WaitLaunch:
                     left = "press Start again on the pad: the launch is planned again";
@@ -274,6 +277,18 @@ namespace K2D2.Lift
             }
             string reason = (why ?? "").Trim().TrimEnd('.');
             return $"Rendezvous with {target} stopped during {StepName(step)}: {reason}. Left to do: {left}";
+        }
+
+        // The target at the hand-over: null when it can still be met, else why not.
+        public static string HandoffRefusal(bool exists, bool landed, bool sameBody)
+        {
+            if (!exists)
+                return "the target vessel no longer exists (recovered, destroyed, or docked elsewhere)";
+            if (landed)
+                return "the target is landed";
+            if (!sameBody)
+                return "the target no longer orbits the launch body";
+            return null;
         }
 
         // The run's last words at the hand-over: started, or the Rendezvous pilot's refusal.

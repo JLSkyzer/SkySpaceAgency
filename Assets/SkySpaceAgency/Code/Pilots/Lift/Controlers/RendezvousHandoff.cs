@@ -60,6 +60,17 @@ namespace K2D2.Lift
             {
                 logger.LogInfo($"[Lift] rendezvous: orbit read failed before the hand-over ({e.GetType().Name}: {e.Message})");
             }
+            // The target may have gone during the ascent (recovered, destroyed, docked elsewhere: a
+            // new GUID) or landed: 4.3 is never started on it.
+            VesselComponent target = RendezvousSnapshot.FindVessel(p.TargetId);
+            string why = LiftGoalRules.HandoffRefusal(target != null, target != null && target.LandedOrSplashed,
+                target?.Orbit != null && ReferenceEquals(target.Orbit.referenceBody, vessel.Orbit?.referenceBody));
+            if (why != null)
+            {
+                logger.LogInfo("[Lift] rendezvous: hand-over refused: " + why);
+                lift.StopRendezvousChain(why, targetLost: true);
+                return;
+            }
             lift.ChainToRendezvous();
         }
 

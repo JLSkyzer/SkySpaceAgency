@@ -437,4 +437,16 @@ public class LiftGoalTests
         Assert.AreEqual(("Plane inclination", "4.28°"), rows[2]);
         Assert.AreEqual(("Transfer window", "Y1, D4, 0h 00m (1696 m/s)"), rows[4]);
     }
+    // Review finding: a target recovered, destroyed, docked elsewhere (new GUID) or landed during the
+    // ascent: the hand-over stops, and never advises a target that is not set any more.
+    [Test]
+    public void HandoffRefusal_TargetGoneLandedOrElsewhere()
+    {
+        Assert.IsNull(LiftGoalRules.HandoffRefusal(true, false, true));
+        Assert.AreEqual("the target vessel no longer exists (recovered, destroyed, or docked elsewhere)", LiftGoalRules.HandoffRefusal(false, false, false));
+        Assert.AreEqual("the target is landed", LiftGoalRules.HandoffRefusal(true, true, true));
+        Assert.AreEqual("the target no longer orbits the launch body", LiftGoalRules.HandoffRefusal(true, false, false));
+        Assert.AreEqual("Rendezvous with Station stopped during the hand-over: the target is landed. Left to do: choose a target in the Rendezvous tab, then start the rendezvous there",
+            LiftGoalRules.ChainStopped(LiftPilot.LiftStatus.Handoff, "Station", "the target is landed", targetLost: true));
+    }
 }

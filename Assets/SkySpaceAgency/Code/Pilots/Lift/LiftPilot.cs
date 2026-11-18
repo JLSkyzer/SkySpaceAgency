@@ -275,6 +275,23 @@ namespace K2D2.Lift
             }
         }
 
+        // Rendezvous goal: a stop in the chain because of the target (gone, landed, elsewhere).
+        internal void StopRendezvousChain(string why, bool targetLost)
+        {
+            logger.LogInfo($"[Lift] rendezvous stopped during {LiftGoalRules.StepName(status)}: {why}");
+            result_ok = false;
+            end_status = LiftGoalRules.ChainStopped(status, transfer?.TargetName ?? "the target", why, targetLost);
+            ending = true;
+            try
+            {
+                isRunning = false;
+            }
+            finally
+            {
+                ending = false;
+            }
+        }
+
         // Rendezvous goal, in the parking orbit: ends the Lift run (throttle 0, warp 1x), then starts
         // the Rendezvous pilot on the target. Lift ends first: RendezvousPilot.Start resets every
         // pilot, which must not reset a Lift run from inside its own update.
