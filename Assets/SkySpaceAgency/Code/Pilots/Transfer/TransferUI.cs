@@ -37,6 +37,7 @@ namespace K2D2.Transfer
             "plan", "start", "stop", "resume", "cancel_saved", "resume_offer",
             "status_pilot", "pilot_console", "progress",
             "plan_group", "case", "departure", "trip", "steps", "totals", "margin", "stages", "stage_note", "warnings",
+            "assist_choice", "choose_direct", "choose_assist",
         };
 
         const float RefreshSeconds = 0.5f;
@@ -46,7 +47,8 @@ namespace K2D2.Transfer
 
         DropdownField target_drop;
         FloatField pe_field, ap_field, inc_field;
-        VisualElement orbit_fields, ap_row, plan_group, steps_el, stages_el, warnings_el;
+        VisualElement orbit_fields, ap_row, plan_group, steps_el, stages_el, warnings_el, assist_choice;
+        Button choose_direct, choose_assist;
         Label low_orbit_hint, resume_offer, case_label, departure_label, trip_label, totals_label, margin_label, stage_note;
         Button plan_bt, start_bt, stop_bt, resume_bt, cancel_bt;
         FullStatus status_bar;
@@ -98,11 +100,8 @@ namespace K2D2.Transfer
             panel.Q<K2Toggle>("inc_enabled").Bind(TransferSettings.inc_enabled);
             panel.Q<K2Toggle>("prepare_only").Bind(TransferSettings.prepare_only);
 
-            // Gravity assists come with sub-project 4.6.
-            var assist = panel.Q<K2Toggle>("gravity_assist");
-            assist.value = false;
-            assist.tooltip = "Coming soon";
-            assist.SetEnabled(false);
+            // Gravity assists (4.6): the search also tries one flyby; the plan offers the choice.
+            panel.Q<K2Toggle>("gravity_assist").Bind(TransferSettings.gravity_assist);
 
             var max_trip = panel.Q<TextField>("max_trip_days");
             max_trip.isDelayed = true;
@@ -123,6 +122,11 @@ namespace K2D2.Transfer
             resume_offer = panel.Q<Label>("resume_offer");
             status_bar = new FullStatus(panel);
             plan_group = panel.Q("plan_group");
+            assist_choice = panel.Q("assist_choice");
+            choose_direct = panel.Q<Button>("choose_direct");
+            choose_assist = panel.Q<Button>("choose_assist");
+            choose_direct.clicked += () => { ui_error = null; pilot.ChoosePlan(false); };
+            choose_assist.clicked += () => { ui_error = null; pilot.ChoosePlan(true); };
             case_label = panel.Q<Label>("case");
             departure_label = panel.Q<Label>("departure");
             trip_label = panel.Q<Label>("trip");
@@ -247,6 +251,7 @@ namespace K2D2.Transfer
                 ui_error = error;
                 return;
             }
+            input.UseGravityAssist = TransferSettings.gravity_assist.V;
             pilot.Plan(input);
         }
 
@@ -272,6 +277,32 @@ namespace K2D2.Transfer
         }
 
         // ---------------------------------------------------------------- plan
+
+        // The two plans of a search with gravity assists (4.6): "Direct" and the offered assist, the
+        // shown one marked; with no assist offered, the direct line and why, disabled.
+        void UpdateAssistChoice(TransferPlan shown)
+        {
+            var choice = pilot.Choice;
+            assist_choice.Show(choice != null);
+            if (choice == null)
+                return;
+            bool idle = !pilot.isRunning && !pilot.Searching;
+            var system = pilot.System;
+            choose_direct.text = TransferReadout.AssistLine(TransferReadout.AssistLabel(choice.Direct, system), choice.Direct, shown == choice.Direct);
+            if (choice.Offered)
+            {
+                choose_assist.Show(true);
+                choose_assist.text = TransferReadout.AssistLine(TransferReadout.AssistLabel(choice.Assist, system), choice.Assist, shown == choice.Assist);
+                choose_direct.SetEnabled(idle && choice.Direct != null && choice.Direct.Ok);
+                choose_assist.SetEnabled(idle);
+            }
+            else
+            {
+                choose_assist.Show(false);
+                choose_direct.text += " — " + choice.NotOffered;
+                choose_direct.SetEnabled(false);
+            }
+        }
 
         void UpdatePlan()
         {
@@ -299,6 +330,7 @@ namespace K2D2.Transfer
                 return;
             }
             plan_group.Show(true);
+            UpdateAssistChoice(plan);
             double now = GeneralTools.Current_UT;
             bool flown = plan == flown_plan;
             int from = flown ? pilot.StepIndex : 0;

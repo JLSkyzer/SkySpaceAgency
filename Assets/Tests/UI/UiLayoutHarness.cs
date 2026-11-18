@@ -102,6 +102,11 @@ public static class UiLayoutHarness
         body.choices = new List<string> { "Duna" };
         body.SetValueWithoutNotify("Duna");
         page.Q<FloatField>("inc_deg").SetEnabled(false);
+        // 4.6: the plan with its two lines (long ones, to check the wrapping).
+        page.Q("plan_group").style.display = DisplayStyle.Flex;
+        page.Q("assist_choice").style.display = DisplayStyle.Flex;
+        page.Q<Button>("choose_direct").text = "○ Direct: 12 140 m/s, 1y 120d — no gravity assist saves 5 % or more (best: via Eve, 11 960 m/s, 1.5 % saved)";
+        page.Q<Button>("choose_assist").text = "● Via Eve: 11 760 m/s, 2y 30d";
     }
 
     // As 16.png and 17.png: Propulsive mode on an atmospheric body (the note is shown), one stage

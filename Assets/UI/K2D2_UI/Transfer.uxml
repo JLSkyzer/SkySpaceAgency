@@ -30,7 +30,7 @@
             </K2UI.Group>
             <K2UI.Group text="Options">
                 <K2UI.K2Toggle label="Prepare only" name="prepare_only" tooltip="Make one game node at a time for you to fly; no warp" />
-                <K2UI.K2Toggle label="Use gravity assist" name="gravity_assist" tooltip="Coming soon" />
+                <K2UI.K2Toggle label="Use gravity assist" name="gravity_assist" tooltip="Also look for plans with one flyby (a planet on the way, or a moon on the way out); shown when they save 5 % or more" />
                 <ui:VisualElement style="flex-direction: row; align-items: center;">
                     <ui:Label text="Max trip (days)" style="width: 68%;" tooltip="Days of 6 h. Empty: no limit" />
                     <ui:TextField name="max_trip_days" value="" tooltip="Days of 6 h. Empty: no limit" style="flex-grow: 1;" />
@@ -58,6 +58,10 @@
             </ui:VisualElement>
             <ui:VisualElement name="plan_group" style="display: none;">
                 <K2UI.Group text="Plan">
+                    <ui:VisualElement name="assist_choice" style="display: none;">
+                        <ui:Button name="choose_direct" style="height: auto; min-height: 26px; white-space: normal; -unity-text-align: middle-left;" />
+                        <ui:Button name="choose_assist" style="height: auto; min-height: 26px; white-space: normal; -unity-text-align: middle-left;" />
+                    </ui:VisualElement>
                     <ui:Label name="case" text="" style="white-space: normal;" />
                     <ui:Label name="departure" text="" style="white-space: normal;" />
                     <ui:Label name="trip" text="" style="white-space: normal;" />
