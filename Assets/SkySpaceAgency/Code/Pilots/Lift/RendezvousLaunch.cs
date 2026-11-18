@@ -21,6 +21,8 @@ namespace K2D2.Lift
         public double UT0;
         public Vector3d TargetR, TargetV;                            // at UT0
         public double LeadSeconds, DownrangeRad;
+        // No pass before UT0 + this: the plan itself takes game time on the pad.
+        public double StartDelaySeconds;
     }
 
     // One launch pass and the rendezvous it would leave after the ascent.
@@ -144,11 +146,14 @@ namespace K2D2.Lift
             double omega = Math.Abs(q.Omega.z);
             double horizon = omega > 1e-15 ? HorizonRotations * 2 * Math.PI / omega : 2 * elT.Period;
             double step = elT.Period / 12;
-            var windows = LaunchWindow.Passes(q.BodyRadius, q.Mu, q.Omega, q.SiteAtUT0, q.UT0, plan.TargetPlaneNormal,
+            double delay = q.StartDelaySeconds > 0 && !double.IsInfinity(q.StartDelaySeconds) ? q.StartDelaySeconds : 0;
+            double start = q.UT0 + delay;
+            Vector3d site = TurnZ(q.SiteAtUT0, q.Omega.z * delay);
+            var windows = LaunchWindow.Passes(q.BodyRadius, q.Mu, q.Omega, site, start, plan.TargetPlaneNormal,
                 plan.ParkingRadius, q.LeadSeconds, q.DownrangeRad, horizon, MaxPasses, step);
             if (windows.Count == 0)
             {
-                var first = LaunchWindow.Find(q.BodyRadius, q.Mu, q.Omega, q.SiteAtUT0, q.UT0, plan.TargetPlaneNormal,
+                var first = LaunchWindow.Find(q.BodyRadius, q.Mu, q.Omega, site, start, plan.TargetPlaneNormal,
                     plan.ParkingRadius, q.LeadSeconds, q.DownrangeRad, horizon);
                 return Refuse(plan, $"No launch pass within {KerbinCalendar.Duration(horizon)}: {(first.Ok ? LaunchWindow.NoPass : first.Refusal)}");
             }
@@ -205,6 +210,12 @@ namespace K2D2.Lift
             plan.Ok = false;
             plan.Refusal = why;
             return plan;
+        }
+
+        static Vector3d TurnZ(Vector3d p, double angle)
+        {
+            double c = Math.Cos(angle), s = Math.Sin(angle);
+            return new Vector3d(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
         }
 
         static bool IsFinite(double x) => !double.IsNaN(x) && !double.IsInfinity(x);

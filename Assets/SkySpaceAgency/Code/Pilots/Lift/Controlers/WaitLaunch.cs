@@ -18,7 +18,8 @@ using ILogger = SpaceWarp2.API.Logging.ILogger;
 namespace K2D2.Lift
 {
     // Transfer goal (LiftGoal.PrepareTransfer), before the ascent: plans the parking orbit and the
-    // launch window, then waits on the pad until the launch time and fires the first stage.
+    // launch window, then waits on the pad until the launch time and fires the first stage. The
+    // rendezvous goal plans its own way (WaitLaunch.Rendezvous.cs) and shares the wait and the launch.
     //
     // 1. Game reads on the main thread (bodies, vessel, rotation), then ParkingPlane.Plan and
     //    LaunchWindow.Find on a worker thread (pure code). The result is polled in Update.
@@ -30,7 +31,7 @@ namespace K2D2.Lift
     //
     // The rotation sign of ω is measured on the pad, where the surface speed is 0
     // (BodyRotation.ChooseSign, as the Landing tab does).
-    public class WaitLaunch : ExecuteController
+    public partial class WaitLaunch : ExecuteController
     {
         public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Lift");
 
@@ -70,10 +71,13 @@ namespace K2D2.Lift
             if (p != null && p.Ready)
             {
                 // Back from the ascent: no liftoff within 5 s of the launch time.
-                Resolve("no liftoff within 5 s of the launch time");
+                OnMissedLaunch("no liftoff within 5 s of the launch time");
                 return;
             }
-            BeginPlanning();
+            if (settings.goal.V == LiftGoal.Rendezvous)
+                BeginRendezvousPlanning(null);
+            else
+                BeginPlanning();
         }
 
         public void Cancel()
@@ -82,6 +86,7 @@ namespace K2D2.Lift
                 cts.Cancel();
             cts = null;
             job = null;
+            rv_job = null;
         }
 
         void BeginPlanning()
@@ -278,6 +283,12 @@ namespace K2D2.Lift
                     return;
                 OnPlanned();
             }
+            if (refusal == null && rv_job != null)
+            {
+                if (!rv_job.IsCompleted)
+                    return;
+                OnRendezvousPlanned();
+            }
             if (refusal != null)
             {
                 string why = refusal;
@@ -326,7 +337,7 @@ namespace K2D2.Lift
                     finished = true;
                     break;
                 case PadAction.Resolve:
-                    Resolve("the clock passed the launch time on the pad");
+                    OnMissedLaunch("the clock passed the launch time on the pad");
                     break;
                 case PadAction.LiftedOff:
                     p.EarlyLiftoff = true;
@@ -415,7 +426,7 @@ namespace K2D2.Lift
 
         public override void updateUI(VisualElement root_el, FullStatus st)
         {
-            st.Status(job != null ? "Planning the transfer..." : "Waiting on the pad");
+            st.Status(job != null ? "Planning the transfer..." : rv_job != null ? "Planning the rendezvous launch..." : "Waiting on the pad");
             st.Console(status_line);
         }
 

@@ -96,6 +96,11 @@ namespace K2D2.Lift
         // The target body, by name (resolved against the snapshot the plan is made from).
         public Setting<string> transfer_target = new("lift.transfer_target", "");
 
+        // RENDEZVOUS GOAL (sub-project 4.4): the target vessel's GUID ("D" format), and whether the
+        // Rendezvous pilot docks after the rendezvous.
+        public Setting<string> rendezvous_target = new("lift.rendezvous_target", "");
+        public Setting<bool> rendezvous_dock = new("lift.rendezvous_dock", true);
+
         // The ascent lead measured by the transfer ascents, per body (lift.ascent_lead.<body>.s and
         // .deg); -1 until a first one (LiftGoalRules.AscentLead then uses its estimate).
         readonly System.Collections.Generic.Dictionary<string, (Setting<float> s, Setting<float> deg)> measured_leads =

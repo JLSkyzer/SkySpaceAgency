@@ -259,6 +259,20 @@ public class RendezvousLaunchTests
     }
 
     [Test]
+    public void StartDelay_NoPassBeforeIt()
+    {
+        // The plan takes seconds of game time on the pad: no pass may fall inside that delay.
+        var q = Request(720000, 40, 0, 0);
+        q.UT0 = 1000;
+        q.StartDelaySeconds = 60;
+        var plan = Run(q);
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.AreEqual(1060, plan.Passes[0].Window.LaunchUT, 1e-6);
+        foreach (var p in plan.Passes)
+            Assert.GreaterOrEqual(p.Window.LaunchUT, 1060 - 1e-9);
+    }
+
+    [Test]
     public void Cancelled_Throws()
     {
         var cts = new CancellationTokenSource();

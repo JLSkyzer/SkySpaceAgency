@@ -40,6 +40,7 @@ namespace K2D2.Lift
         FinalCircularize final_circularize;
         WaitLaunch wait_launch;
         PlaneTrim plane_trim;
+        RendezvousHandoff handoff;
 
         // The transfer goal's plan for this run (set by WaitLaunch); null for the Orbit goal, whose
         // run is today's, unchanged.
@@ -61,6 +62,7 @@ namespace K2D2.Lift
             final_circularize = new FinalCircularize(this, settings);
             wait_launch = new WaitLaunch(this, settings);
             plane_trim = new PlaneTrim(this);
+            handoff = new RendezvousHandoff(this);
         
             Instance = this;
 
@@ -101,12 +103,21 @@ namespace K2D2.Lift
 
                         current_subpilot = null;
 
-                        // Transfer goal: no plan search left running, and no warp left on by the
-                        // pad wait or the trim.
+                        // Transfer and rendezvous goals: no plan search left running, and no warp
+                        // left on by the pad wait, the trim or the hand-over.
                         wait_launch.Cancel();
                         settings.SetApOverride(-1);
-                        if (previous == LiftStatus.WaitLaunch || previous == LiftStatus.PlaneTrim)
+                        if (previous == LiftStatus.WaitLaunch || previous == LiftStatus.PlaneTrim || previous == LiftStatus.Handoff)
                             TimeWarpTools.SetRateIndex(0, false);
+
+                        // Rendezvous goal stopped from outside (Stop, another pilot started): say
+                        // which step and what is left. EndLiftPilot and the hand-over write their own.
+                        if (!ending && transfer != null && transfer.Goal == LiftGoal.Rendezvous && previous != LiftStatus.Off)
+                        {
+                            result_ok = false;
+                            end_status = LiftGoalRules.ChainStopped(previous, transfer.TargetName, "stopped (Stop pressed, or another pilot started)");
+                            logger.LogInfo($"[Lift] rendezvous stopped during {LiftGoalRules.StepName(previous)}: Stop pressed, or another pilot started");
+                        }
                     }
                         break;
                     case LiftStatus.WaitLaunch:
@@ -114,6 +125,9 @@ namespace K2D2.Lift
                         break;
                     case LiftStatus.PlaneTrim:
                         current_subpilot = plane_trim;
+                        break;
+                    case LiftStatus.Handoff:
+                        current_subpilot = handoff;
                         break;
                     case LiftStatus.Ascent:
                         current_subpilot = ascent;
@@ -163,7 +177,7 @@ namespace K2D2.Lift
             transfer = null;
             ascent.transfer_plan = null;
             settings.SetApOverride(-1);
-            if (settings.goal.V == LiftGoal.PrepareTransfer)
+            if (settings.goal.V == LiftGoal.PrepareTransfer || settings.goal.V == LiftGoal.Rendezvous)
                 status = LiftStatus.WaitLaunch;
             else
                 status = LiftStatus.Ascent;
@@ -228,8 +242,17 @@ namespace K2D2.Lift
         internal bool result_ok = false;
         internal string end_status;
 
+        // True while the run ends through EndLiftPilot or the hand-over, which write their own end text.
+        bool ending;
+
         public void EndLiftPilot(bool result_ok, string end_status)
         {
+            // Rendezvous goal: a stop in the chain says the step, the reason and what is left (6b).
+            if (!result_ok && transfer != null && transfer.Goal == LiftGoal.Rendezvous && status != LiftStatus.Off)
+            {
+                logger.LogInfo($"[Lift] rendezvous stopped during {LiftGoalRules.StepName(status)}: {end_status}");
+                end_status = LiftGoalRules.ChainStopped(status, transfer.TargetName, end_status);
+            }
             this.result_ok = result_ok;
             this.end_status = end_status;
             // Was: status = LiftStatus.Off directly. That flips the getter's answer
@@ -241,7 +264,49 @@ namespace K2D2.Lift
             // that callback to update, or it stays stuck showing "running" after the pilot has
             // actually finished on its own (as opposed to being stopped via the Brake/Start
             // button, which already goes through this setter).
-            isRunning = false;
+            ending = true;
+            try
+            {
+                isRunning = false;
+            }
+            finally
+            {
+                ending = false;
+            }
+        }
+
+        // Rendezvous goal, in the parking orbit: ends the Lift run (throttle 0, warp 1x), then starts
+        // the Rendezvous pilot on the target. Lift ends first: RendezvousPilot.Start resets every
+        // pilot, which must not reset a Lift run from inside its own update.
+        internal void ChainToRendezvous()
+        {
+            var p = transfer;
+            string target = p?.TargetName ?? "the target";
+            bool dock = p != null && p.Dock;
+            string id = p?.TargetId;
+            ending = true;
+            try
+            {
+                isRunning = false;
+            }
+            finally
+            {
+                ending = false;
+            }
+            var rv = K2D2.Rendezvous.RendezvousPilot.Instance;
+            bool started = false;
+            string why;
+            if (rv == null)
+                why = "the Rendezvous pilot is not loaded";
+            else if (string.IsNullOrEmpty(id))
+                why = "No target vessel.";
+            else
+            {
+                started = rv.Start(dock ? K2D2.Rendezvous.RvMode.RendezvousAndDock : K2D2.Rendezvous.RvMode.RendezvousOnly, id, false);
+                why = rv.Status;
+            }
+            logger.LogInfo("[Lift] rendezvous: hand-over " + (started ? "started" : "refused: " + why));
+            result_ok = LiftGoalRules.HandoffMessage(started, target, dock, why, out end_status);
         }
 
         public WarpTo warp_to = new WarpTo();
@@ -249,7 +314,7 @@ namespace K2D2.Lift
 
         public void NextMode()
         {
-            status = status.Next();
+            status = LiftGoalRules.NextStatus(status, transfer?.Goal ?? settings.goal.V);
         }
 
         public override void Update()
@@ -283,6 +348,8 @@ namespace K2D2.Lift
                 // NextMode() a second time on top of a run that already ended itself.
                 if (current_subpilot == subpilot && subpilot.finished)
                 {
+                    // Orbit and Prepare transfer: the next status, as always; the rendezvous goal
+                    // hands over after the circularization (LiftGoalRules.NextStatus).
                     NextMode();
                     if (transfer != null && before == LiftStatus.Ascent)
                         MeasureAscent();
