@@ -41,6 +41,7 @@ namespace K2D2.Transfer
         public const string ParentToDescendant = "Parent to descendant";
         public const string Siblings = "Siblings";
         public const string DifferentBranches = "Different branches";
+        public const string InTarget = "In the target's SOI";
 
         // Optional diagnostics: each candidate built and why it was rejected (tests, logs). Called on
         // the search's thread.
@@ -216,8 +217,6 @@ namespace K2D2.Transfer
 
             public TransferPlan Run()
             {
-                if (From == To)
-                    return Refuse(SameBody);
                 var target = S[To];
                 ArrRp = double.IsNaN(Q.ArrivalPeriapsisRadius) ? target.LowOrbitRadius : Q.ArrivalPeriapsisRadius;
                 ArrRa = double.IsNaN(Q.ArrivalApoapsisRadius) ? ArrRp : Q.ArrivalApoapsisRadius;
@@ -227,6 +226,10 @@ namespace K2D2.Transfer
                 if (!(ArrRp >= Floor(To)))
                     return Refuse(LowCapture(target.Name));
                 MaxTrip = double.IsNaN(Q.MaxTripSeconds) ? double.PositiveInfinity : Q.MaxTripSeconds;
+                // Already in the target's SOI (the end of a child → parent trip, a resume there): the
+                // Orbit tab's plan, capture first when the path is open.
+                if (From == To)
+                    return InTargetSoi();
 
                 Ancestor = S.CommonAncestor(From, To);
                 for (int b = From; b != Ancestor; b = S[b].ParentIndex)

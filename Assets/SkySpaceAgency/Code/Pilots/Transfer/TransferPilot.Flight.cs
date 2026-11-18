@@ -38,6 +38,7 @@ namespace K2D2.Transfer
         // Diagnostics: the vessel's physics mode, and the orbit read when the last burn ended.
         PhysicsMode? last_physics;
         double burn_end_ut = double.NaN, burn_end_energy = double.NaN, burn_end_e = double.NaN;
+        int burn_end_body = -1; // the body the energy above is about
         // The last correction that failed (TransferFlight.SolveKey), saved so a resume never repeats it.
         string failed_solve_key;
         bool warping;
@@ -418,7 +419,8 @@ namespace K2D2.Transfer
             burn.stage_when_dry = true;
             burn.allow_warp = true;
             burn_ignited = false;
-            burn.Start(guidance, start);
+            // The plan is in the system's shared frame; TargetOrbitBurn reads the vessel in its body's.
+            burn.Start(CelestialFrames.InLocalFrame(guidance, System[snap.Body].FrameToCommon), start);
             if (burn.failure_reason != null)
             {
                 Fail($"{name}: {burn.failure_reason}");
@@ -503,6 +505,11 @@ namespace K2D2.Transfer
             {
                 logger.LogInfo($"[Transfer] correction {n} skipped: no periapsis to aim at ({(step.TargetBody < 0 ? "no target" : "a pass-through")})");
                 StepDone();
+                return;
+            }
+            if (snap.Body == step.TargetBody && !ArrivalTargeting.PeriapsisAhead(snap.R, snap.V, mu, System[snap.Body].Soi))
+            {
+                PlanInTarget(i, snap, $"correction {n}: in the {System[snap.Body].Name} SOI past its periapsis, on a path that leaves it");
                 return;
             }
             bool freeArrival = free_arrival_step == i;
@@ -682,6 +689,45 @@ namespace K2D2.Transfer
             Save();
         }
 
+        // In the target's SOI with no arrival ahead to correct: the steps from i on are replaced by
+        // the orbit at the target (TransferSearch.InTarget: the Orbit tab's capture, then the orbit
+        // asked for), searched from the actual state.
+        void PlanInTarget(int i, Snapshot snap, string why)
+        {
+            var plan = Current;
+            var q = CopyRequest(plan.Request);
+            q.FromBody = snap.Body;
+            q.ToBody = snap.Body;
+            q.R0 = snap.R;
+            q.V0 = snap.V;
+            q.UT0 = snap.UT;
+            string name = snap.System[snap.Body].Name;
+            logger.LogInfo($"[Transfer] {why}: the rest is planned as an orbit at {name} (capture first), from the current state");
+            Status = $"Planning the orbit at {name} from the current path...";
+            var system = snap.System;
+            StartSearch(system, q, JobKind.Search, replanned =>
+            {
+                if (!isRunning)
+                    return;
+                logger.LogInfo(TransferFlight.Describe(replanned, system, last_job_ms));
+                if (!replanned.Ok)
+                {
+                    Fail($"no orbit at {name} can be planned from the current path: {replanned.Refusal}", captureFailed: true);
+                    return;
+                }
+                TransferFlight.MergeLeg(plan, i, replanned);
+                TransferFlight.MarkLegStarted(plan, i);
+                Budget = TransferFlight.RemainingBudget(plan, i, stages);
+                if (!Budget.Ok)
+                {
+                    Fail($"the orbit at {name}: {Budget.Refusal}", captureFailed: true);
+                    return;
+                }
+                logger.LogInfo($"[Transfer] orbit at {name} planned from the current path: {plan.Steps.Count - i} step(s) left, {replanned.TotalDeltaV:F0} m/s");
+                Save();
+            });
+        }
+
         // ---------------------------------------------------------------- Prepare only
 
         void MakeNode(int i, double impulseUT, Vector3d dv, Vector3d r, Vector3d v, Snapshot snap)
@@ -768,10 +814,19 @@ namespace K2D2.Transfer
                     soi_expect_entry = p.End == PatchEnd.Encounter;
                     soi_expect_ut = p.EndUT;
                 }
+                else if (patches.Count > 0 && patches[0].StartInsideBody >= 0
+                    && !TransferFlight.InsideChildIsPendingEntry(DistanceRate(body, r, v, patches[0].StartInsideBody, now, out _)))
+                {
+                    // Within our SOI radius of a child but moving away from it: the game has made the
+                    // exit already (the radii differ by rounding). Nothing to wait for.
+                    int inside = patches[0].StartInsideBody;
+                    logger.LogInfo($"[Transfer] inside our SOI radius of {System[inside].Name} but moving away from it: an exit the game has made, no entry awaited " +
+                        $"({TransferDiagnostics.Distances(vessel, bodies, System, body, r, now, inside)})");
+                }
                 else if (patches.Count > 0 && patches[0].StartInsideBody >= 0)
                 {
-                    // Within our SOI radius of a child, the game still around its parent: an explicit
-                    // state, waited out by the late-SOI rule.
+                    // Within our SOI radius of a child, closing in, the game still around its parent: an
+                    // explicit state, waited out by the late-SOI rule.
                     int inside = patches[0].StartInsideBody;
                     soi_expect_body = inside;
                     soi_expect_entry = true;
@@ -844,15 +899,7 @@ namespace K2D2.Transfer
             bool entry = soi_expect_entry;
             double distance, rate;
             if (entry)
-            {
-                distance = TransferDiagnostics.OurDistance(System, body, r, x, now, out var rel);
-                var path = System.PathToRoot(body);
-                int root = path[path.Count - 1];
-                System.StateRelativeTo(body, root, now, out _, out var vb);
-                System.StateRelativeTo(x, root, now, out _, out var vx);
-                var relV = vb + v - vx;
-                rate = distance > 0 ? Vector3d.Dot(rel, relV) / distance : 0;
-            }
+                rate = DistanceRate(body, r, v, x, now, out distance);
             else
             {
                 distance = r.magnitude;
@@ -915,6 +962,18 @@ namespace K2D2.Transfer
             }
         }
 
+        // The vessel (r, v around body, shared frame) against body x: our distance, and its rate.
+        double DistanceRate(int body, Vector3d r, Vector3d v, int x, double now, out double distance)
+        {
+            distance = TransferDiagnostics.OurDistance(System, body, r, x, now, out var rel);
+            var path = System.PathToRoot(body);
+            int root = path[path.Count - 1];
+            System.StateRelativeTo(body, root, now, out _, out var vb);
+            System.StateRelativeTo(x, root, now, out _, out var vx);
+            var relV = vb + v - vx;
+            return distance > 0 ? Vector3d.Dot(rel, relV) / distance : 0;
+        }
+
         // Every 10 s of real time while an SOI change is awaited: the distance, game and ours.
         void LogSoiDistance(VesselComponent vessel, int body, Vector3d r, double now, int target)
         {
@@ -945,6 +1004,7 @@ namespace K2D2.Transfer
                 return;
             string orbit = TransferDiagnostics.Orbit(vessel, now, out burn_end_energy, out burn_end_e, out double radius);
             burn_end_ut = now;
+            burn_end_body = body;
             double diff = TransferDiagnostics.WorldVsOrbit(vessel, now, out string world);
             logger.LogInfo($"[Transfer] state after the {burn_name}: {orbit}; {world}");
             if (TransferFlight.StateMismatch(diff, radius))
@@ -978,10 +1038,21 @@ namespace K2D2.Transfer
             // an engine still pushing when rails warp starts makes the game fly a burn of its own.
             bool afterBurn = !double.IsNaN(burn_end_ut);
             double mu = vessel.Orbit?.referenceBody?.gravParameter ?? double.NaN;
-            if (afterBurn)
+            int body = GameBodySystem.IndexOf(bodies ?? GameBodySystem.GameBodies(), vessel.Orbit?.referenceBody);
+            if (afterBurn && double.IsNaN(TransferFlight.EquivalentDeltaVSince(burn_end_body, burn_end_energy, body, energy, 0)))
+            {
+                // An SOI change since: energies around two bodies are not comparable. Start again here.
+                string name(int b) => b >= 0 && System != null && b < System.Count ? System[b].Name : $"#{b}";
+                logger.LogInfo($"[Transfer] energy since the {burn_name} ended: the central body changed ({name(burn_end_body)} -> {name(body)}), " +
+                    $"accounting restarted around {name(body)} at {energy:F3}");
+                burn_end_energy = energy;
+                burn_end_e = e;
+                burn_end_body = body;
+            }
+            else if (afterBurn)
             {
                 double speed = vessel.Orbit != null ? vessel.Orbit.GetOrbitalVelocityAtUTZup(now).magnitude : double.NaN;
-                double dvEq = TransferFlight.EquivalentDeltaV(burn_end_energy, energy, speed);
+                double dvEq = TransferFlight.EquivalentDeltaVSince(burn_end_body, burn_end_energy, body, energy, speed);
                 logger.LogInfo($"[Transfer] energy since the {burn_name} ended: {burn_end_energy:F3} -> {energy:F3} ({energy - burn_end_energy:+0.000;-0.000}), " +
                     $"about {dvEq:F2} m/s, {now - burn_end_ut:F0} s after it");
                 if (dvEq > TransferFlight.UncommandedDeltaV)
@@ -1037,7 +1108,7 @@ namespace K2D2.Transfer
         {
             string text;
             var plan = Current;
-            bool capture = plan.Steps.Any(st => st.Kind == StepKind.Capture);
+            bool capture = TransferFlight.EndsInOrbit(plan);
             if (capture)
             {
                 int final = plan.Request?.ToBody ?? body;
@@ -1046,7 +1117,7 @@ namespace K2D2.Transfer
                     Fail($"after the capture the vessel is not in a closed orbit of {System[final].Name} ({OrbitText(body, r, v)})", captureFailed: true);
                     return;
                 }
-                var el = OrbitMath.Elements(r, v, MuOf(body));
+                var el = LocalElements(body, r, v);
                 double R = System[body].Radius;
                 text = TransferFlight.FinalOrbit(System[body].Name, el.PeriapsisRadius - R, el.ApoapsisRadius - R, el.InclinationRad * 180 / Math.PI);
             }
@@ -1130,10 +1201,14 @@ namespace K2D2.Transfer
             if (orbit == null || System == null)
                 return false;
             ut = GeneralTools.Current_UT;
-            r = orbit.GetRelativePositionAtUTZup(ut);
-            v = orbit.GetOrbitalVelocityAtUTZup(ut);
             body = GameBodySystem.IndexOf(bodies ?? GameBodySystem.GameBodies(), orbit.referenceBody);
-            return body >= 0 && body < System.Count;
+            if (body < 0 || body >= System.Count)
+                return false;
+            // In the system's shared frame, as the snapshots (CelestialFrames).
+            QuaternionD toCommon = System[body].FrameToCommon;
+            r = toCommon * orbit.GetRelativePositionAtUTZup(ut);
+            v = toCommon * orbit.GetOrbitalVelocityAtUTZup(ut);
+            return true;
         }
 
         // Seconds at full thrust for dv; NaN without thrust.
@@ -1145,9 +1220,16 @@ namespace K2D2.Transfer
             return el.IsClosed ? el.Period : double.PositiveInfinity;
         }
 
+        // The elements in the body's own frame: the inclination is the game's (CelestialFrames).
+        OrbitElements LocalElements(int body, Vector3d r, Vector3d v)
+        {
+            QuaternionD toCommon = System[body].FrameToCommon;
+            return OrbitMath.Elements(CelestialFrames.ToLocal(toCommon, r), CelestialFrames.ToLocal(toCommon, v), MuOf(body));
+        }
+
         string OrbitText(int body, Vector3d r, Vector3d v)
         {
-            var el = OrbitMath.Elements(r, v, MuOf(body));
+            var el = LocalElements(body, r, v);
             double R = System[body].Radius;
             return $"{System[body].Name}: Pe {(el.PeriapsisRadius - R) / 1000:F1} km, " +
                 (el.IsClosed ? $"Ap {(el.ApoapsisRadius - R) / 1000:F1} km, " : $"e {el.Eccentricity:F3}, ") +

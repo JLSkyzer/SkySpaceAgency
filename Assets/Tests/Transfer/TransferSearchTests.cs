@@ -189,12 +189,17 @@ public class TransferSearchTests
         Assert.IsFalse(plan.Steps.Any(st => st.Kind == StepKind.Capture));
     }
 
+    // Since 2026-11-18 the current body is no longer refused: the orbit asked for there, as the
+    // Orbit tab plans it (ChildToParentReturnTests has the open paths).
     [Test]
-    public void TargetIsCurrentBody_Refused()
+    public void TargetIsCurrentBody_PlansTheOrbitThere()
     {
         var plan = Find(Request("Kerbin", "Kerbin", 700_000), "Kerbin -> Kerbin");
-        Assert.IsFalse(plan.Ok);
-        Assert.AreEqual("The target is the body you are orbiting.", plan.Refusal);
+        Assert.IsTrue(plan.Ok, plan.Refusal);
+        Assert.AreEqual(TransferSearch.InTarget, plan.CaseName);
+        Assert.IsTrue(plan.Steps.Count > 0 && plan.Steps.All(st => st.Kind == StepKind.OrbitChange && st.TargetBody == B("Kerbin")));
+        Assert.AreEqual(_s["Kerbin"].LowOrbitRadius, plan.Steps.Last().TargetPeriapsisRadius, 1);
+        Assert.AreEqual(_s["Kerbin"].LowOrbitRadius, plan.Steps.Last().TargetApoapsisRadius, 1);
     }
 
     [Test]

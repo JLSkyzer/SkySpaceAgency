@@ -622,6 +622,14 @@ namespace K2D2.Transfer
             return SoiWaitAction.Coast;
         }
 
+        // Our propagator starts the path inside a child's SOI radius while the game has the vessel
+        // around the parent. That is an entry still to come only while the vessel closes in on the
+        // child (rate, d|r|/dt relative to it, < 0). Moving away, it is the end of an exit the game
+        // has already made: our radius and the game's differ by a few metres (in game, 2026-11-18,
+        // 3 m after leaving Minmus, then "late SOI entry into Minmus: Missed" and a failed Escape).
+        // An unknown rate keeps the wait.
+        public static bool InsideChildIsPendingEntry(double rate) => !(rate >= 0);
+
         // A burn left the orbit away from the physical state: the position the orbit gives and the one
         // the game's world gives differ by more than the larger of 1 km and 1e-4 of the radius.
         public static bool StateMismatch(double positionDifference, double radius) =>
@@ -638,6 +646,25 @@ namespace K2D2.Transfer
 
         public static double EquivalentDeltaV(double energyBefore, double energyAfter, double speed) =>
             double.IsNaN(energyBefore) || double.IsNaN(energyAfter) ? 0 : Math.Abs(energyAfter - energyBefore) / Math.Max(speed, 1);
+
+        // The same, only when both energies are about one body: an orbital energy is relative to its
+        // central body, and two around different bodies say nothing of a burn (in game, 2026-11-18:
+        // "17.23 m/s nobody commanded" at the Minmus -> Kerbin SOI change). NaN when the bodies
+        // differ (or one is unknown): the caller starts the accounting again from the new body.
+        public static double EquivalentDeltaVSince(int burnBody, double energyBefore, int body, double energyAfter, double speed) =>
+            burnBody < 0 || burnBody != body ? double.NaN : EquivalentDeltaV(energyBefore, energyAfter, speed);
+
+        // The plan ends in an orbit of its target (not an encounter): a capture, or the orbit changes
+        // planned in the target's SOI (TransferSearch.InTarget, possibly merged into a plan from
+        // elsewhere). An orbit change happens around the target only in that case.
+        public static bool EndsInOrbit(TransferPlan plan)
+        {
+            if (plan == null)
+                return false;
+            int final = plan.Request?.ToBody ?? -1;
+            return plan.Steps.Any(st => st.Kind == StepKind.Capture
+                || (st.Kind == StepKind.OrbitChange && final >= 0 && st.Body == final && st.TargetBody == final));
+        }
 
         // The capture holds: a closed orbit inside the body's SOI.
         public static bool InOrbit(Vector3d r, Vector3d v, double mu, double soi)
@@ -676,6 +703,19 @@ namespace K2D2.Transfer
             if (SavedVectorsAhead(saved.Plan, saved.StepIndex))
                 return ResumeAction.Replan;
             return ResumeAction.Continue;
+        }
+
+        // A resume after a failed correction, with the vessel already in the SOI of the body that
+        // correction aimed at and no periapsis ahead to aim (an open path that leaves the SOI): there
+        // is no path to correct, so the plan is searched again from the actual state, which gives the
+        // orbit at that body (TransferSearch.InTarget). Before 2026-11-18 each Resume tried the
+        // correction again and refused ("The target is the body you are orbiting.").
+        public static ResumeAction InTargetSoi(ResumeAction action, SavedPlan saved, int currentBody, bool periapsisAhead)
+        {
+            if (action != ResumeAction.CorrectExisting || saved?.Plan == null || saved.StepIndex >= saved.Plan.Steps.Count)
+                return action;
+            int target = saved.Plan.Steps[saved.StepIndex].TargetBody;
+            return target >= 0 && currentBody == target && !periapsisAhead ? ResumeAction.Replan : action;
         }
 
         // Whether flying the plan from step 'from' would use a saved vector: a step with a planned

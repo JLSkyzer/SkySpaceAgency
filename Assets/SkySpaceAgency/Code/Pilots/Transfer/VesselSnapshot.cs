@@ -50,8 +50,10 @@ namespace K2D2.Transfer
                     return false;
                 }
                 ut = GeneralTools.Current_UT;
-                r = orbit.GetRelativePositionAtUTZup(ut);
-                v = orbit.GetOrbitalVelocityAtUTZup(ut);
+                // In the root's frame, as the BodySystem (CelestialFrames).
+                QuaternionD toCommon = GameBodySystem.FrameToCommon(orbit.referenceBody);
+                r = toCommon * orbit.GetRelativePositionAtUTZup(ut);
+                v = toCommon * orbit.GetOrbitalVelocityAtUTZup(ut);
                 body = GameBodySystem.IndexOf(bodies, orbit.referenceBody);
                 if (body < 0)
                 {
@@ -140,8 +142,10 @@ namespace K2D2.Transfer
 
         // The start-of-transfer checks of the IL findings, logged by the pilot:
         // (a) the vessel's position relative to the root, summed up the hierarchy from the game's
-        //     relative Zup vectors, against the game's world positions reframed into the root's
-        //     celestial frame, and against the BodySystem (built at the same UT, or null);
+        //     relative Zup vectors as they are ("chain", the sum the transfer code made before
+        //     2026-11-18) and turned by each frame's CelestialTilt ("tilted chain", CelestialFrames),
+        //     against the game's world positions reframed into the root's celestial frame, and the
+        //     tilted chain against the BodySystem (built at the same UT, or null);
         // (b) which trajectory model moves the vessel right now.
         public static void LogStartChecks(BodySystem system, IReadOnlyList<CelestialBodyComponent> bodyList = null)
         {
@@ -157,10 +161,12 @@ namespace K2D2.Transfer
                 double ut = GeneralTools.Current_UT;
 
                 Vector3d chain = orbit.GetRelativePositionAtUTZup(ut);
+                Vector3d tilted = GameBodySystem.FrameToCommon(orbit.referenceBody) * chain;
                 CelestialBodyComponent root = orbit.referenceBody;
                 while (root.referenceBody != null && !ReferenceEquals(root.referenceBody, root))
                 {
                     chain += root.Orbit.GetRelativePositionAtUTZup(ut);
+                    tilted += GameBodySystem.FrameToCommon(root.referenceBody) * root.Orbit.GetRelativePositionAtUTZup(ut);
                     root = root.referenceBody;
                 }
 
@@ -170,7 +176,9 @@ namespace K2D2.Transfer
                 double distance = Position.Distance(vessel.SimulationObject.Position, root.Position);
                 string line = $"[Transfer] frame check at UT {F(ut)}: vessel from {root.bodyName}, Zup chain |r| {F(chain.magnitude)} m, " +
                               $"world distance {F(distance)} m (diff {F(chain.magnitude - distance)} m), " +
-                              $"chain vs world (Zup swap) {F((chain - worldZup).magnitude)} m";
+                              $"chain vs world (Zup swap) {F((chain - worldZup).magnitude)} m, " +
+                              $"tilted chain vs world {F((tilted - worldZup).magnitude)} m " +
+                              $"(the {orbit.referenceBody.bodyName} frame turned {CelestialFrames.AngleDeg(GameBodySystem.FrameToCommon(orbit.referenceBody)).ToString("F2", CultureInfo.InvariantCulture)}°)";
 
                 if (system != null)
                 {
@@ -180,7 +188,7 @@ namespace K2D2.Transfer
                     if (b >= 0 && rootIndex >= 0 && b < system.Count && rootIndex < system.Count)
                     {
                         system.StateRelativeTo(b, rootIndex, ut, out Vector3d rb, out _);
-                        line += $", chain vs BodySystem {F((rb + orbit.GetRelativePositionAtUTZup(ut) - chain).magnitude)} m";
+                        line += $", tilted chain vs BodySystem {F((rb + system[b].FrameToCommon * orbit.GetRelativePositionAtUTZup(ut) - tilted).magnitude)} m";
                     }
                 }
                 K2D2_Plugin.logger.LogInfo(line);

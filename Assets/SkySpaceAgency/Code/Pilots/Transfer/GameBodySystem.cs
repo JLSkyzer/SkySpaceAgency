@@ -21,6 +21,9 @@ namespace K2D2.Transfer
     //   and both are read again at each re-plan.
     // - CelestialBodyComponent.MaxTerrainHeight is the height above the radius that the game itself
     //   uses for collisions (PatchedConics.WillCollideWithParent: Periapsis < radius + MaxTerrainHeight).
+    // - that shared Zup orientation is only the convention of the axes: the vectors of an orbit are
+    //   in the celestial frame of its reference body, turned by CelestialTilt within its parent's
+    //   (CelestialFrames). Build and VesselSnapshot turn every vector into the root's frame.
     public static class GameBodySystem
     {
         public const int TerrainSamples = 400;
@@ -45,6 +48,21 @@ namespace K2D2.Transfer
         // The game's bodies; a body's index in a built BodySystem is its index in this list.
         public static List<CelestialBodyComponent> GameBodies() =>
             GeneralTools.Game?.UniverseModel?.GetAllCelestialBodies();
+
+        // The rotation from body's celestial frame to the root's, as the game composes it
+        // (PatchedConicsOrbit.GetPositionAtUTInStarSpace), the root's own tilt left out.
+        public static QuaternionD FrameToCommon(CelestialBodyComponent body)
+        {
+            // [body, parent, …, root]: the root ends the chain (its own tilt is not used).
+            var chain = new List<CelestialBodyComponent>();
+            for (var b = body; b != null && chain.Count < 64; b = ReferenceEquals(b.referenceBody, b) ? null : b.referenceBody)
+                chain.Add(b);
+            if (chain.Count == 0)
+                return QuaternionD.identity;
+            return CelestialFrames.ToCommon(0,
+                i => i + 1 < chain.Count ? i + 1 : -1,
+                i => chain[i].transform.CelestialTilt.swizzle);
+        }
 
         public static int IndexOf(IReadOnlyList<CelestialBodyComponent> bodies, CelestialBodyComponent body)
         {
@@ -129,9 +147,11 @@ namespace K2D2.Transfer
                             error = $"The game gives no orbit for {name}.";
                             return null;
                         }
-                        node.EpochPosition = orbit.GetRelativePositionAtUTZup(ut);
-                        node.EpochVelocity = orbit.GetOrbitalVelocityAtUTZup(ut);
+                        QuaternionD parentFrame = FrameToCommon(bodies[parentIndex]);
+                        node.EpochPosition = parentFrame * orbit.GetRelativePositionAtUTZup(ut);
+                        node.EpochVelocity = parentFrame * orbit.GetOrbitalVelocityAtUTZup(ut);
                     }
+                    node.FrameToCommon = FrameToCommon(b);
                     node.MaxTerrainHeight = MaxTerrainHeight(b, parentIndex < 0, out string source);
 
                     if (!Finite(node.Mu) || node.Mu <= 0 || !Finite(node.Radius) || node.Radius <= 0
@@ -146,7 +166,8 @@ namespace K2D2.Transfer
                     LogOnce($"[Transfer] body {name}: parent {(parentIndex < 0 ? "none" : bodies[parentIndex].bodyName)}, " +
                             $"mu {node.Mu.ToString("G6", CultureInfo.InvariantCulture)} m³/s², radius {F(node.Radius)} m, " +
                             $"SOI {F(node.Soi)} m, atmosphere {F(node.AtmosphereDepth)} m, " +
-                            $"max terrain {F(node.MaxTerrainHeight)} m ({source}), low orbit {F(node.LowOrbitRadius - node.Radius)} m");
+                            $"max terrain {F(node.MaxTerrainHeight)} m ({source}), low orbit {F(node.LowOrbitRadius - node.Radius)} m, " +
+                            $"frame turned {CelestialFrames.AngleDeg(node.FrameToCommon).ToString("F2", CultureInfo.InvariantCulture)}° from the root's");
                     nodes.Add(node);
                 }
 

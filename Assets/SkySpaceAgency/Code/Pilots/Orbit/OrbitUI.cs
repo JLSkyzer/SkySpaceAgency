@@ -261,21 +261,6 @@ namespace K2D2.OrbitPlanning
             return $"{(int)t.TotalHours:00}:{t.Minutes:00}:{t.Seconds:00}";
         }
 
-        static string Describe(OrbitPlanError error, string bodyName = "body")
-        {
-            switch (error)
-            {
-                case OrbitPlanError.CaptureBelowSurface: return $"The trajectory hits the {bodyName}: its periapsis is below the surface and no capture above it is possible any more.";
-                case OrbitPlanError.CaptureInAtmosphere: return $"The trajectory enters the {bodyName} atmosphere: no capture above it is possible any more.";
-                case OrbitPlanError.CaptureLeavesSoi: return $"No capture possible: the vessel leaves the {bodyName} SOI first, or the target Ap is beyond it.";
-                case OrbitPlanError.EscapeTrajectory: return "Current trajectory escapes the body: planning needs a closed orbit.";
-                case OrbitPlanError.UnstableCurrentOrbit: return "Current periapsis is inside the atmosphere or below the surface: circularize first (Lift or Node tab).";
-                case OrbitPlanError.PeBelowSurface: return "Target Pe is below the surface.";
-                case OrbitPlanError.PeInAtmosphere: return "Target Pe is inside the atmosphere.";
-                case OrbitPlanError.PeAboveAp: return "Target Pe cannot be higher than the target Ap.";
-                case OrbitPlanError.InclinationOutOfRange: return "Target inclination must be between 0° and 180°.";
-                default: return error.ToString();
-            }
-        }
+        static string Describe(OrbitPlanError error, string bodyName = "body") => OrbitPlanner.Describe(error, bodyName);
     }
 }

@@ -286,6 +286,13 @@ namespace K2D2.Transfer
             var check = PlanStore.Check(saved, snap.System, snap.Body, snap.R, snap.V, snap.UT);
             var action = TransferFlight.DecideResume(saved, check);
             logger.LogInfo($"[Transfer] resume: {check.Verdict} -> {action} ({check.Detail}), saved in {saved.Phase} at step {saved.StepIndex}");
+            bool periapsisAhead = ArrivalTargeting.PeriapsisAhead(snap.R, snap.V, snap.System[snap.Body].Mu, snap.System[snap.Body].Soi);
+            var inTarget = TransferFlight.InTargetSoi(action, saved, snap.Body, periapsisAhead);
+            if (inTarget != action)
+            {
+                logger.LogInfo($"[Transfer] resume: already in the {snap.System[snap.Body].Name} SOI with no periapsis ahead: {action} -> {inTarget} (the orbit at {snap.System[snap.Body].Name})");
+                action = inTarget;
+            }
             if (action == ResumeAction.Continue && !TransferFlight.RemapBodies(saved, snap.System))
             {
                 logger.LogInfo("[Transfer] resume: the body indices cannot be mapped by name: planned again");

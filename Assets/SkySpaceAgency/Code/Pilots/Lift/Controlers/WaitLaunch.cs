@@ -118,6 +118,11 @@ namespace K2D2.Lift
                 refusal = "Cannot plan: " + error;
                 return;
             }
+            // The launch (site, rotation, window, steering) is worked out in the body's own frame, as
+            // the game gives it; the snapshot is in the system's shared frame (CelestialFrames).
+            QuaternionD toCommon = system[body].FrameToCommon;
+            r = CelestialFrames.ToLocal(toCommon, r);
+            v = CelestialFrames.ToLocal(toCommon, v);
             // The target by name, resolved against this snapshot's bodies (as the Transfer tab does).
             if (!new TransferInput { TargetName = target }.Resolve(system, out TransferRequest template, out error))
             {
@@ -178,6 +183,8 @@ namespace K2D2.Lift
             job = Task.Run(() =>
             {
                 ParkingPlan parking = ParkingPlane.Plan(system, body, targetIndex, lat, t, radius, template, token);
+                if (parking.Ok)
+                    parking.PlaneNormal = CelestialFrames.ToLocal(toCommon, parking.PlaneNormal); // planned in the shared frame
                 LaunchWindowResult window = parking.Ok
                     ? LaunchWindow.Find(node.Radius, node.Mu, omega, r, t, parking.PlaneNormal, radius, lead, downrange, horizon)
                     : null;

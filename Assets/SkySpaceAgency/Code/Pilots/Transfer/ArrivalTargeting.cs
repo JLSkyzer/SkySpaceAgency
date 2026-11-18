@@ -95,6 +95,11 @@ namespace K2D2.Transfer
             converged = false;
             if (s == null || targetBody < 0 || targetBody >= s.Count || !(wantedPeriapsisRadius > 0) || !(horizonUT > ut))
                 return false;
+            // Already in the target's SOI, past the periapsis on an open path: no arrival ahead to aim
+            // (in game, 2026-11-18: "300.00 m/s … arrival UT 453892790", before the solve's UT, after a
+            // Minmus → Kerbin escape that missed). The caller plans an orbit at the target instead.
+            if (body == targetBody && !PeriapsisAhead(r, v, s[body].Mu, s[body].Soi))
+                return false;
 
             var problem = new Problem
             {
@@ -126,6 +131,16 @@ namespace K2D2.Transfer
                 converged = ok;
             }
             return found;
+        }
+
+        // Whether the conic (r, v around a body of SOI radius soi) still has its periapsis ahead
+        // inside the SOI: a closed orbit within the SOI always does, an open path only inbound.
+        public static bool PeriapsisAhead(Vector3d r, Vector3d v, double mu, double soi)
+        {
+            var el = OrbitMath.Elements(r, v, mu);
+            if (el.IsClosed && el.ApoapsisRadius < soi)
+                return true;
+            return Vector3d.Dot(r, v) < 0;
         }
 
         // Two passes closer than this in total (m/s: the larger of 2 m/s and 2 % of the cheaper) cost
@@ -469,7 +484,11 @@ namespace K2D2.Transfer
             Eval Arrival(Patch p, BodyNode target, ref int branch)
             {
                 double mu = target.Mu;
-                var el = OrbitMath.Elements(p.StartR, p.StartV, mu);
+                // In the target's own frame, where its inclination is the game's (CelestialFrames):
+                // the B-plane residuals do not depend on the frame, the inclination does.
+                var startR = CelestialFrames.ToLocal(target.FrameToCommon, p.StartR);
+                var startV = CelestialFrames.ToLocal(target.FrameToCommon, p.StartV);
+                var el = OrbitMath.Elements(startR, startV, mu);
                 var eval = new Eval
                 {
                     Mode = Mode.Encounter,
