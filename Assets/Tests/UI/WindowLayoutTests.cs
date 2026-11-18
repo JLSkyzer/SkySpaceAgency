@@ -51,6 +51,10 @@ public class WindowLayoutTests
         Assert.IsNotNull(lift.Q<Label>("transfer_hint"));
         foreach (string element in new[] { "transfer_goal_group", "transfer_infos", "heading_row", "heading", "lift_infos" })
             Assert.IsNotNull(lift.Q(element), $"the Lift tab has no element named {element}");
+        // Rendezvous goal (4.4): one toggle, inside the goal group.
+        var dock = lift.Q<K2UI.K2Toggle>("rendezvous_dock");
+        Assert.IsNotNull(dock, "the Lift tab has no K2Toggle named rendezvous_dock");
+        Assert.IsNotNull(lift.Q("transfer_goal_group").Q<K2UI.K2Toggle>("rendezvous_dock"), "rendezvous_dock is in transfer_goal_group");
     }
 
     [Test]

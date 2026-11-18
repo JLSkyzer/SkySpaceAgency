@@ -4,6 +4,7 @@ using K2UI.Tabs;
 using K2UI;
 using UnityEngine.UIElements;
 using K2D2.UI;
+using K2D2.Rendezvous;
 using K2D2.Transfer;
 using KTools;
 
@@ -30,8 +31,15 @@ namespace K2D2.Lift
         VisualElement lift_infos_el;
 
         // TRANSFER GOAL (sub-project 4.2): the goal and target dropdowns and the plan readout,
-        // shown only for Prepare transfer; the Orbit goal keeps today's layout.
-        static readonly string[] GoalLabels = { "Orbit", "Prepare transfer" };
+        // shown only for Prepare transfer; the Orbit goal keeps today's layout. RENDEZVOUS GOAL
+        // (4.4): the same group, the target dropdown listing the vessels around our body, plus the
+        // "Dock after the rendezvous" toggle (no other element: UI rule, no new old-style UI).
+        static readonly string[] GoalLabels = { "Orbit", "Prepare transfer", "Rendezvous" };
+        K2Toggle dock_toggle;
+        List<RendezvousReadout.Choice> vessel_choices = new List<RendezvousReadout.Choice>();
+        float next_vessel_try;
+        string last_game_target;
+        bool drop_lists_vessels;   // the target dropdown holds the vessels (else the bodies)
         DropdownField goal_drop, target_drop;
         VisualElement transfer_group, transfer_infos_el, heading_row, heading_el;
         Label transfer_hint;
@@ -83,10 +91,19 @@ namespace K2D2.Lift
             target_drop = panel.Q<DropdownField>("transfer_target");
             target_drop.RegisterValueChangedCallback(evt =>
             {
+                if (settings.goal.V == LiftGoal.Rendezvous)
+                {
+                    // A body header cannot be picked (its Id is null).
+                    int k = RendezvousReadout.FindLabel(vessel_choices, evt.newValue);
+                    if (k >= 0 && vessel_choices[k].Id != null)
+                        settings.rendezvous_target.V = vessel_choices[k].Id;
+                    return;
+                }
                 int i = BodyChoices.FindLabel(entries, evt.newValue);
                 if (i >= 0)
                     settings.transfer_target.V = entries[i].Name;
             });
+            dock_toggle = panel.Q<K2Toggle>("rendezvous_dock").Bind(settings.rendezvous_dock);
             transfer_group = panel.Q<VisualElement>("transfer_goal_group");
             transfer_infos_el = panel.Q<VisualElement>("transfer_infos");
             transfer_hint = panel.Q<Label>("transfer_hint");
@@ -122,7 +139,63 @@ namespace K2D2.Lift
         }
 
         static string GoalLabel(LiftGoal goal) =>
-            goal == LiftGoal.PrepareTransfer ? GoalLabels[1] : GoalLabels[0];
+            goal == LiftGoal.PrepareTransfer ? GoalLabels[1] : goal == LiftGoal.Rendezvous ? GoalLabels[2] : GoalLabels[0];
+
+        // The vessels around our body, refreshed every 2 s (as the body list). A new game target is
+        // selected once (it is what the Rendezvous tab pre-selects too); the pick stands otherwise.
+        void UpdateVessels()
+        {
+            LiftSettings settings = pilot.settings;
+            if (!drop_lists_vessels || UnityEngine.Time.realtimeSinceStartup >= next_vessel_try)
+            {
+                drop_lists_vessels = true;
+                next_vessel_try = UnityEngine.Time.realtimeSinceStartup + 2;
+                try
+                {
+                    var ours = RendezvousSnapshot.Ours;
+                    string body = ours?.Orbit?.referenceBody?.bodyName;
+                    var groups = new List<(string body, List<VesselEntry> vessels)>();
+                    foreach (var g in RendezvousSnapshot.VesselsByBody(ours))
+                        if (g.body == body)
+                            groups.Add(g);
+                    vessel_choices = RendezvousReadout.Targets(groups);
+                    target_drop.choices = RendezvousReadout.Labels(vessel_choices);
+
+                    string game_target = RendezvousSnapshot.TargetVessel(ours)?.GlobalId.Guid.ToString("D");
+                    if (!pilot.isRunning && game_target != null && game_target != last_game_target
+                        && RendezvousReadout.FindId(vessel_choices, game_target) >= 0)
+                        settings.rendezvous_target.V = game_target;
+                    last_game_target = game_target;
+                }
+                catch (Exception e)
+                {
+                    K2D2_Plugin.logger.LogInfo($"[Lift] tab: no vessel list yet ({e.GetType().Name}: {e.Message})");
+                }
+            }
+            int i = RendezvousReadout.FindId(vessel_choices, settings.rendezvous_target.V);
+            target_drop.SetValueWithoutNotify(i >= 0 ? vessel_choices[i].Label : RendezvousReadout.NoTargetLabel);
+        }
+
+        void UpdateRendezvousGoal()
+        {
+            LiftSettings settings = pilot.settings;
+            UpdateVessels();
+            string id = settings.rendezvous_target.V;
+            int i = RendezvousReadout.FindId(vessel_choices, id);
+            string name = i >= 0 ? vessel_choices[i].Label.Trim() : null;
+            var plan = pilot.transfer;
+            // The last plan, while it is the one of the target chosen.
+            if (plan != null && plan.Goal == LiftGoal.Rendezvous && plan.TargetId == id)
+            {
+                transfer_hint.text = "";
+                foreach (var (label, value) in LiftGoalRules.Readout(plan, GeneralTools.Current_UT))
+                    AddInfoRow(transfer_infos_el, label, value);
+            }
+            else
+                transfer_hint.text = name == null
+                    ? "Choose the target vessel."
+                    : $"Start picks the launch pass for the cheapest rendezvous with {name}, waits on the pad, lifts into an orbit 10 km under it (at most the low orbit + 150 km) and hands over to the Rendezvous pilot.";
+        }
 
         // A body list read from the game, retried every 2 s until there is one (as the Transfer tab).
         void UpdateBodies()
@@ -147,6 +220,11 @@ namespace K2D2.Lift
                     K2D2_Plugin.logger.LogInfo($"[Lift] tab: no body list yet ({e.GetType().Name}: {e.Message})");
                 }
             }
+            if (drop_lists_vessels)
+            {
+                drop_lists_vessels = false;
+                target_drop.choices = BodyChoices.Labels(entries);
+            }
             int i = BodyChoices.FindName(entries, pilot.settings.transfer_target.V);
             target_drop.SetValueWithoutNotify(i >= 0 ? entries[i].Label : "Choose a body");
         }
@@ -155,13 +233,22 @@ namespace K2D2.Lift
         {
             LiftSettings settings = pilot.settings;
             bool transfer_goal = settings.goal.V == LiftGoal.PrepareTransfer;
+            bool rendezvous_goal = settings.goal.V == LiftGoal.Rendezvous;
             goal_drop.SetValueWithoutNotify(GoalLabel(settings.goal.V));
-            transfer_group.Show(transfer_goal);
-            // The heading comes from the launch window for a transfer.
-            heading_row.Show(!transfer_goal);
-            heading_el.Show(!transfer_goal);
+            transfer_group.Show(transfer_goal || rendezvous_goal);
+            // The heading comes from the launch window for a transfer or a rendezvous.
+            heading_row.Show(!transfer_goal && !rendezvous_goal);
+            heading_el.Show(!transfer_goal && !rendezvous_goal);
             goal_drop.SetEnabled(!pilot.isRunning);
             target_drop.SetEnabled(!pilot.isRunning);
+            dock_toggle.Show(rendezvous_goal);
+            dock_toggle.SetEnabled(!pilot.isRunning);
+            if (rendezvous_goal)
+            {
+                transfer_infos_el.Clear();
+                UpdateRendezvousGoal();
+                return;
+            }
             if (!transfer_goal)
                 return;
 
@@ -170,7 +257,7 @@ namespace K2D2.Lift
             string target = settings.transfer_target.V;
             var plan = pilot.transfer;
             // The last plan, while it is the one of the target chosen.
-            if (plan != null && plan.TargetName == target)
+            if (plan != null && plan.Goal == LiftGoal.PrepareTransfer && plan.TargetName == target)
             {
                 transfer_hint.text = "";
                 foreach (var (label, value) in LiftGoalRules.Readout(plan, GeneralTools.Current_UT))

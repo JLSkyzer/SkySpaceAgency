@@ -9,10 +9,13 @@
             <ui:Label tabindex="-1" text="Ascent Autopilot" display-tooltip-when-elided="true" name="Title" class="unselectedContent" style="display: flex; width: 100%; -unity-text-align: upper-center;" />
             <!-- Goal (sub-project 4.2): Orbit is today's ascent and layout, unchanged. Prepare
                  transfer waits on the pad for the transfer's parking-orbit plane, lifts into it and
-                 trims it; its target and plan readout are shown only for that goal (LiftUI.cs). -->
-            <ui:DropdownField label="Goal" index="-1" choices="" name="goal" tooltip="Orbit: the ascent to the Ap below. Prepare transfer: wait on the pad for the transfer's parking-orbit plane, lift into it and trim it" />
+                 trims it; its target and plan readout are shown only for that goal (LiftUI.cs).
+                 Rendezvous (4.4) uses the same group: the target dropdown lists vessels, plus the
+                 "Dock after the rendezvous" toggle. -->
+            <ui:DropdownField label="Goal" index="-1" choices="" name="goal" tooltip="Orbit: the ascent to the Ap below. Prepare transfer: wait on the pad for the transfer's parking-orbit plane, lift into it and trim it. Rendezvous: wait on the pad for the launch pass with the cheapest rendezvous, lift under the target vessel and hand over to the Rendezvous pilot" />
             <ui:VisualElement name="transfer_goal_group">
-                <ui:DropdownField label="Target" index="-1" choices="" name="transfer_target" tooltip="The body of the transfer, every body grouped by parent" />
+                <ui:DropdownField label="Target" index="-1" choices="" name="transfer_target" tooltip="The body of the transfer, every body grouped by parent; for a rendezvous, a vessel around the launch body" />
+                <K2UI.K2Toggle label="Dock after the rendezvous" name="rendezvous_dock" tooltip="After the rendezvous, dock with a free compatible port (Rendezvous tab rules)" />
                 <ui:Label name="transfer_hint" text="" style="white-space: normal; font-size: 12px; color: rgb(180, 180, 180);" />
                 <ui:VisualElement name="transfer_infos" class="advanced-info-table" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);" />
             </ui:VisualElement>
