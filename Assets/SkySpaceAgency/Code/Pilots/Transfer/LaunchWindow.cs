@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using KSP.Sim;
 
 namespace K2D2.Transfer
@@ -22,6 +23,11 @@ namespace K2D2.Transfer
         public double PlaneErrorDeg;
         public double PlaneChangeDeltaV;
         public Vector3d ReachedPlaneNormal = new Vector3d(0, 0, 1);
+
+        // Where the ascent ends (unit, inertial, at InsertionUT = LaunchUT + lead). On a refusal:
+        // InsertionUT = LaunchUT and a zero point.
+        public Vector3d InsertionPoint = Vector3d.zero;
+        public double InsertionUT;
     }
 
     // When to lift off, and on which heading, to reach a target orbit plane (inertial Zup frame,
@@ -45,8 +51,41 @@ namespace K2D2.Transfer
         // Below this out-of-plane angle of the insertion point, launching now is as good as a pass.
         public const double NowToleranceDeg = 0.01;
 
+        // Between two listed passes: the next search starts this long after the previous launch.
+        public const double MinPassGapSeconds = 600;
+
         const double Deg = Math.PI / 180;
         const double TwoPi = 2 * Math.PI;
+
+        // The next launch passes from ut0: Find, then Find again from just after each launch, with the
+        // site turned with the body. When every moment is a launch (Pass Any launched at its own start
+        // time: equatorial plane, a body that does not turn), steps anyTimeStepSeconds instead. Only Ok
+        // results, at most maxPasses, none past ut0 + horizonSeconds; empty when the first Find refuses.
+        public static List<LaunchWindowResult> Passes(double bodyRadius, double mu, Vector3d bodyAngularVelocity,
+            Vector3d siteAtUT0, double ut0, Vector3d targetPlaneNormal, double orbitRadius,
+            double ascentLeadSeconds, double ascentDownrangeRad, double horizonSeconds, int maxPasses,
+            double anyTimeStepSeconds)
+        {
+            var list = new List<LaunchWindowResult>();
+            if (!Finite(ut0) || !(horizonSeconds > 0) || maxPasses <= 0)
+                return list;
+            double step = Finite(anyTimeStepSeconds) && anyTimeStepSeconds > 1 ? anyTimeStepSeconds : MinPassGapSeconds;
+            double end = ut0 + horizonSeconds;
+            double omega = Finite(bodyAngularVelocity.z) ? bodyAngularVelocity.z : 0;
+            double start = ut0;
+            while (list.Count < maxPasses && start <= end)
+            {
+                var site = Turn(siteAtUT0, omega * (start - ut0));
+                var w = Find(bodyRadius, mu, bodyAngularVelocity, site, start, targetPlaneNormal, orbitRadius,
+                    ascentLeadSeconds, ascentDownrangeRad, end - start);
+                if (!w.Ok || w.LaunchUT > end)
+                    break;
+                list.Add(w);
+                bool anyTime = w.Pass == PlanePass.Any && Math.Abs(w.LaunchUT - start) < 1e-9;
+                start = w.LaunchUT + (anyTime ? step : MinPassGapSeconds);
+            }
+            return list;
+        }
 
         public static LaunchWindowResult Find(double bodyRadius, double mu, Vector3d bodyAngularVelocity,
             Vector3d siteAtUT0, double ut0, Vector3d targetPlaneNormal, double orbitRadius,
@@ -178,6 +217,8 @@ namespace K2D2.Transfer
                 PlaneErrorDeg = error / Deg,
                 PlaneChangeDeltaV = 2 * vo * Math.Sin(error / 2),
                 ReachedPlaneNormal = reached,
+                InsertionPoint = q,
+                InsertionUT = ut0 + dt + lead,
             };
         }
 
@@ -228,6 +269,8 @@ namespace K2D2.Transfer
             LaunchUT = ut0,
             AzimuthDeg = 90,
             Pass = PlanePass.Any,
+            InsertionPoint = Vector3d.zero,
+            InsertionUT = ut0,
         };
     }
 }

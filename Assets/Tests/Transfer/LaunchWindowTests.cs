@@ -266,4 +266,100 @@ public class LaunchWindowTests
         Assert.IsTrue(cases[9].Ok);
         Assert.AreEqual(270, cases[9].AzimuthDeg, 1e-6);
     }
+    // ---- 4.4: insertion point and pass enumeration ----
+
+    [Test]
+    public void InsertionPoint_LiesInTheReachedPlane()
+    {
+        var w = Find(Ksc(), Normal(28.5, 10), lead: 150, downrange: 5 * Deg);
+        Assert.IsTrue(w.Ok, w.Refusal);
+        Assert.Less(Math.Abs(Vector3d.Dot(w.InsertionPoint, w.ReachedPlaneNormal)), 1e-9);
+        Assert.AreEqual(1, w.InsertionPoint.magnitude, 1e-12);
+        Assert.AreEqual(w.LaunchUT + 150, w.InsertionUT, 1e-9);
+    }
+
+    [Test]
+    public void InsertionPoint_IsTheSiteTurnedAndMovedDownrange()
+    {
+        var site = new Vector3d(R, 0, 0);
+        var w = Find(site, new Vector3d(0, 0, 1), ut0: 500, lead: 100, downrange: 3 * Deg);
+        Assert.IsTrue(w.Ok, w.Refusal);
+        Assert.AreEqual(3, AngleDeg(w.InsertionPoint, Rotate(site, Omega(), w.LaunchUT + 100)), 1e-6);
+    }
+
+    [Test]
+    public void Refusal_InsertionAtLaunchUT_ZeroPoint()
+    {
+        var w = LaunchWindow.Find(R, Mu, new Vector3d(1e-5, 0, 2.9e-4), Ksc(), 42, Normal(6, 0), Orbit, 10, 0, Day);
+        Assert.IsFalse(w.Ok);
+        Assert.AreEqual(w.LaunchUT, w.InsertionUT);
+        Assert.AreEqual(0, w.InsertionPoint.magnitude);
+    }
+
+    static System.Collections.Generic.List<LaunchWindowResult> Passes(Vector3d site, Vector3d normal, double horizon,
+        int max, double step, double ut0 = 0, Vector3d? omega = null)
+    {
+        var w = omega ?? Omega();
+        var list = LaunchWindow.Passes(R, Mu, w, Rotate(site, w, ut0), ut0, normal, Orbit, 0, 0, horizon, max, step);
+        foreach (var p in list)
+            TestContext.Out.WriteLine($"pass {p.LaunchUT - ut0:F1} s, {p.Pass}, error {p.PlaneErrorDeg:F4}°");
+        return list;
+    }
+
+    [Test]
+    public void Passes_Kerbin6Deg_TwoPerRotation_Increasing()
+    {
+        var list = Passes(Ksc(-74.5577), Normal(6, 123), 2 * Day, 12, 300);
+        Assert.AreEqual(4, list.Count);
+        for (int k = 1; k < list.Count; k++)
+        {
+            Assert.Greater(list[k].LaunchUT, list[k - 1].LaunchUT);
+            Assert.AreNotEqual(list[k].Pass, list[k - 1].Pass);
+            Assert.AreNotEqual(PlanePass.Any, list[k].Pass);
+        }
+        // Gaps alternate: a and b, then a again, summing to a day.
+        double g1 = list[1].LaunchUT - list[0].LaunchUT, g2 = list[2].LaunchUT - list[1].LaunchUT, g3 = list[3].LaunchUT - list[2].LaunchUT;
+        Assert.AreEqual(g1, g3, 1e-3);
+        Assert.AreEqual(Day, g1 + g2, 1e-3);
+    }
+
+    [Test]
+    public void Passes_AnyTime_StepsThroughTime()
+    {
+        var list = Passes(new Vector3d(R, 0, 0), new Vector3d(0, 0, 1), Day, 5, 300, ut0: 1000);
+        Assert.AreEqual(5, list.Count);
+        for (int k = 0; k < 5; k++)
+        {
+            Assert.AreEqual(1000 + 300 * k, list[k].LaunchUT, 1e-6);
+            Assert.AreEqual(PlanePass.Any, list[k].Pass);
+        }
+    }
+
+    [Test]
+    public void Passes_OutOfReach_OnePerRotation()
+    {
+        var list = Passes(KerbolFixture.SurfacePoint(R, 10, 0), Normal(5, 30), 3 * Day, 12, 300);
+        Assert.AreEqual(3, list.Count);
+        for (int k = 0; k < list.Count; k++)
+        {
+            Assert.AreEqual(PlanePass.Any, list[k].Pass);
+            Assert.AreEqual(5, list[k].PlaneErrorDeg, 0.01);
+            if (k > 0)
+                Assert.AreEqual(Day, list[k].LaunchUT - list[k - 1].LaunchUT, 1);
+        }
+    }
+
+    [Test]
+    public void Passes_FirstRefused_Empty()
+    {
+        var list = Passes(Ksc(), Normal(6, 0), Day, 12, 300, omega: new Vector3d(1e-5, 0, 2.9e-4));
+        Assert.AreEqual(0, list.Count);
+    }
+
+    [Test]
+    public void Passes_MaxPassesHonoured()
+    {
+        Assert.AreEqual(3, Passes(Ksc(), Normal(6, 0), 4 * Day, 3, 300).Count);
+        Assert.AreEqual(3, Passes(new Vector3d(R, 0, 0), new Vector3d(0, 0, 1), Day, 3, 300).Count);
+    }
 }
