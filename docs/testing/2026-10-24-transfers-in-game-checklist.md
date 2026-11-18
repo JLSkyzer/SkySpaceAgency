@@ -215,3 +215,41 @@ cas 4). Lire `Player.log`, lignes `[Lift] rendezvous:` puis `[Rendezvous]`.
    aucun burn lancé, warp à 1×, conseil « choose a target in the Rendezvous tab ».
 8. **Cible refusée.** Une cible posée au sol, ou en orbite autour de la Mun : refus immédiat avec le message, rien n'est lancé.
 9. **Les autres objectifs.** Un Lift « Orbit » et un « Prepare transfer » se déroulent comme avant (sections 6 et 7).
+
+## 22. Transfert + rendez-vous + amarrage vers une cible autour d'un autre corps (4.5)
+
+Préparer une station en orbite circulaire d'environ 200 km autour de la Mun (puis, si possible, autour de Minmus, dont le
+repère est tourné), inclinée d'environ 20°, avec un port d'amarrage libre. Le vaisseau part d'une orbite basse de Kerbin avec
+un port compatible. Sauvegarde rapide avant chaque essai. Lire `Player.log`, lignes `[Transfer] chain:`, `[Transfer]` puis
+`[Rendezvous]` et `[Docking]`.
+
+1. **Plan.** Onglet Rendezvous, choisir la station : le texte dit qu'elle orbite la Mun, seuls les boutons « Transfer +
+   rendezvous + dock » et « Transfer + rendezvous » sont actifs. Appuyer sur le premier.
+   - Ligne `planning transfer + rendezvous` : Pe, Ap, `inclination` comparée à `game orbit.inclination` (noter l'unité),
+     orbite d'attente 190 km.
+   - Lignes `arrival asymptote` (source `propagated`), `rendezvous estimate` (12 phases, fourchette de Δv, temps en ms :
+     le jeu ne doit pas geler ; environ 10 s dans l'éditeur, barre de progression « Planning ») et `total … = transfer … +
+     rendezvous … + docking reserve 10`.
+   - Le tableau du plan montre chaque étape du transfert, « Plane match left » si plus de 0,05°, « Rendezvous … (planned at
+     the arrival) » avec « up to … m/s », « Docking », puis le total et la marge.
+2. **Refus faute de Δv.** Avec un vaisseau trop juste pour le rendez-vous mais assez pour le transfert : refus « Not enough
+   Δv … Per stage … », aucun burn.
+3. **Corrections.** À chaque correction, une ligne `target plane re-read` et `plane error predicted … °` dans la ligne de
+   correction. Comparer à `plane left after the arrival correction`.
+4. **Arrivée et relais.** Après la capture : `in orbit … plane error to … °` (proche de la prévision), puis `hand-over
+   started`. Le pilote Rendezvous planifie depuis la phase réelle (`[Rendezvous]`, plane match éventuel en premier), puis
+   l'amarrage (sections 9 et 10). Comparer le Δv du rendez-vous réel à la fourchette prévue.
+5. **Prepare only.** Même essai avec Prepare only : un nœud à la fois pour le transfert, puis pour le rendez-vous ;
+   l'amarrage reste piloté. Le bouton « Transfer + rendezvous » s'arrête après le rendez-vous, sans amarrage.
+6. **Arrêt et reprise.** Stop pendant la croisière : message « stopped during … Left to do: press Resume … ». Recharger la
+   sauvegarde rapide : l'onglet Rendezvous propose de reprendre (« … Then the rendezvous with … »). Resume : le transfert
+   reprend (`resume: target found`) et le relais a lieu à l'arrivée.
+7. **Cible perdue.** Pendant la croisière, récupérer ou supprimer la station : le transfert continue jusqu'à l'orbite
+   d'attente (`not readable … stored plane kept`), puis `hand-over refused` avec la raison, aucun burn, warp à 1×.
+8. **Cibles refusées.** Une cible posée, une cible autour du Soleil, une cible autour de notre propre corps (ce sont alors
+   les boutons de la section 9) : refus immédiat avec le message.
+9. **Repère tourné.** Station autour de Minmus : `plane error to …` à l'arrivée du même ordre que la prévision (pas
+   d'écart de dizaines de degrés).
+10. **Correctifs 4.4.** Lift « Rendezvous » : une cible refusée sur le pas de tir dit « Nothing was launched » ; quitter le
+    vol pendant l'attente donne « the scene changed (flight left) » ; lancer le plan sous warp : ligne `warp set to 1x
+    while the passes are planned`.
