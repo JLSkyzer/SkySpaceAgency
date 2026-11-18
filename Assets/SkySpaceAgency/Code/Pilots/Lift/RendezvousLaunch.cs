@@ -71,7 +71,7 @@ namespace K2D2.Lift
             if (landed)
                 return "The target is landed: a rendezvous needs a vessel in orbit.";
             if (!string.Equals(targetBody, launchBody, StringComparison.Ordinal))
-                return $"The target orbits {targetBody}, not {launchBody}: a rendezvous around another body is not built yet (sub-project 4.5).";
+                return $"The target orbits {targetBody}, not {launchBody}: lift to orbit with the Orbit goal, then use Transfer + rendezvous + dock in the Rendezvous tab.";
             if (!target.IsClosed || double.IsNaN(target.PeriapsisRadius))
                 return "The target is not on a closed orbit.";
             if (!(target.PeriapsisRadius > clearRadius))

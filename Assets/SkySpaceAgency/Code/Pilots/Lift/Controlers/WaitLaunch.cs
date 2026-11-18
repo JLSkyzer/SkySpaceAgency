@@ -43,6 +43,8 @@ namespace K2D2.Lift
         CancellationTokenSource cts;
         Stopwatch job_watch;
         string refusal;
+        // The refusal comes from the rendezvous planner (target or plan): the same on every Start.
+        bool refusal_is_plan;
 
         // A first stage fired and not yet confirmed: the staging read just before it.
         bool stage_pending;
@@ -64,6 +66,7 @@ namespace K2D2.Lift
             base.Start();
             current_vessel = K2D2_Plugin.Instance.current_vessel;
             refusal = null;
+            refusal_is_plan = false;
             status_line = "";
             stage_pending = false;
             throttle_cut_logged = false;
@@ -292,9 +295,11 @@ namespace K2D2.Lift
             if (refusal != null)
             {
                 string why = refusal;
+                bool planRefused = refusal_is_plan;
                 refusal = null;
+                refusal_is_plan = false;
                 TimeWarpTools.SetRateIndex(0, false);
-                lift.EndLiftPilot(false, why);
+                lift.EndLiftPilot(false, why, planRefused);
                 return;
             }
 

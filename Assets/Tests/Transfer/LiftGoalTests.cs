@@ -326,6 +326,32 @@ public class LiftGoalTests
         Assert.AreEqual(LiftGoalRules.ResolveMode.NextPass, LiftGoalRules.OnMissedLaunch(LiftGoal.PrepareTransfer));
     }
 
+    // 4.5, Task 0: a stop says its real cause (Stop, another pilot, scene, vessel, mod off).
+    [Test]
+    public void StopReason_PerCause()
+    {
+        Assert.AreEqual("Stop pressed", LiftGoalRules.StopReason(null));
+        Assert.AreEqual("another pilot started", LiftGoalRules.StopReason(K2D2.ResetCause.AnotherPilot));
+        Assert.AreEqual("the scene changed (flight left)", LiftGoalRules.StopReason(K2D2.ResetCause.SceneChange));
+        Assert.AreEqual("the active vessel changed", LiftGoalRules.StopReason(K2D2.ResetCause.VesselChange));
+        Assert.AreEqual("the mod is off in this campaign", LiftGoalRules.StopReason(K2D2.ResetCause.ModDisabled));
+    }
+
+    // 4.5, Task 0: a planner refusal gives the same answer on every Start: no "press Start again".
+    [Test]
+    public void PlanRefused_SaysNothingWasLaunched()
+    {
+        string text = LiftGoalRules.PlanRefused("Station", "The target is landed: a rendezvous needs a vessel in orbit.");
+        Assert.AreEqual("Rendezvous with Station refused on the pad: The target is landed: a rendezvous needs a vessel in orbit. Nothing was launched.", text);
+        StringAssert.DoesNotContain("press Start again", text);
+    }
+
+    [Test]
+    public void ChainStopped_WaitLaunch_Unchanged()
+    {
+        StringAssert.Contains("press Start again", LiftGoalRules.ChainStopped(LiftPilot.LiftStatus.WaitLaunch, "Station", "Stop pressed"));
+    }
+
     [Test]
     public void ChainStopped_TextPerStep()
     {

@@ -104,7 +104,7 @@ public class RendezvousLaunchTests
         Assert.AreEqual("Choose the rendezvous target.", RendezvousLaunch.TargetRefusal(false, false, "Kerbin", "Kerbin", ok, Clear, R));
         Assert.AreEqual("The target is landed: a rendezvous needs a vessel in orbit.",
             RendezvousLaunch.TargetRefusal(true, true, "Kerbin", "Kerbin", ok, Clear, R));
-        Assert.AreEqual("The target orbits Mun, not Kerbin: a rendezvous around another body is not built yet (sub-project 4.5).",
+        Assert.AreEqual("The target orbits Mun, not Kerbin: lift to orbit with the Orbit goal, then use Transfer + rendezvous + dock in the Rendezvous tab.",
             RendezvousLaunch.TargetRefusal(true, false, "Mun", "Kerbin", ok, Clear, R));
         var open = OrbitMath.Elements(new Vector3d(720000, 0, 0), new Vector3d(0, 4000, 0), Mu);
         Assert.AreEqual("The target is not on a closed orbit.", RendezvousLaunch.TargetRefusal(true, false, "Kerbin", "Kerbin", open, Clear, R));

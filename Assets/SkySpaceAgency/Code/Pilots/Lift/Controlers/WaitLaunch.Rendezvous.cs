@@ -31,6 +31,14 @@ namespace K2D2.Lift
         void BeginRendezvousPlanning(LiftTransferPlan previous)
         {
             Cancel();
+            // The passes are planned for seconds of game time: at 1x, so that none slips by
+            // meanwhile (the first plan too, not only the re-plans).
+            int warpIndex = TimeWarpTools.CurrentRateIndex;
+            if (warpIndex != 0)
+            {
+                logger.LogInfo($"[Lift] rendezvous: warp set to 1x while the passes are planned (was index {warpIndex})");
+                TimeWarpTools.SetRateIndex(0, false);
+            }
             VesselComponent vessel = current_vessel?.VesselComponent;
             if (vessel == null)
             {
@@ -82,6 +90,7 @@ namespace K2D2.Lift
             if (why != null)
             {
                 refusal = why;
+                refusal_is_plan = true;
                 logger.LogInfo($"[Lift] rendezvous refused: {why}");
                 return;
             }
@@ -185,6 +194,7 @@ namespace K2D2.Lift
             if (!plan.Ok)
             {
                 refusal = $"No rendezvous with {p.TargetName}: {plan.Refusal}";
+                refusal_is_plan = true;
                 logger.LogInfo(Inv($"[Lift] rendezvous: {plan.Refusal} ({n} pass(es) planned in {ms:F0} ms)"));
                 return;
             }
@@ -210,9 +220,7 @@ namespace K2D2.Lift
             {
                 logger.LogInfo(Inv($"[Lift] rendezvous: re-planning every pass ({why}); the missed launch was UT {(p.Window != null ? p.Window.LaunchUT : double.NaN):F1}"));
                 stage_pending = false;
-                // The plan takes seconds: at 1x, so that no pass slips by meanwhile.
-                TimeWarpTools.SetRateIndex(0, false);
-                BeginRendezvousPlanning(p);
+                BeginRendezvousPlanning(p); // sets the warp to 1x itself
                 return;
             }
             Resolve(why);

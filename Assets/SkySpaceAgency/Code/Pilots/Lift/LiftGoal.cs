@@ -279,6 +279,28 @@ namespace K2D2.Lift
             return $"Rendezvous with {target} stopped during {StepName(step)}: {reason}. Left to do: {left}";
         }
 
+        // Why a run was stopped from outside: null is the Stop button (no reset in progress).
+        public static string StopReason(ResetCause? cause)
+        {
+            switch (cause)
+            {
+                case null: return "Stop pressed";
+                case ResetCause.AnotherPilot: return "another pilot started";
+                case ResetCause.SceneChange: return "the scene changed (flight left)";
+                case ResetCause.VesselChange: return "the active vessel changed";
+                case ResetCause.ModDisabled: return "the mod is off in this campaign";
+                default: return cause.ToString();
+            }
+        }
+
+        // A refusal of the rendezvous planner on the pad: the same answer on every Start, so no
+        // "press Start again".
+        public static string PlanRefused(string target, string why)
+        {
+            string reason = (why ?? "").Trim().TrimEnd('.');
+            return $"Rendezvous with {target} refused on the pad: {reason}. Nothing was launched.";
+        }
+
         // The target at the hand-over: null when it can still be met, else why not.
         public static string HandoffRefusal(bool exists, bool landed, bool sameBody)
         {

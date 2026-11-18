@@ -22,6 +22,10 @@ using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 namespace K2D2
 {
+    // Why K2D2_Plugin.ResetControllers stopped the pilots, so a pilot's end text can say it
+    // (4.5, Task 0). Top level: the pure rules read it without touching the plugin.
+    public enum ResetCause { AnotherPilot, SceneChange, VesselChange, ModDisabled }
+
     internal class L
     {
         public static void Log(string txt)
@@ -299,7 +303,7 @@ namespace K2D2
             // then, but Alt-O and the pilots run from Update, so they must check Enabled.
             if (Instance == null || !Instance.Enabled)
             {
-                ResetControllers();
+                ResetControllers(ResetCause.ModDisabled);
                 return false;
             }
 
@@ -311,7 +315,7 @@ namespace K2D2
             bool is_valid = validScenes.Contains(state);
             if (!is_valid)
             {
-                ResetControllers();
+                ResetControllers(ResetCause.SceneChange);
             }
             return is_valid;
         }
@@ -361,11 +365,23 @@ namespace K2D2
         }
 
         // call on reset on controller, each on can reset it's status
-        public static void ResetControllers()
+        // The cause of the reset in progress, null outside one.
+        public static ResetCause? CurrentResetCause { get; private set; }
+
+        public static void ResetControllers(ResetCause cause = ResetCause.AnotherPilot)
         {
             if (!loaded) return;
-            StagingPilot.Instance.onReset();
-            Instance.pilots_manager.onReset(); 
+            ResetCause? outer = CurrentResetCause;
+            CurrentResetCause = cause;
+            try
+            {
+                StagingPilot.Instance.onReset();
+                Instance.pilots_manager.onReset();
+            }
+            finally
+            {
+                CurrentResetCause = outer;
+            }
         }
 
         public bool settings_visible = false;
@@ -414,7 +430,7 @@ namespace K2D2
                 Landing.LandingPilot.reset_by_vessel_change = true;
                 try
                 {
-                    ResetControllers();
+                    ResetControllers(ResetCause.VesselChange);
                 }
                 finally
                 {

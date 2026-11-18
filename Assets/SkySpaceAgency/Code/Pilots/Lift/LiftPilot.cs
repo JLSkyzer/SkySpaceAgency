@@ -71,9 +71,20 @@ namespace K2D2.Lift
             K2D2PilotsMgr.Instance.RegisterPilot("Lift", this);
         }
 
+        // The cause of a reset that stops the run (K2D2_Plugin.ResetControllers); null for Stop.
+        ResetCause? stop_cause;
+
         public override void onReset()
         {
-            isRunning = false;
+            stop_cause = K2D2_Plugin.CurrentResetCause;
+            try
+            {
+                isRunning = false;
+            }
+            finally
+            {
+                stop_cause = null; // a reset of a stopped run must not leak into the next Stop
+            }
         }
 
         LiftStatus _status = LiftStatus.Off;
@@ -110,14 +121,17 @@ namespace K2D2.Lift
                         if (previous == LiftStatus.WaitLaunch || previous == LiftStatus.PlaneTrim || previous == LiftStatus.Handoff)
                             TimeWarpTools.SetRateIndex(0, false);
 
-                        // Rendezvous goal stopped from outside (Stop, another pilot started): say
-                        // which step and what is left. EndLiftPilot and the hand-over write their own.
+                        // Rendezvous goal stopped from outside (Stop, another pilot, scene or vessel
+                        // change, mod off): say which step, why, and what is left. EndLiftPilot and
+                        // the hand-over write their own.
                         if (!ending && transfer != null && transfer.Goal == LiftGoal.Rendezvous && previous != LiftStatus.Off)
                         {
+                            string reason = LiftGoalRules.StopReason(stop_cause);
                             result_ok = false;
-                            end_status = LiftGoalRules.ChainStopped(previous, transfer.TargetName, "stopped (Stop pressed, or another pilot started)");
-                            logger.LogInfo($"[Lift] rendezvous stopped during {LiftGoalRules.StepName(previous)}: Stop pressed, or another pilot started");
+                            end_status = LiftGoalRules.ChainStopped(previous, transfer.TargetName, reason);
+                            logger.LogInfo($"[Lift] rendezvous stopped during {LiftGoalRules.StepName(previous)}: {reason}");
                         }
+                        stop_cause = null;
                     }
                         break;
                     case LiftStatus.WaitLaunch:
@@ -245,13 +259,17 @@ namespace K2D2.Lift
         // True while the run ends through EndLiftPilot or the hand-over, which write their own end text.
         bool ending;
 
-        public void EndLiftPilot(bool result_ok, string end_status)
+        // planRefused: the rendezvous planner refused (target or plan) on the pad: nothing was
+        // launched, and pressing Start again would give the same answer.
+        public void EndLiftPilot(bool result_ok, string end_status, bool planRefused = false)
         {
             // Rendezvous goal: a stop in the chain says the step, the reason and what is left (6b).
             if (!result_ok && transfer != null && transfer.Goal == LiftGoal.Rendezvous && status != LiftStatus.Off)
             {
                 logger.LogInfo($"[Lift] rendezvous stopped during {LiftGoalRules.StepName(status)}: {end_status}");
-                end_status = LiftGoalRules.ChainStopped(status, transfer.TargetName, end_status);
+                end_status = planRefused
+                    ? LiftGoalRules.PlanRefused(transfer.TargetName, end_status)
+                    : LiftGoalRules.ChainStopped(status, transfer.TargetName, end_status);
             }
             this.result_ok = result_ok;
             this.end_status = end_status;
