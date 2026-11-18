@@ -183,3 +183,35 @@ Les options de difficulté de la campagne (Edit Pack / paramètres de la partie)
 4. **Échelle de chaleur** (par exemple 0,5 puis 2, chaleur et destruction actives) : la ligne `model inputs` donne `heat scale 0.5` (ou 2) et `game heat on, part destruction on, heat scaling 0.5`. Le pic prévu (`predicted engine peak …`) doit baisser avec 0,5 et monter avec 2, et rester proche du pic lu en vol (`hottest engine … (peak …)`).
 5. **Changement en cours de vol** (si le jeu permet de modifier l'option en vol) : la ligne `[Landing] heat: …` réapparaît avec le nouvel état dans la seconde, et la garde s'arrête (`guard off in …: the game's heat no longer destroys parts`) si elle tournait.
 6. **Non-régression** (tout actif, échelle 1) : mêmes lignes qu'à la section 16, limite du plan à **70 %** (gardée par l'utilisateur le 2026-11-18), garde à 75 %, alarme à 90 %.
+
+## 21. Lift « Rendezvous » depuis le pas de tir (4.4)
+
+Préparer une station en orbite circulaire vers 120 km, inclinée d'environ 6° (une inclinaison de 0° ou de 0,03° teste le
+cas 4). Lire `Player.log`, lignes `[Lift] rendezvous:` puis `[Rendezvous]`.
+
+1. **Plan sur le pas de tir.** Onglet Lift, objectif Rendezvous, cible la station, « Dock after the rendezvous » coché, Start.
+   - Une ligne `planning with …` : Pe et Ap de la cible, `inclination` comparée à `game orbit.inclination` (même valeur, en
+     degrés ou en radians : noter l'unité), orbite d'attente 110 km (`10 km under the target's periapsis`), Ap du joueur ignoré.
+   - Une ligne par passage (`pass k/n`), puis `chosen pass` : le Δv choisi est le plus bas à 5 m/s près. Noter le temps
+     `planned in … ms` (le jeu ne doit pas geler ; dans l'éditeur, environ 0,9 s par passage, 7 s pour 8 passages).
+   - Aucun passage dans la première minute après Start.
+   - Le tableau affiche le passage, l'azimut, le plan de la cible, le changement de plan restant, l'orbite d'attente et le Δv
+     du rendez-vous. Le réglage Ap du profil n'a pas changé après la course.
+2. **Attente et lancement.** Warp jusqu'à T-30 s, gaz à 0 pendant l'attente, premier étage tiré à T-0 (comme la section 6).
+   La ligne `plane error` décroît pendant la montée.
+3. **Passage manqué.** Sur une autre tentative, warper soi-même au-delà de l'heure de lancement : la ligne
+   `re-planning every pass` apparaît, le warp revient à 1×, et un nouveau passage est choisi, jamais un lancement en retard.
+   Si le premier étage avait déjà été tiré, il ne l'est pas une seconde fois.
+4. **Plan hors d'atteinte.** Station à 0° (ou 0,03°) d'inclinaison depuis le KSC : `plane change` d'environ 0,1° (quelques m/s)
+   affiché avant le lancement, des passages espacés d'environ un douzième de l'orbite de la station (pas un par jour), puis
+   un `PlaneMatch` au début du plan `[Rendezvous]`.
+5. **Cible haute (plafond de 150 km).** Station vers 400 km : orbite d'attente à 230 km
+   (`capped at the low orbit + 150 km`), le phasage du pilote Rendezvous monte le reste. Le Δv affiché le comprend.
+6. **Passage de relais.** Après la circularisation, sans trim Lift : ligne `in orbit … handing over`, puis
+   `hand-over started`. Comparer la phase réelle à la phase prédite (`phase … (predicted …)`). L'onglet Rendezvous montre le
+   plan (plane match éventuel, phasage, interception) puis l'amarrage (sections 9 et 10).
+7. **Arrêt dans la chaîne.** Arrêter Lift pendant l'attente : message « stopped during the pad wait … Left to do: … ».
+   Supprimer ou récupérer la cible pendant la montée : au relais, `hand-over refused: the target vessel no longer exists`,
+   aucun burn lancé, warp à 1×, conseil « choose a target in the Rendezvous tab ».
+8. **Cible refusée.** Une cible posée au sol, ou en orbite autour de la Mun : refus immédiat avec le message, rien n'est lancé.
+9. **Les autres objectifs.** Un Lift « Orbit » et un « Prepare transfer » se déroulent comme avant (sections 6 et 7).
