@@ -253,3 +253,43 @@ un port compatible. Sauvegarde rapide avant chaque essai. Lire `Player.log`, lig
 10. **Correctifs 4.4.** Lift « Rendezvous » : une cible refusée sur le pas de tir dit « Nothing was launched » ; quitter le
     vol pendant l'attente donne « the scene changed (flight left) » ; lancer le plan sous warp : ligne `warp set to 1x
     while the passes are planned`.
+
+## 23. Assistance gravitationnelle (4.6)
+
+Onglet Transfer, case « Use gravity assist » cochée. Sauvegarde rapide avant chaque essai. Lire `Player.log`, lignes
+`[Transfer] assist:` et `[Transfer]`.
+
+Note : sur le système de test du mod (copie du système de série), aucun survol d'Eve ne fait gagner assez vers Jool
+(2 % au mieux) ; le cas de référence est **Kerbin → Moho via Eve** (16 à 18 % gagnés). Commencer par lui.
+
+1. **Moho via Eve.** Depuis une orbite basse de Kerbin, cible Moho, Orbit, Plan.
+   - Lignes `direct …`, `grid via …` (une par corps, nombre de Lambert, durée en ms), `built via …`, puis `offer: …` avec
+     la durée totale. Le jeu ne doit pas geler pendant la recherche (barre « Searching ») ; noter la durée totale.
+   - Si une assistance est proposée : deux lignes dans l'onglet, « Direct: … » et « Via … », la moins chère marquée ●.
+     Cliquer l'autre : le tableau et le total changent, ligne `chosen … by the player`.
+   - Sinon : une ligne « Direct: … — no gravity assist saves 5 % … » ; noter le meilleur pourcentage du log.
+2. **Vol via Eve.** Start sur le plan « Via Eve ».
+   - Les corrections avant le survol : ligne `correction n` avec `plane error predicted` ; périapside visé = celui de
+     l'étape « Flyby (Eve) ».
+   - Entrée dans la SOI d'Eve : `leg … starts in Eve: flyby, periapsis … km predicted (planned …)`, toujours au-dessus de
+     l'atmosphère (plancher 100 km).
+   - Au périapside : `flyby of Eve: … burn … m/s` (ou `no burn`), poussée en 1x, sans warp.
+   - Après : `flyby of Eve done: excess out … m/s, …° from the wanted one` (attendu : moins de 1°), puis les corrections
+     vers Moho ; Δv réel des corrections comparé à la réserve.
+   - Arrivée : capture à Moho comme en section 1 à 6 ; comparer le Δv total réel au plan.
+3. **Jool via Eve.** Même essai, cible Jool : noter si « Via Eve » est proposé (non attendu sur le système de test) et le
+   pourcentage de la ligne `offer:`.
+4. **Départ via la Mun.** Depuis une orbite basse de Kerbin, cible Duna : si « Via Mun » est proposé, le voler. Lignes
+   `departure via Mun`, injection vers la Mun, survol, burn de re-visée dans la SOI de Kerbin, sortie avec l'excès voulu
+   (`SOI exit … mismatch`). Sur le système de test, la Mun ne fait gagner qu'environ 3 % : elle n'est pas proposée.
+5. **Pas d'assistance utile.** Cible la Mun ou Minmus : aucune ligne « Via … », aucune ligne `grid via`.
+6. **Durée max.** Mettre une durée max entre la durée du direct et celle de l'assistance : l'assistance n'est plus proposée
+   (« longer than the maximum trip »).
+7. **Reprise.** Sauvegarder pendant la croisière vers Eve, recharger, Resume : `resume of an assist via Eve: route
+   BeforeFlyby`, puis le survol a lieu. Recommencer dans la SOI d'Eve avant le périapside (`InFlybySoi`) et après le
+   survol (`AfterFlyby` : plan sans assistance, message clair).
+8. **Prepare only.** Même plan avec Prepare only : un nœud à la fois, dont un nœud au périapside d'Eve si le survol est
+   propulsé.
+9. **Transfer + rendezvous.** Case cochée, station autour de Moho : le tableau de l'onglet Rendezvous montre l'étape
+   « Flyby » si l'assistance a été retenue ; sinon le plan direct.
+10. **Option décochée.** Refaire le plan Kerbin → Duna : le plan et les lignes du log sont ceux d'avant 4.6.
