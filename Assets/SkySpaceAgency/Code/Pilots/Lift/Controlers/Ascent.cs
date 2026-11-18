@@ -373,7 +373,7 @@ namespace K2D2.Lift
             double h = (p.Window.AzimuthDeg + transfer_correction) % 360;
             if (h < 0)
                 h += 360;
-            plane_error_deg = PlaneSteering.PlaneErrorDeg(r, v, p.Parking.PlaneNormal);
+            plane_error_deg = PlaneSteering.PlaneErrorDeg(r, v, p.PlaneNormal);
 
             if (Time.realtimeSinceStartup >= next_plane_log)
             {

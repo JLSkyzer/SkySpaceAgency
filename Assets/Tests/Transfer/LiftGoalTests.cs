@@ -293,4 +293,148 @@ public class LiftGoalTests
         Assert.AreEqual(1, rows.Count);
         Assert.AreEqual(("Transfer plan", "planning for Duna..."), rows[0]);
     }
+    // ---------------------------------------------------------------- rendezvous goal (4.4)
+
+    static readonly LiftPilot.LiftStatus[] OldOrder =
+    {
+        LiftPilot.LiftStatus.Off, LiftPilot.LiftStatus.WaitLaunch, LiftPilot.LiftStatus.Ascent, LiftPilot.LiftStatus.Coasting,
+        LiftPilot.LiftStatus.Adjust, LiftPilot.LiftStatus.Circularize, LiftPilot.LiftStatus.PlaneTrim,
+    };
+
+    [Test]
+    public void NextStatus_OrbitAndTransfer_Unchanged()
+    {
+        // The order before Handoff existed: each status goes to the next, PlaneTrim back to Off.
+        foreach (var goal in new[] { LiftGoal.Orbit, LiftGoal.PrepareTransfer })
+            for (int k = 0; k < OldOrder.Length; k++)
+                Assert.AreEqual(OldOrder[(k + 1) % OldOrder.Length], LiftGoalRules.NextStatus(OldOrder[k], goal), $"{goal} {OldOrder[k]}");
+    }
+
+    [Test]
+    public void NextStatus_RendezvousAfterCircularize_Handoff()
+    {
+        Assert.AreEqual(LiftPilot.LiftStatus.Handoff, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Circularize, LiftGoal.Rendezvous));
+        Assert.AreEqual(LiftPilot.LiftStatus.Coasting, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Ascent, LiftGoal.Rendezvous));
+        Assert.AreEqual(LiftPilot.LiftStatus.Off, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Handoff, LiftGoal.Rendezvous));
+        Assert.AreEqual(LiftPilot.LiftStatus.PlaneTrim, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Circularize, LiftGoal.PrepareTransfer));
+    }
+
+    [Test]
+    public void MissedLaunch_RendezvousReplansAll_TransferNextPass()
+    {
+        Assert.AreEqual(LiftGoalRules.ResolveMode.ReplanAll, LiftGoalRules.OnMissedLaunch(LiftGoal.Rendezvous));
+        Assert.AreEqual(LiftGoalRules.ResolveMode.NextPass, LiftGoalRules.OnMissedLaunch(LiftGoal.PrepareTransfer));
+    }
+
+    [Test]
+    public void ChainStopped_TextPerStep()
+    {
+        Assert.AreEqual("Rendezvous with Station stopped during the pad wait: aborted. Left to do: press Start again on the pad: the launch is planned again",
+            LiftGoalRules.ChainStopped(LiftPilot.LiftStatus.WaitLaunch, "Station", "aborted"));
+        foreach (var s in new[] { LiftPilot.LiftStatus.Ascent, LiftPilot.LiftStatus.Coasting, LiftPilot.LiftStatus.Adjust })
+            StringAssert.EndsWith("Left to do: reach orbit by hand, then start the rendezvous from the Rendezvous tab (the target is set)",
+                LiftGoalRules.ChainStopped(s, "Station", "x"));
+        StringAssert.Contains("during the ascent: x.", LiftGoalRules.ChainStopped(LiftPilot.LiftStatus.Ascent, "Station", "x"));
+        StringAssert.EndsWith("Left to do: circularize, then start the rendezvous from the Rendezvous tab (the target is set)",
+            LiftGoalRules.ChainStopped(LiftPilot.LiftStatus.Circularize, "Station", "x"));
+        // A reason that already ends with a full stop does not get a second one.
+        Assert.AreEqual("Rendezvous with Station stopped during the hand-over: No target vessel. Left to do: start the rendezvous from the Rendezvous tab (the target is set)",
+            LiftGoalRules.ChainStopped(LiftPilot.LiftStatus.Handoff, "Station", "No target vessel."));
+    }
+
+    [Test]
+    public void Handoff_Started_And_Refused_Texts()
+    {
+        Assert.IsTrue(LiftGoalRules.HandoffMessage(true, "Station", true, "", out var text));
+        Assert.AreEqual("In the parking orbit: the Rendezvous pilot takes over (rendezvous + docking with Station), see the Rendezvous tab", text);
+        Assert.IsTrue(LiftGoalRules.HandoffMessage(true, "Station", false, "", out text));
+        StringAssert.Contains("(rendezvous only with Station)", text);
+        Assert.IsFalse(LiftGoalRules.HandoffMessage(false, "Station", true, "No target vessel.", out text));
+        Assert.AreEqual(LiftGoalRules.ChainStopped(LiftPilot.LiftStatus.Handoff, "Station", "No target vessel."), text);
+    }
+
+    static RendezvousLaunchPlan RvPlanFor(bool ok)
+    {
+        return new RendezvousLaunchPlan
+        {
+            Ok = ok,
+            Refusal = ok ? "" : "No rendezvous from any of the 8 launch passes: nope",
+            TargetPlaneNormal = new Vector3d(0, -Math.Sin(6 * Deg), Math.Cos(6 * Deg)),
+            ParkingRadius = 710000,
+            ParkingReason = "10 km under the target's periapsis",
+            Window = new LaunchWindowResult { Ok = true, LaunchUT = 1000 + 3600 + 120, AzimuthDeg = 84.2, PlaneErrorDeg = 0.1, PlaneChangeDeltaV = 4 },
+            Rendezvous = new K2D2.Rendezvous.RvPlan { Ok = true, TotalDeltaV = 18.6, ArrivalUT = 3 * KerbinCalendar.DaySeconds },
+            Passes = new System.Collections.Generic.List<RendezvousPass>
+            {
+                new RendezvousPass { DeltaV = 67.3 }, new RendezvousPass { DeltaV = 18.6 }, new RendezvousPass { DeltaV = 40 },
+            },
+            Chosen = 1,
+        };
+    }
+
+    [Test]
+    public void PlaneNormal_And_Ready_PerGoal()
+    {
+        var transfer = new LiftTransferPlan
+        {
+            Parking = new ParkingPlan { Ok = true, PlaneNormal = new Vector3d(1, 0, 0) },
+            Window = new LaunchWindowResult { Ok = true },
+        };
+        Assert.AreEqual(LiftGoal.PrepareTransfer, transfer.Goal);
+        Assert.AreEqual(1, transfer.PlaneNormal.x);
+        Assert.IsTrue(transfer.Ready);
+
+        var rv = new LiftTransferPlan { Goal = LiftGoal.Rendezvous, Rendezvous = RvPlanFor(true) };
+        Assert.IsFalse(rv.Ready, "no window yet");
+        rv.Window = rv.Rendezvous.Window;
+        Assert.IsTrue(rv.Ready);
+        Assert.AreEqual(Math.Cos(6 * Deg), rv.PlaneNormal.z, 1e-12);
+        rv.Rendezvous = RvPlanFor(false);
+        Assert.IsFalse(rv.Ready);
+        rv.Rendezvous = null;
+        Assert.IsFalse(rv.Ready);
+    }
+
+    [Test]
+    public void Readout_RendezvousRows()
+    {
+        var p = new LiftTransferPlan { Goal = LiftGoal.Rendezvous, TargetName = "Station", BodyRadius = 600000 };
+        var rows = LiftGoalRules.Readout(p, 1000);
+        Assert.AreEqual(1, rows.Count);
+        Assert.AreEqual(("Rendezvous plan", "planning with Station..."), rows[0]);
+
+        p.Rendezvous = RvPlanFor(false);
+        rows = LiftGoalRules.Readout(p, 1000);
+        Assert.AreEqual(1, rows.Count);
+        Assert.AreEqual(("Rendezvous plan", "No rendezvous from any of the 8 launch passes: nope"), rows[0]);
+
+        p.Rendezvous = RvPlanFor(true);
+        p.Window = p.Rendezvous.Window;
+        rows = LiftGoalRules.Readout(p, 1000);
+        Assert.AreEqual(7, rows.Count);
+        Assert.AreEqual(("Launch in", "T-1h 02m"), rows[0]);
+        Assert.AreEqual(("Azimuth", "84.2°"), rows[1]);
+        Assert.AreEqual(("Target plane", "6.00°"), rows[2]);
+        Assert.AreEqual(("Plane change left", "0.10° (4 m/s)"), rows[3]);
+        Assert.AreEqual(("Parking orbit", "110 km (10 km under the target's periapsis)"), rows[4]);
+        Assert.AreEqual(("Rendezvous", "19 m/s, arrival Y1, D4, 0h 00m"), rows[5]);
+        Assert.AreEqual(("Launch pass", "2 of 3, first pass 67 m/s"), rows[6]);
+    }
+
+    [Test]
+    public void Readout_TransferRows_Unchanged()
+    {
+        var p = new LiftTransferPlan
+        {
+            TargetName = "Duna",
+            Parking = new ParkingPlan { Ok = true, PlaneNormal = new Vector3d(0, -Math.Sin(4.28 * Deg), Math.Cos(4.28 * Deg)),
+                WindowUT = 3 * KerbinCalendar.DaySeconds, TransferDeltaV = 1696 },
+            Window = new LaunchWindowResult { Ok = true, LaunchUT = 1000 + 3600 + 120, AzimuthDeg = 85.7, PlaneErrorDeg = 0.2, PlaneChangeDeltaV = 8 },
+            Rendezvous = RvPlanFor(true), // ignored for the transfer goal
+        };
+        var rows = LiftGoalRules.Readout(p, 1000);
+        Assert.AreEqual(5, rows.Count);
+        Assert.AreEqual(("Plane inclination", "4.28°"), rows[2]);
+        Assert.AreEqual(("Transfer window", "Y1, D4, 0h 00m (1696 m/s)"), rows[4]);
+    }
 }

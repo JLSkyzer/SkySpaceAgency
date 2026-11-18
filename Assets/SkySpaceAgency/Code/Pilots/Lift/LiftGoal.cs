@@ -4,12 +4,14 @@ using System.Globalization;
 using K2D2.OrbitPlanning;
 using K2D2.Transfer;
 using KSP.Sim;
+using KTools;
 
 namespace K2D2.Lift
 {
     // What a Lift run is for. Orbit is today's ascent, unchanged. PrepareTransfer waits on the pad for
     // the parking-orbit plane of a transfer, lifts into it and trims it (sub-project 4.2). Rendezvous
-    // stays hidden until 4.4.
+    // waits for the pass that leaves the cheapest rendezvous, lifts under the target and hands over to
+    // the Rendezvous pilot (sub-project 4.4).
     public enum LiftGoal { Orbit, PrepareTransfer, Rendezvous }
 
     // What the pad wait does now (LiftGoalRules.Decide).
@@ -19,11 +21,18 @@ namespace K2D2.Lift
     // on the throttle alone (engines already lit), or refuse.
     public enum LaunchStaging { Stage, ThrottleOnly, Refuse }
 
-    // The transfer goal's plan, filled by WaitLaunch and read by the ascent, the trim and the tab. All
-    // vectors are in the launch body's inertial Zup frame of the snapshot the plan was made from.
+    // The plan of a goal with a pad wait (PrepareTransfer or Rendezvous), filled by WaitLaunch and read
+    // by the ascent, the trim, the hand-over and the tab. All vectors are in the launch body's inertial
+    // Zup frame of the snapshot the plan was made from.
     public class LiftTransferPlan
     {
+        public LiftGoal Goal = LiftGoal.PrepareTransfer;
         public string TargetName;
+
+        // Rendezvous goal only.
+        public RendezvousLaunchPlan Rendezvous;   // null while planning
+        public string TargetId;                   // the target vessel's GUID
+        public bool Dock;
         public string BodyName;
         public double BodyRadius;
         public double Mu;
@@ -45,7 +54,11 @@ namespace K2D2.Lift
         public double LiftoffUT = double.NaN;
         public Vector3d LiftoffPosition;
 
-        public bool Ready => Parking != null && Parking.Ok && Window != null && Window.Ok;
+        public bool Ready => Window != null && Window.Ok
+                             && (Goal == LiftGoal.Rendezvous ? Rendezvous != null && Rendezvous.Ok : Parking != null && Parking.Ok);
+
+        // The plane the ascent steers to: the target vessel's, or the transfer's parking plane.
+        public Vector3d PlaneNormal => Goal == LiftGoal.Rendezvous ? Rendezvous.TargetPlaneNormal : Parking.PlaneNormal;
         public double OrbitalSpeed => OrbitRadius > 0 && Mu > 0 ? Math.Sqrt(Mu / OrbitRadius) : 0;
     }
 
@@ -204,12 +217,119 @@ namespace K2D2.Lift
             return false;
         }
 
+        // ---------------------------------------------------------------- rendezvous goal (4.4)
+
+        // The status after a finished one. Orbit and PrepareTransfer keep the order they always had
+        // (PlaneTrim, the last, back to Off); the rendezvous goal hands over after the circularization.
+        public static LiftPilot.LiftStatus NextStatus(LiftPilot.LiftStatus finished, LiftGoal goal)
+        {
+            if (goal == LiftGoal.Rendezvous && finished == LiftPilot.LiftStatus.Circularize)
+                return LiftPilot.LiftStatus.Handoff;
+            if (finished == LiftPilot.LiftStatus.PlaneTrim || finished == LiftPilot.LiftStatus.Handoff)
+                return LiftPilot.LiftStatus.Off;
+            return finished.Next();
+        }
+
+        public enum ResolveMode { NextPass, ReplanAll }
+
+        // A missed launch time: the transfer solves the next window again; a rendezvous plans every
+        // pass again, since the target's phase has moved on.
+        public static ResolveMode OnMissedLaunch(LiftGoal goal) =>
+            goal == LiftGoal.Rendezvous ? ResolveMode.ReplanAll : ResolveMode.NextPass;
+
+        public static string StepName(LiftPilot.LiftStatus step)
+        {
+            switch (step)
+            {
+                case LiftPilot.LiftStatus.WaitLaunch: return "the pad wait";
+                case LiftPilot.LiftStatus.Ascent: return "the ascent";
+                case LiftPilot.LiftStatus.Coasting: return "the coast to the apoapsis";
+                case LiftPilot.LiftStatus.Adjust: return "the apoapsis adjustment";
+                case LiftPilot.LiftStatus.Circularize: return "the circularization";
+                case LiftPilot.LiftStatus.Handoff: return "the hand-over";
+                default: return step.ToString();
+            }
+        }
+
+        // What a stop in the chain says: the step, the reason and what is left to do.
+        public static string ChainStopped(LiftPilot.LiftStatus step, string target, string why)
+        {
+            string left;
+            switch (step)
+            {
+                case LiftPilot.LiftStatus.WaitLaunch:
+                    left = "press Start again on the pad: the launch is planned again";
+                    break;
+                case LiftPilot.LiftStatus.Ascent:
+                case LiftPilot.LiftStatus.Coasting:
+                case LiftPilot.LiftStatus.Adjust:
+                    left = "reach orbit by hand, then start the rendezvous from the Rendezvous tab (the target is set)";
+                    break;
+                case LiftPilot.LiftStatus.Circularize:
+                    left = "circularize, then start the rendezvous from the Rendezvous tab (the target is set)";
+                    break;
+                default:
+                    left = "start the rendezvous from the Rendezvous tab (the target is set)";
+                    break;
+            }
+            string reason = (why ?? "").Trim().TrimEnd('.');
+            return $"Rendezvous with {target} stopped during {StepName(step)}: {reason}. Left to do: {left}";
+        }
+
+        // The run's last words at the hand-over: started, or the Rendezvous pilot's refusal.
+        public static bool HandoffMessage(bool started, string target, bool dock, string rendezvousStatus, out string text)
+        {
+            if (started)
+            {
+                text = $"In the parking orbit: the Rendezvous pilot takes over ({(dock ? "rendezvous + docking" : "rendezvous only")} with {target}), see the Rendezvous tab";
+                return true;
+            }
+            text = ChainStopped(LiftPilot.LiftStatus.Handoff, target, rendezvousStatus);
+            return false;
+        }
+
+        static List<(string, string)> RendezvousReadout(LiftTransferPlan p, double now)
+        {
+            var rows = new List<(string, string)>();
+            var rv = p.Rendezvous;
+            if (rv == null)
+            {
+                rows.Add(("Rendezvous plan", $"planning with {p.TargetName}..."));
+                return rows;
+            }
+            if (!rv.Ok || p.Window == null || !p.Window.Ok)
+            {
+                rows.Add(("Rendezvous plan", !rv.Ok ? rv.Refusal : p.Window?.Refusal ?? ""));
+                return rows;
+            }
+            var w = p.Window;
+            double toLaunch = w.LaunchUT - now;
+            rows.Add(("Launch in", toLaunch >= 0 ? "T-" + KerbinCalendar.Duration(toLaunch) : "T+" + KerbinCalendar.Duration(-toLaunch)));
+            rows.Add(("Azimuth", Inv($"{w.AzimuthDeg:F1}°")));
+            double inc = Math.Acos(Math.Max(-1, Math.Min(1, rv.TargetPlaneNormal.normalized.z))) / Deg;
+            rows.Add(("Target plane", Inv($"{inc:F2}°")));
+            rows.Add(("Plane change left", Inv($"{w.PlaneErrorDeg:F2}° ({w.PlaneChangeDeltaV:F0} m/s)")));
+            rows.Add(("Parking orbit", Inv($"{(rv.ParkingRadius - p.BodyRadius) / 1000:F0} km ({rv.ParkingReason})")));
+            if (rv.Rendezvous != null)
+                rows.Add(("Rendezvous", Inv($"{rv.Rendezvous.TotalDeltaV:F0} m/s, arrival {KerbinCalendar.Date(rv.Rendezvous.ArrivalUT)}")));
+            if (rv.Passes != null && rv.Passes.Count > 0)
+            {
+                double dv1 = rv.Passes[0].DeltaV;
+                string first = double.IsNaN(dv1) ? "first pass: no rendezvous" : Inv($"first pass {dv1:F0} m/s");
+                rows.Add(("Launch pass", $"{rv.Chosen + 1} of {rv.Passes.Count}, {first}"));
+            }
+            return rows;
+        }
+
+
         // The tab's rows for the plan, at UT now.
         public static List<(string, string)> Readout(LiftTransferPlan p, double now)
         {
             var rows = new List<(string, string)>();
             if (p == null)
                 return rows;
+            if (p.Goal == LiftGoal.Rendezvous)
+                return RendezvousReadout(p, now);
             if (p.Parking == null || p.Window == null)
             {
                 rows.Add(("Transfer plan", $"planning for {p.TargetName}..."));

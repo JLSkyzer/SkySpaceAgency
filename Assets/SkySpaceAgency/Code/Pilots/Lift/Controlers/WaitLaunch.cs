@@ -253,7 +253,7 @@ namespace K2D2.Lift
             Vector3d r = orbit.GetRelativePositionAtUTZup(now);
             double missed = p.Window.LaunchUT;
             stage_pending = false;
-            var window = LaunchWindow.Find(p.BodyRadius, p.Mu, p.Omega, r, now, p.Parking.PlaneNormal, p.OrbitRadius,
+            var window = LaunchWindow.Find(p.BodyRadius, p.Mu, p.Omega, r, now, p.PlaneNormal, p.OrbitRadius,
                 p.LeadSeconds, p.DownrangeRad, Horizon(p.Omega));
             p.Resolves++;
             logger.LogInfo(Inv($"[Lift] launch time missed ({why}): launch was UT {missed:F1}, now UT {now:F1}; ") +

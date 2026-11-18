@@ -17,7 +17,8 @@ namespace K2D2.Lift
             Coasting,
             Adjust,
             Circularize,
-            PlaneTrim       // transfer goal only: ends the run itself (EndLiftPilot)
+            PlaneTrim,      // transfer goal only: ends the run itself (EndLiftPilot)
+            Handoff         // rendezvous goal only: ends the run and starts the Rendezvous pilot
         }
 
         public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Lift");

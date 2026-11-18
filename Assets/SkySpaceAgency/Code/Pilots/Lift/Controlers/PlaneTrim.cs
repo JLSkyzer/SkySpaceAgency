@@ -55,7 +55,7 @@ namespace K2D2.Lift
             double now = GeneralTools.Current_UT;
             Vector3d r = orbit.GetRelativePositionAtUTZup(now);
             Vector3d v = orbit.GetOrbitalVelocityAtUTZup(now);
-            Vector3d n = p.Parking.PlaneNormal;
+            Vector3d n = p.PlaneNormal;
             error_before = PlaneSteering.PlaneErrorDeg(r, v, n);
             logger.LogInfo(Inv($"[Lift] plane error after the circularisation: {error_before:F3}° (launch window expected {p.Window.PlaneErrorDeg:F3}°)"));
             if (!LiftGoalRules.TrimNeeded(error_before))
@@ -121,7 +121,7 @@ namespace K2D2.Lift
             IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
             double now = GeneralTools.Current_UT;
             double after = PlaneSteering.PlaneErrorDeg(orbit.GetRelativePositionAtUTZup(now), orbit.GetOrbitalVelocityAtUTZup(now),
-                p.Parking.PlaneNormal);
+                p.PlaneNormal);
             logger.LogInfo(Inv($"[Lift] plane error {(burning ? "after the trim" : "(no trim needed)")}: {error_before:F3}° -> {after:F3}°"));
             bool ok = LiftGoalRules.EndMessage(p.TargetName, after, out string text);
             lift.EndLiftPilot(ok, text);
