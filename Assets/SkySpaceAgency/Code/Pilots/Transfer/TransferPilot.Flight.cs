@@ -490,6 +490,7 @@ namespace K2D2.Transfer
             public bool Ok, Converged;
             public Vector3d DeltaV;
             public double Pe, Inc, ArrivalUT, CaptureDv, Without;
+            public double PlaneError = double.NaN; // ° predicted to the aimed plane (4.5), NaN: none
         }
 
         void StartSolve(int i, Snapshot snap)
@@ -521,14 +522,18 @@ namespace K2D2.Transfer
             var s = System;
             int body = snap.Body, target = step.TargetBody;
             double wanted = step.TargetPeriapsisRadius, inc = step.TargetInclinationDeg;
+            // A chain's final target: the target vessel's plane, read again now (4.5).
+            var plane = ReadTargetPlane(i, step, n);
             Status = $"Correction {n}: solving...";
             RunJob(JobKind.Solve, ct =>
             {
                 var res = new SolveResult();
                 res.Without = TransferFlight.PeriapsisWithout(s, body, rb, vb, burnUT, target, horizon);
                 ct.ThrowIfCancellationRequested();
-                res.Ok = ArrivalTargeting.Solve(s, body, rb, vb, burnUT, target, wanted, inc, horizon, planned, captureAp,
-                    out res.DeltaV, out res.Pe, out res.Inc, out res.ArrivalUT, out res.CaptureDv, out res.Converged);
+                res.Ok = ArrivalTargeting.Solve(s, body, rb, vb, burnUT, target, wanted, inc, plane, horizon, planned, captureAp,
+                    ArrivalTargeting.MaxDeltaV, out res.DeltaV, out res.Pe, out res.Inc, out res.ArrivalUT, out res.CaptureDv, out res.Converged);
+                if (res.Ok && plane.magnitude > 0)
+                    res.PlaneError = ArrivalTargeting.ArrivalPlaneErrorDeg(s, body, rb, vb, burnUT, res.DeltaV, target, plane, horizon);
                 return res;
             }, t => OnSolved(t, i, n, burnUT, rb, vb, snap));
         }
@@ -576,7 +581,8 @@ namespace K2D2.Transfer
                 $"(wanted {(step.TargetPeriapsisRadius - R) / 1000:F2}, without the correction {(res.Without - R) / 1000:F2}), " +
                 $"inclination {res.Inc:F2}° (wanted {step.TargetInclinationDeg:F1}), arrival UT {res.ArrivalUT:F0} " +
                 $"(planned {TransferFlight.LegArrivalUT(plan, i):F0}{(free_arrival_step == i ? ", not used: new leg" : "")}), " +
-                $"capture {res.CaptureDv:F1} m/s, converged {res.Converged}");
+                $"capture {res.CaptureDv:F1} m/s, converged {res.Converged}" +
+                (double.IsNaN(res.PlaneError) ? "" : $", plane error predicted {res.PlaneError.ToString("F3", global::System.Globalization.CultureInfo.InvariantCulture)}°"));
 
             double floor = target.LowOrbitRadius - 10_000;
             var verdict = TransferFlight.JudgeCorrection(dv, res.Converged, res.Pe, step.TargetPeriapsisRadius, res.Without, floor, out string why);
@@ -595,7 +601,7 @@ namespace K2D2.Transfer
                     $"({(shift > 0 ? "later" : "earlier")}{(Math.Abs(shift) > 0.01 * Math.Max(1, plan.TripSeconds) ? ", another pass" : "")}): " +
                     "capture at the aimed periapsis, later steps moved, corrections re-timed");
             // StepIndex is unchanged by the sort (only the steps after it move).
-            Budget = TransferFlight.RemainingBudget(plan, i, stages);
+            Budget = BudgetFor(plan, i);
             if (!Budget.Ok)
             {
                 Fail($"after correction {n}, the Δv no longer fits: {Budget.Refusal}");
@@ -659,7 +665,7 @@ namespace K2D2.Transfer
                         }
                         TransferFlight.MergeLeg(plan, i, replanned);
                         TransferFlight.MarkLegStarted(plan, i);
-                        Budget = TransferFlight.RemainingBudget(plan, i, stages);
+                        Budget = BudgetFor(plan, i);
                         if (!Budget.Ok)
                         {
                             Fail($"leg {leg}: {Budget.Refusal}");
@@ -717,7 +723,7 @@ namespace K2D2.Transfer
                 }
                 TransferFlight.MergeLeg(plan, i, replanned);
                 TransferFlight.MarkLegStarted(plan, i);
-                Budget = TransferFlight.RemainingBudget(plan, i, stages);
+                Budget = BudgetFor(plan, i);
                 if (!Budget.Ok)
                 {
                     Fail($"the orbit at {name}: {Budget.Refusal}", captureFailed: true);
@@ -1129,6 +1135,9 @@ namespace K2D2.Transfer
             isRunning = false;
             Status = text;
             checked_vessel = null;
+            // A chain (4.5): the Rendezvous pilot takes over, now that the transfer has ended.
+            if (Chain != null)
+                HandOver(body, r, v);
         }
 
         // An SOI change the plan needs did not come: predict once more, then fail.
@@ -1181,6 +1190,7 @@ namespace K2D2.Transfer
             isRunning = false;
             Status = text;
             checked_vessel = null; // offer the saved plan again
+            ChainStoppedStatus(reason);
         }
 
         static string By(double ut) => double.IsNaN(ut) ? " (the plan gives no time for it)" : $" by UT {ut:F0}";

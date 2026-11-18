@@ -8,7 +8,9 @@ using System.Threading.Tasks;
 using K2D2.Controller;
 using K2D2.KSPService;
 using K2D2.Node;
+using K2D2.Lift;
 using K2D2.OrbitPlanning;
+using K2D2.Rendezvous;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
@@ -120,6 +122,7 @@ namespace K2D2.Transfer
                 isRunning = false;
                 Status = "Stopped by a vessel or scene change. Resume continues from the actual state.";
                 logger.LogInfo("[Transfer] stopped by a reset (vessel change, scene change or another pilot)");
+                ChainStoppedStatus(LiftGoalRules.StopReason(K2D2_Plugin.CurrentResetCause));
             }
             CancelJob();
             checked_vessel = null; // look for the new active vessel's saved plan
@@ -160,6 +163,7 @@ namespace K2D2.Transfer
             if (input == null)
                 return;
             CancelJob();
+            ClearChain(); // a plain transfer: no rendezvous follows
             if (!TakeSnapshot(out var snap, out string error, out _))
             {
                 Status = "Cannot plan: " + error;
@@ -199,7 +203,9 @@ namespace K2D2.Transfer
         }
 
         /// <summary>Flies the current plan, or with prepareOnly makes its nodes one at a time.</summary>
-        public bool Start(bool prepareOnly)
+        public bool Start(bool prepareOnly) => StartCore(prepareOnly, "start");
+
+        bool StartCore(bool prepareOnly, string why)
         {
             if (!CanStart)
             {
@@ -241,7 +247,7 @@ namespace K2D2.Transfer
                     return false;
                 }
             }
-            Budget = TransferFlight.RemainingBudget(plan, 0, stages);
+            Budget = BudgetFor(plan, 0);
             if (!Budget.Ok)
             {
                 Status = Budget.Refusal;
@@ -253,7 +259,7 @@ namespace K2D2.Transfer
                 Status = "Cannot start: the vessel has no id.";
                 return false;
             }
-            Begin(plan, 0, prepareOnly, snap, "start");
+            Begin(plan, 0, prepareOnly, snap, why);
             return true;
         }
 
@@ -271,6 +277,7 @@ namespace K2D2.Transfer
             checked_vessel = null; // offer the saved plan
             Status = "Stopped. Resume continues from the actual state.";
             logger.LogInfo($"[Transfer] stopped by the player in {Phase}, step {StepIndex}");
+            ChainStoppedStatus("Stop pressed");
         }
 
         /// <summary>Resumes the active vessel's saved plan, re-planned from the actual state.</summary>
@@ -301,6 +308,10 @@ namespace K2D2.Transfer
             vessel_id = saved.VesselId;
             Adopt(snap);
             var resumed = saved;
+            // A chain (4.5) comes back with its plan: the budget counts the rendezvous, the hand-over follows.
+            ClearChain();
+            Chain = resumed.Chain;
+            ChainStatusShown = Chain != null;
             switch (action)
             {
                 case ResumeAction.Refuse:
@@ -327,15 +338,25 @@ namespace K2D2.Transfer
                         Status = PlanStore.MismatchMessage;
                         return;
                     }
+                    if (ReplanChain(resumed, snap, q.ToBody))
+                        return;
                     Status = $"Planning the transfer to {resumed.ToBodyName} again from the actual state...";
                     var system = snap.System;
-                    StartSearch(system, q, JobKind.Search, plan => OnPlanned(plan, system, snap.Stages, resumed));
+                    var goneChain = Chain;
+                    StartSearch(system, q, JobKind.Search, plan =>
+                    {
+                        OnPlanned(plan, system, snap.Stages, resumed);
+                        if (goneChain != null && isRunning)
+                            Status = ChainGoneText(goneChain, system, q.ToBody);
+                    });
                     return;
                 }
                 default:
                 {
                     var plan = resumed.Plan;
-                    var budget = TransferFlight.RemainingBudget(plan, resumed.StepIndex, stages);
+                    if (Chain != null)
+                        logger.LogInfo($"[Transfer] chain: resume: target {(RendezvousSnapshot.FindVessel(Chain.TargetId) != null ? "found" : "gone")}, Continue");
+                    var budget = BudgetFor(plan, resumed.StepIndex);
                     Current = plan;
                     Budget = budget;
                     if (!budget.Ok)
@@ -387,6 +408,7 @@ namespace K2D2.Transfer
             double horizon = Math.Max(Math.Max(plan.ArrivalUT, legArrival) + 0.25 * Math.Max(0, plan.TripSeconds), burnUT + 3600);
             double captureAp = TransferFlight.CaptureApoapsis(plan, i);
             double wanted = step.TargetPeriapsisRadius, inc = step.TargetInclinationDeg;
+            var plane = step.TargetPlaneNormal;
             logger.LogInfo($"[Transfer] resume after a failed correction: correcting the current path to {name} within {budget:F0} m/s " +
                 $"(the plan's correction allowance {plan.ReserveDeltaV:F0} m/s, or {TransferFlight.ExistingCorrectionShare * 100:F0} % of what it still needs), planned and nearest passes");
             Status = $"Correcting the current path to {name} (up to {budget:F0} m/s)...";
@@ -395,7 +417,7 @@ namespace K2D2.Transfer
             RunJob(JobKind.Solve, ct =>
             {
                 var res = new SolveResult();
-                res.Ok = ArrivalTargeting.Solve(s, body, rb, vb, burnUT, target, wanted, inc, horizon, planned, captureAp, budget,
+                res.Ok = ArrivalTargeting.Solve(s, body, rb, vb, burnUT, target, wanted, inc, plane, horizon, planned, captureAp, budget,
                     out res.DeltaV, out res.Pe, out res.Inc, out res.ArrivalUT, out res.CaptureDv, out res.Converged);
                 return res;
             }, t =>
@@ -420,7 +442,7 @@ namespace K2D2.Transfer
                     return;
                 }
                 Adopt(now);
-                Budget = TransferFlight.RemainingBudget(plan, i, stages);
+                Budget = BudgetFor(plan, i);
                 if (!Budget.Ok)
                 {
                     Status = Budget.Refusal;
@@ -447,6 +469,7 @@ namespace K2D2.Transfer
             saved_error = null;
             ResumeOffer = null;
             Phase = TransferPhase.Planned;
+            ClearChain();
             Status = "Saved plan cancelled.";
         }
 
@@ -499,7 +522,7 @@ namespace K2D2.Transfer
                 logger.LogInfo($"[Transfer] refused: {plan.Refusal}");
                 return;
             }
-            Budget = TransferFlight.RemainingBudget(plan, 0, stages);
+            Budget = BudgetFor(plan, 0);
             logger.LogInfo($"[Transfer] stage budget: {(Budget.Ok ? "ok" : Budget.Refusal)}; needs {Budget.Needed:F0} m/s, has {Budget.Available:F0} m/s; " +
                 $"stages: {StageList.Describe(stages)}");
             if (!Budget.Ok)
@@ -640,6 +663,7 @@ namespace K2D2.Transfer
             try
             {
                 var sp = TransferFlight.ToSaved(Current, System, vessel_id, Phase, StepIndex, GeneralTools.Current_UT, PrepareOnly, burn_ignited, free_arrival_step, failed_solve_key);
+                sp.Chain = Chain;
                 PlanFiles.Write(SavedPath(vessel_id), PlanStore.ToJson(sp), logger, "[Transfer]");
             }
             catch (Exception e)
@@ -666,7 +690,7 @@ namespace K2D2.Transfer
                 LoadOffer(id);
             }
             if (saved != null && saved_check != null)
-                ResumeOffer = TransferFlight.ResumeOffer(saved, saved_check, GeneralTools.Current_UT, StrTool.DurationToString);
+                ResumeOffer = Offer(saved, saved_check, GeneralTools.Current_UT);
         }
 
         void LoadOffer(string id)
@@ -702,7 +726,7 @@ namespace K2D2.Transfer
                 }
                 saved = p;
                 saved_check = PlanStore.Check(p, snap.System, snap.Body, snap.R, snap.V, snap.UT);
-                ResumeOffer = TransferFlight.ResumeOffer(p, saved_check, snap.UT, StrTool.DurationToString);
+                ResumeOffer = Offer(p, saved_check, snap.UT);
                 logger.LogInfo($"[Transfer] saved plan for vessel {id}: to {p.ToBodyName}, {p.Phase} at step {p.StepIndex}, " +
                     $"check {saved_check.Verdict} ({saved_check.Detail}); offer: {ResumeOffer}");
             }
@@ -712,6 +736,15 @@ namespace K2D2.Transfer
                 ResumeOffer = $"The saved plan cannot be read ({e.GetType().Name}): cancel it to plan again.";
                 logger.LogWarning($"[Transfer] reading the saved plan failed: {e.GetType().Name}: {e.Message}");
             }
+        }
+
+        // The resume offer; a chain's says that the rendezvous follows.
+        static string Offer(SavedPlan p, ResumeCheck check, double ut)
+        {
+            string offer = TransferFlight.ResumeOffer(p, check, ut, StrTool.DurationToString);
+            return p.Chain != null && check.Verdict != ResumeVerdict.Mismatch
+                ? FarRendezvous.ResumeOffer(offer, string.IsNullOrEmpty(p.Chain.TargetName) ? "the target" : p.Chain.TargetName)
+                : offer;
         }
 
         // ---------------------------------------------------------------- helpers
