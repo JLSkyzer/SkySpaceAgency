@@ -51,7 +51,7 @@ public static class BruteForceReference
         return best;
     }
 
-    static List<int> Chain(BodySystem s, int body, int ancestor)
+    internal static List<int> Chain(BodySystem s, int body, int ancestor)
     {
         var chain = new List<int>();
         for (int b = body; b != ancestor; b = s[b].ParentIndex)
@@ -60,7 +60,7 @@ public static class BruteForceReference
     }
 
     // Semi-major axis of a body's orbit, from vis-viva on its epoch state.
-    static double OrbitRadius(BodySystem s, int body)
+    internal static double OrbitRadius(BodySystem s, int body)
     {
         var n = s[body];
         double mu = s[n.ParentIndex].Mu;
@@ -68,7 +68,7 @@ public static class BruteForceReference
     }
 
     // Ideal cost of leaving chain[level] at vInf, starting from a circular parking orbit in chain[0].
-    static double Leave(BodySystem s, List<int> chain, int level, double vInf, double parkingRadius)
+    internal static double Leave(BodySystem s, List<int> chain, int level, double vInf, double parkingRadius)
     {
         var body = s[chain[level]];
         if (level == 0)
@@ -90,7 +90,7 @@ public static class BruteForceReference
     }
 
     // Ideal cost of arriving at chain[level] at vInf and ending at chain[0] (capture or flyby).
-    static double Reach(BodySystem s, List<int> chain, int level, double vInf, double arrivalRadius, bool capture)
+    internal static double Reach(BodySystem s, List<int> chain, int level, double vInf, double arrivalRadius, bool capture)
     {
         var body = s[chain[level]];
         if (level == 0)
