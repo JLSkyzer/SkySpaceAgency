@@ -72,7 +72,7 @@ public class WindowLayoutTests
         Assert.IsNotNull(page.Q<DropdownField>("our_port"));
         Assert.IsNotNull(page.Q<DropdownField>("target_port"));
         Assert.IsNotNull(page.Q<K2UI.K2Toggle>("prepare_only"));
-        foreach (string button in new[] { "rendezvous_dock", "rendezvous_only", "dock_only", "stop", "resume", "cancel_saved" })
+        foreach (string button in new[] { "rendezvous_dock", "rendezvous_only", "dock_only", "transfer_rendezvous_dock", "transfer_rendezvous", "stop", "resume", "cancel_saved" })
             Assert.IsNotNull(page.Q<Button>(button), $"the Rendezvous tab has no button named {button}");
         // The old Dock assistant's controls are gone.
         foreach (string old in new[] { "align_dock", "main_brake", "rcs_final_approach", "cheat", "final_mode", "rcs_power" })

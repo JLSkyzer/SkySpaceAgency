@@ -27,6 +27,8 @@
                     <ui:Button name="rendezvous_only" text="Rendezvous only" class="big" style="flex-grow: 1; height: 30px;" />
                     <ui:Button name="dock_only" text="Dock only" class="big" style="flex-grow: 1; height: 30px;" tooltip="Within 2 km of the target" />
                 </ui:VisualElement>
+                <ui:Button name="transfer_rendezvous_dock" text="Transfer + rendezvous + dock" class="big" style="height: 30px; display: none;" tooltip="The target orbits another body: transfer into its plane, then rendezvous and dock" />
+                <ui:Button name="transfer_rendezvous" text="Transfer + rendezvous" class="big" style="height: 30px; display: none;" tooltip="The target orbits another body: transfer into its plane, then rendezvous (no docking)" />
                 <ui:Button name="stop" text="Stop" class="big" style="height: 30px;" />
             </ui:VisualElement>
             <ui:VisualElement style="flex-direction: row;">

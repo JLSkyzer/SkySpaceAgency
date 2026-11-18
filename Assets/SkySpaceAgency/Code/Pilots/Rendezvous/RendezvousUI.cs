@@ -27,7 +27,8 @@ namespace K2D2.Rendezvous
         public static readonly string[] Elements =
         {
             "target_vessel", "relative", "our_port", "target_port", "port_hint", "prepare_only",
-            "rendezvous_dock", "rendezvous_only", "dock_only", "stop", "resume", "cancel_saved", "resume_offer",
+            "rendezvous_dock", "rendezvous_only", "dock_only", "transfer_rendezvous_dock", "transfer_rendezvous",
+            "stop", "resume", "cancel_saved", "resume_offer",
             "status_pilot", "pilot_console", "progress",
             "dock_group", "dock_ports", "translate_mode", "dock_phase", "dock_aborts",
             "plan_group", "steps", "totals", "stages_foldout", "stages",
@@ -40,7 +41,7 @@ namespace K2D2.Rendezvous
 
         DropdownField target_drop, our_port_drop, target_port_drop;
         Label relative_label, port_hint, resume_offer, dock_ports, translate_mode, dock_phase, dock_aborts, totals_label;
-        Button rv_dock_bt, rv_only_bt, dock_only_bt, stop_bt, resume_bt, cancel_bt;
+        Button rv_dock_bt, rv_only_bt, dock_only_bt, far_dock_bt, far_rv_bt, stop_bt, resume_bt, cancel_bt;
         VisualElement dock_group, plan_group, steps_el, stages_el;
         FullStatus status_bar;
 
@@ -53,6 +54,11 @@ namespace K2D2.Rendezvous
         string our_port_pick, target_port_pick;   // null: Auto
 
         double distance = double.NaN, rel_speed = double.NaN, rel_inc = double.NaN;
+        // The target orbits another body than ours: Transfer + rendezvous (4.5) instead of 4.3's buttons.
+        bool far;
+
+        // The Transfer pilot flies the chain's transfer leg (4.5).
+        static TransferPilot Transfer => TransferPilot.Instance;
         List<StageDv> live_stages = new List<StageDv>();
         string ui_error;
         float next_refresh, next_lists;
@@ -88,12 +94,31 @@ namespace K2D2.Rendezvous
             stop_bt = panel.Q<Button>("stop");
             resume_bt = panel.Q<Button>("resume");
             cancel_bt = panel.Q<Button>("cancel_saved");
+            far_dock_bt = panel.Q<Button>("transfer_rendezvous_dock");
+            far_rv_bt = panel.Q<Button>("transfer_rendezvous");
             rv_dock_bt.clicked += () => StartPilot(RvMode.RendezvousAndDock);
             rv_only_bt.clicked += () => StartPilot(RvMode.RendezvousOnly);
             dock_only_bt.clicked += () => StartPilot(RvMode.DockOnly);
-            stop_bt.clicked += () => { ui_error = null; pilot.Stop(); };
-            resume_bt.clicked += () => { ui_error = null; pilot.Resume(); };
-            cancel_bt.clicked += () => { ui_error = null; pilot.CancelSaved(); };
+            far_dock_bt.clicked += () => StartChain(RvMode.RendezvousAndDock);
+            far_rv_bt.clicked += () => StartChain(RvMode.RendezvousOnly);
+            stop_bt.clicked += () =>
+            {
+                ui_error = null;
+                if (ChainLeg()) Transfer.Stop();
+                else pilot.Stop();
+            };
+            resume_bt.clicked += () =>
+            {
+                ui_error = null;
+                if (ChainResume()) Transfer.Resume();
+                else pilot.Resume();
+            };
+            cancel_bt.clicked += () =>
+            {
+                ui_error = null;
+                if (ChainResume()) Transfer.CancelSaved();
+                else pilot.CancelSaved();
+            };
 
             resume_offer = panel.Q<Label>("resume_offer");
             status_bar = new FullStatus(panel);
@@ -252,11 +277,19 @@ namespace K2D2.Rendezvous
         void UpdateRelative()
         {
             distance = rel_speed = rel_inc = double.NaN;
+            far = false;
             var ours = RendezvousSnapshot.Ours;
             var target = RendezvousSnapshot.FindVessel(selected_target);
             if (ours == null || target == null)
             {
                 relative_label.text = selected_target == null ? "Choose a vessel, or target one in the game." : "The vessel is gone.";
+                return;
+            }
+            string ourBody = ours.Orbit?.referenceBody?.bodyName, targetBody = target.Orbit?.referenceBody?.bodyName;
+            if (FarRendezvous.IsFar(ourBody, targetBody))
+            {
+                far = true;
+                relative_label.text = FarRendezvous.FarHint(target.Name, targetBody);
                 return;
             }
             if (!RendezvousSnapshot.TryRead(ours, target, out var s, out string error))
@@ -278,38 +311,85 @@ namespace K2D2.Rendezvous
                 ui_error = "Choose a target vessel first.";
                 return;
             }
+            Transfer?.ForgetChainStatus(); // the tab shows the Rendezvous pilot again
             pilot.Start(mode, selected_target, RendezvousSettings.prepare_only.V, our_port_pick, target_port_pick);
         }
 
+        // Transfer + rendezvous (+ dock): the Transfer pilot plans the chain, then flies it.
+        void StartChain(RvMode mode)
+        {
+            ui_error = null;
+            if (selected_target == null)
+            {
+                ui_error = "Choose a target vessel first.";
+                return;
+            }
+            if (Transfer == null)
+            {
+                ui_error = "The Transfer pilot is not loaded.";
+                return;
+            }
+            Transfer.PlanChain(selected_target, mode, RendezvousSettings.prepare_only.V);
+        }
+
+        // The chain is searching or in its transfer leg: Stop goes to the Transfer pilot.
+        static bool ChainLeg() =>
+            Transfer != null && Transfer.ChainStatusShown && (Transfer.isRunning || Transfer.Searching);
+
+        // No rendezvous of our own is saved, and the Transfer pilot offers a chain's Resume.
+        bool ChainResume() => !pilot.HasSavedPlan && Transfer != null && Transfer.SavedIsChain && !Transfer.isRunning;
+
+        // The tab shows the Transfer pilot's status and plan: a chain planned, refused, flown or
+        // stopped from here, while the Rendezvous pilot is idle.
+        bool ShowsChain() => Transfer != null && Transfer.ChainStatusShown && !pilot.isRunning && !pilot.Planning;
+
         void UpdateControls()
         {
-            bool busy = pilot.isRunning || pilot.Planning;
+            bool chainLeg = ChainLeg();
+            bool busy = pilot.isRunning || pilot.Planning || chainLeg;
             bool can = !busy && selected_target != null;
-            rv_dock_bt.SetEnabled(can);
-            rv_only_bt.SetEnabled(can);
-            dock_only_bt.SetEnabled(can && RendezvousReadout.DockOnlyAllowed(distance));
+            rv_dock_bt.SetEnabled(can && !far);
+            rv_only_bt.SetEnabled(can && !far);
+            dock_only_bt.SetEnabled(can && !far && RendezvousReadout.DockOnlyAllowed(distance));
+            far_dock_bt.Show(far);
+            far_rv_bt.Show(far);
+            far_dock_bt.SetEnabled(can && far && Transfer != null);
+            far_rv_bt.SetEnabled(can && far && Transfer != null);
             stop_bt.SetEnabled(busy);
             target_drop.SetEnabled(!busy);
             our_port_drop.SetEnabled(!busy);
             target_port_drop.SetEnabled(!busy);
-            resume_bt.Show(pilot.HasSavedPlan);
-            resume_bt.SetEnabled(pilot.CanResume);
-            cancel_bt.Show(pilot.HasSavedPlan || pilot.isRunning);
+            bool chainResume = ChainResume();
+            resume_bt.Show(pilot.HasSavedPlan || chainResume);
+            resume_bt.SetEnabled(chainResume ? Transfer.CanResume : pilot.CanResume);
+            cancel_bt.Show(pilot.HasSavedPlan || pilot.isRunning || chainResume);
         }
 
         void UpdateStatus()
         {
+            // Once the Rendezvous pilot runs (the hand-over, or a 4.3 button), the tab is its own again.
+            if (pilot.isRunning && Transfer != null && Transfer.ChainStatusShown && !ChainLeg())
+                Transfer.ForgetChainStatus();
             status_bar.Reset();
-            status_bar.avatar?.SetRunning(pilot.isRunning);
+            status_bar.avatar?.SetRunning(pilot.isRunning || ChainLeg());
             if (!string.IsNullOrEmpty(ui_error))
                 status_bar.Warning(ui_error);
+            else if (ShowsChain() && !string.IsNullOrEmpty(Transfer.Status))
+            {
+                string text = Transfer.Status;
+                bool warn = Transfer.Phase == TransferPhase.Failed || text.StartsWith("Refused") || text.StartsWith("Not enough")
+                    || text.StartsWith("The stages") || text.Contains(" stopped during ");
+                status_bar.Status(text, warn ? StatusLine.Level.Warning : StatusLine.Level.Normal);
+                if (Transfer.Searching)
+                    status_bar.Progress(Transfer.SearchProgress, "Planning");
+            }
             else if (!string.IsNullOrEmpty(pilot.Status))
                 status_bar.Status(pilot.Status, pilot.Phase == RvPhase.Failed || pilot.Status.StartsWith("Rendezvous stopped")
                     ? StatusLine.Level.Warning : StatusLine.Level.Normal);
             else
                 status_bar.Status("Choose a target, then Rendezvous + dock.");
 
-            string offer = pilot.isRunning ? null : pilot.ResumeOffer;
+            string offer = pilot.isRunning ? null : ChainResume() ? Transfer.ResumeOffer : pilot.ResumeOffer;
             resume_offer.Show(!string.IsNullOrEmpty(offer));
             resume_offer.text = offer ?? "";
         }
@@ -345,6 +425,22 @@ namespace K2D2.Rendezvous
             IReadOnlyList<StageDv> stages = pilot.Stages;
             if (stages == null || stages.Count == 0)
                 stages = live_stages;
+
+            // The chain's plan (4.5): the transfer's steps, the plane match left, the rendezvous, the docking.
+            var chain = Transfer?.ChainPlan;
+            if (chain != null && chain.Ok && plan == null && !pilot.isRunning)
+            {
+                IReadOnlyList<StageDv> chainStages = Transfer.Stages != null && Transfer.Stages.Count > 0 ? Transfer.Stages : stages;
+                plan_group.Show(true);
+                steps_el.Clear();
+                foreach (var row in FarRendezvous.Rows(chain, Transfer.System, GeneralTools.Current_UT, Transfer.isRunning ? Transfer.StepIndex : 0))
+                    steps_el.Add(StepElement(row));
+                var chainBudget = Transfer.Budget;
+                totals_label.text = FarRendezvous.Totals(chain, chainBudget);
+                totals_label.style.color = chainBudget == null || chainBudget.Ok ? new StyleColor(StyleKeyword.Null) : new StyleColor(new UnityEngine.Color(1f, 0.55f, 0.4f));
+                FillStages(RendezvousReadout.Stages(null, 0, chainStages, null));
+                return;
+            }
 
             if (plan == null || !plan.Ok)
             {
