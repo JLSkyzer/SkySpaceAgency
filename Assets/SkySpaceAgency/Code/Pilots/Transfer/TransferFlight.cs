@@ -20,6 +20,7 @@ namespace K2D2.Transfer
         Solve,       // a correction: solve it now from the actual state
         Capture,     // the capture burn at the arrival periapsis
         SoiMissed,   // an SOI change the plan needs did not come in time (MissedBody, MissedExit)
+        Flyby,       // a powered flyby: the burn at the flyby periapsis toward the step's TargetExcess (4.6)
     }
 
     public struct FlightDecision
@@ -39,7 +40,12 @@ namespace K2D2.Transfer
         SolveCorrection,  // a direct descent: its correction is solved without the stale planned arrival
         AimExcess,        // the top climb level, straight through: aim at the plan's required excess
         PlannedImpulse,   // a lower climb level, straight through: the planned re-aim vector, with a warning
+        Flyby,            // a gravity assist's flyby leg: nothing to re-plan, its burn is closed-loop at the periapsis (4.6)
     }
+
+    // Where a resume of a gravity-assist plan stands (4.6): no burn flown yet, cruising to the flyby,
+    // in the flyby body's SOI with the periapsis ahead, or past it.
+    public enum AssistResumeRoute { FullSearch, BeforeFlyby, InFlybySoi, AfterFlyby }
 
     public enum CorrectionVerdict { Fly, Skip, Refuse }
 
@@ -150,6 +156,7 @@ namespace K2D2.Transfer
                 case StepKind.Escape: return TransferPhase.Escape;
                 case StepKind.Correction: return TransferPhase.Correction;
                 case StepKind.Capture: return TransferPhase.Capture;
+                case StepKind.Flyby: return TransferPhase.Flyby;
                 default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
             }
         }
@@ -163,7 +170,12 @@ namespace K2D2.Transfer
             return TransferPhase.WaitWindow;
         }
 
-        public static bool IsBurn(PlanStep step) => step.Kind != StepKind.Escape;
+        public static bool IsBurn(PlanStep step) => step.Kind != StepKind.Escape && !IsUnpoweredFlyby(step);
+
+        // A flyby whose planned burn is under FlybyModel.MinBurn: a milestone, the next correction
+        // takes the rest.
+        public static bool IsUnpoweredFlyby(PlanStep step) =>
+            step.Kind == StepKind.Flyby && !(step.DeltaVMagnitude >= FlybyModel.MinBurn);
 
         // Seconds before a burn's centre at which the warp must have stopped: BurnWarp's alignment
         // lead for a half turn, the margin, and half the burn (the burn is centred on its time).
@@ -198,6 +210,18 @@ namespace K2D2.Transfer
                 return Overdue(plan, TransferPhase.Escape, now, step.UT, step.Body, exit: true);
             }
 
+            if (step.Kind == StepKind.Flyby)
+            {
+                // Its leg starts on entering the flyby body's SOI: once started, being elsewhere means
+                // the flyby is behind.
+                if (currentBody != step.Body && !step.ReplanAtLegStart)
+                    return new FlightDecision { Action = FlightAction.StepPassed, Phase = TransferPhase.Flyby };
+                if (currentBody == step.Body && IsUnpoweredFlyby(step))
+                    return now < step.UT
+                        ? new FlightDecision { Action = FlightAction.Warp, Phase = TransferPhase.Flyby, WarpUntilUT = step.UT }
+                        : new FlightDecision { Action = FlightAction.StepPassed, Phase = TransferPhase.Flyby };
+            }
+
             var waitPhase = WaitPhase(plan, stepIndex);
             if (currentBody != step.Body)
             {
@@ -219,6 +243,7 @@ namespace K2D2.Transfer
                 return new FlightDecision { Action = FlightAction.Warp, Phase = waitPhase, WarpUntilUT = warpEnd };
 
             FlightAction action = step.Kind == StepKind.Capture ? FlightAction.Capture
+                : step.Kind == StepKind.Flyby ? FlightAction.Flyby
                 : step.Kind == StepKind.Correction && !(step.DeltaV.sqrMagnitude > 0) ? FlightAction.Solve
                 : FlightAction.Burn;
             return new FlightDecision { Action = action, Phase = BurnPhase(step.Kind) };
@@ -272,6 +297,8 @@ namespace K2D2.Transfer
             var step = plan.Steps[stepIndex];
             if (AfterCapture(plan, step.LegIndex))
                 return LegReplan.Search;
+            if (step.Kind == StepKind.Flyby)
+                return LegReplan.Flyby;
             if (step.Kind == StepKind.Correction && !(step.DeltaV.sqrMagnitude > 0))
                 return LegReplan.SolveCorrection;
             int burns = plan.Steps.Count(st => st.LegIndex == step.LegIndex && HasPlannedVector(st));
@@ -499,6 +526,8 @@ namespace K2D2.Transfer
 
         public static IBurnGuidance GuidanceFor(PlanStep step, Vector3d r, Vector3d v, double mu, double soi)
         {
+            if (step.Kind == StepKind.Flyby)
+                return new AsymptoteGuidance(step.TargetExcess);
             if (step.Kind == StepKind.Capture)
             {
                 double pe = step.TargetPeriapsisRadius;
@@ -705,6 +734,27 @@ namespace K2D2.Transfer
             return ResumeAction.Continue;
         }
 
+        // A resume of a gravity-assist plan whose decision is Replan (4.6): where it stands.
+        //  - no burn flown yet: the whole search again (the assist search, the cheaper offer);
+        //  - the flyby still ahead and the vessel outside the flyby body: cruising to it;
+        //  - in the flyby body's SOI with the periapsis ahead: a new excess out, a new burn;
+        //  - otherwise (past the periapsis, after the flyby): the plain search.
+        public static AssistResumeRoute RouteAssistResume(TransferPlan plan, int stepIndex, int currentBody, bool periapsisAhead)
+        {
+            bool flown = false;
+            for (int i = 0; i < stepIndex && i < plan.Steps.Count; i++)
+                if (IsBurn(plan.Steps[i]))
+                    flown = true;
+            if (!flown)
+                return AssistResumeRoute.FullSearch;
+            int flyby = plan.Steps.FindIndex(st => st.Kind == StepKind.Flyby);
+            if (currentBody == plan.FlybyBody)
+                return periapsisAhead ? AssistResumeRoute.InFlybySoi : AssistResumeRoute.AfterFlyby;
+            if (flyby >= stepIndex)
+                return AssistResumeRoute.BeforeFlyby;
+            return AssistResumeRoute.AfterFlyby;
+        }
+
         // A resume after a failed correction, with the vessel already in the SOI of the body that
         // correction aimed at and no periapsis ahead to aim (an open path that leaves the SOI): there
         // is no path to correct, so the plan is searched again from the actual state, which gives the
@@ -726,6 +776,8 @@ namespace K2D2.Transfer
             for (int k = Math.Max(0, from); k < plan.Steps.Count; k++)
             {
                 var st = plan.Steps[k];
+                if (st.Kind == StepKind.Flyby && st.TargetExcess.sqrMagnitude > 0)
+                    return true; // the wanted excess out of a flyby is a saved vector too
                 if (!HasPlannedVector(st))
                     continue;
                 if (st.ReplanAtLegStart && AfterCapture(plan, st.LegIndex))
@@ -832,6 +884,7 @@ namespace K2D2.Transfer
                 case StepKind.Injection: return "injection burn";
                 case StepKind.Escape: return "SOI exit";
                 case StepKind.Capture: return "capture burn";
+                case StepKind.Flyby: return IsUnpoweredFlyby(step) ? "flyby (no burn)" : "flyby";
             }
             if (step.DeltaV.sqrMagnitude > 0)
                 return "re-aim burn";

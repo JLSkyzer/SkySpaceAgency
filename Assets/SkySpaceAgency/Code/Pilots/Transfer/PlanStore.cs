@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 
 namespace K2D2.Transfer
 {
-    public enum TransferPhase { Planned, WaitWindow, PlaneChange, OrbitChange, Injection, Escape, Correction, Coast, Capture, Done, Failed }
+    public enum TransferPhase { Planned, WaitWindow, PlaneChange, OrbitChange, Injection, Escape, Correction, Coast, Capture, Flyby, Done, Failed }
 
     // A plan saved for one vessel, so that it survives a save/reload, a scene change and a vessel
     // switch. The game glue (TransferPilot) writes it in <mod folder>/plans/.
@@ -162,7 +162,7 @@ namespace K2D2.Transfer
             ["request"] = plan.Request == null ? JValue.CreateNull() : RequestJson(plan.Request),
             ["steps"] = new JArray((plan.Steps ?? new List<PlanStep>()).Select(StepJson).Cast<object>().ToArray()),
             ["finalLegRequest"] = plan.FinalLegRequest == null ? JValue.CreateNull() : RequestJson(plan.FinalLegRequest),
-        };
+        }.WithAssist(plan);
 
         static JObject RequestJson(TransferRequest q) => new JObject
         {
@@ -194,7 +194,24 @@ namespace K2D2.Transfer
             ["legIndex"] = s.LegIndex,
             ["replanAtLegStart"] = s.ReplanAtLegStart,
             ["targetPlaneNormal"] = V(s.TargetPlaneNormal),
-        };
+        }.WithExcess(s);
+
+        // The 4.6 keys, written only when not default: a plan without an assist reads as before.
+        static JObject WithAssist(this JObject o, TransferPlan plan)
+        {
+            if (plan.Assist != AssistKind.None)
+                o["assist"] = plan.Assist.ToString();
+            if (plan.FlybyBody >= 0)
+                o["flybyBody"] = plan.FlybyBody;
+            return o;
+        }
+
+        static JObject WithExcess(this JObject o, PlanStep s)
+        {
+            if (s.TargetExcess.sqrMagnitude > 0)
+                o["targetExcess"] = V(s.TargetExcess);
+            return o;
+        }
 
         // Doubles are written with "G17", which always reads back to the same bits. The values JSON
         // numbers cannot hold (NaN, the infinities, and -0, which a number parser may read as +0)
@@ -334,6 +351,11 @@ namespace K2D2.Transfer
                 var f = Field(o, "finalLegRequest");
                 plan.FinalLegRequest = f.Type == JTokenType.Null ? null : ReadRequest(Obj(f, "finalLegRequest"));
             }
+            // Optional (4.6).
+            if (o.ContainsKey("assist"))
+                plan.Assist = Enum<AssistKind>(o, "assist");
+            if (o.ContainsKey("flybyBody"))
+                plan.FlybyBody = Int(o, "flybyBody");
             return plan;
         }
 
@@ -371,6 +393,7 @@ namespace K2D2.Transfer
                     LegIndex = Int(o, "legIndex"),
                     ReplanAtLegStart = Bool(o, "replanAtLegStart"),
                     TargetPlaneNormal = o.ContainsKey("targetPlaneNormal") ? Vec(o, "targetPlaneNormal") : Vector3d.zero,
+                    TargetExcess = o.ContainsKey("targetExcess") ? Vec(o, "targetExcess") : Vector3d.zero,
                 };
             }
             catch (FormatException e)
@@ -567,8 +590,8 @@ namespace K2D2.Transfer
             for (int i = p.StepIndex; i < plan.Steps.Count; i++)
             {
                 var st = plan.Steps[i];
-                if (st.Kind == StepKind.Escape || st.Kind == StepKind.Correction)
-                    continue; // a milestone; corrections are re-timed in flight
+                if (st.Kind == StepKind.Escape || st.Kind == StepKind.Correction || st.Kind == StepKind.Flyby)
+                    continue; // a milestone; corrections are re-timed in flight, a flyby re-planned
                 if (st.UT < ut - MissedBurnSeconds)
                     return ResumeCheck.Replan($"the {st.Kind} burn was due {Seconds(ut - st.UT)} ago");
                 break;

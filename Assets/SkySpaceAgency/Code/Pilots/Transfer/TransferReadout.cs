@@ -230,13 +230,15 @@ namespace K2D2.Transfer
                 string dv;
                 if (st.Kind == StepKind.Escape)
                     dv = "-";
+                else if (st.Kind == StepKind.Flyby)
+                    dv = TransferFlight.IsUnpoweredFlyby(st) ? "no burn" : Inv($"{st.DeltaVMagnitude:F1} m/s");
                 else if (st.Kind == StepKind.Correction && !(st.DeltaVMagnitude > 0))
                     dv = "reserve";
                 else
                     dv = Inv($"{st.DeltaVMagnitude:F1} m/s");
                 rows.Add(new StepRow
                 {
-                    Kind = Capitalize(TransferFlight.StepName(plan, i)) + $" ({body})",
+                    Kind = (st.Kind == StepKind.Flyby ? "Flyby" : Capitalize(TransferFlight.StepName(plan, i))) + $" ({body})",
                     When = KerbinCalendar.Date(st.UT) + (done ? ", done" : dt > 0 ? $", in {KerbinCalendar.Duration(dt)}" : ", now"),
                     DeltaV = dv,
                     Explanation = st.Explanation ?? "",

@@ -29,7 +29,13 @@ namespace K2D2.Transfer
 
     // Injection: a burn toward a hyperbolic excess vector (or, inside one SOI, the transfer burn).
     // Escape: a coast milestone, the SOI exit (no Δv). Capture: a burn at the arrival periapsis.
-    public enum StepKind { PlaneChange, OrbitChange, Injection, Escape, Correction, Capture }
+    // Flyby (4.6): the periapsis of a gravity assist, a milestone, or a burn along the motion there
+    // when powered.
+    public enum StepKind { PlaneChange, OrbitChange, Injection, Escape, Correction, Capture, Flyby }
+
+    // The kind of gravity assist a plan flies (4.6): none, a flyby of a planet on the way (a child of
+    // the common ancestor), or of a moon on the way out.
+    public enum AssistKind { None, Sibling, Departure }
 
     public class PlanStep
     {
@@ -58,6 +64,10 @@ namespace K2D2.Transfer
         // an estimate, re-planned from the actual state when the vessel reaches it.
         public int LegIndex;
         public bool ReplanAtLegStart;
+
+        // A flyby (4.6): the excess wanted on leaving the flyby body, relative to it, common frame;
+        // zero otherwise.
+        public Vector3d TargetExcess = Vector3d.zero;
     }
 
     public class TransferPlan
@@ -85,6 +95,10 @@ namespace K2D2.Transfer
         // request of that last leg, from the planned low orbit (an estimate, never flown), so that the
         // arrival geometry can be predicted. Null when the last leg starts from Request.
         public TransferRequest FinalLegRequest;
+
+        // A gravity assist (4.6): its kind and the flyby body; None / -1 for a direct plan.
+        public AssistKind Assist = AssistKind.None;
+        public int FlybyBody = -1;
 
         public double TripSeconds => ArrivalUT - DepartureUT;
     }

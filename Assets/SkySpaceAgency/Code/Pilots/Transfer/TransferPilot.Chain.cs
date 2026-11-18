@@ -377,6 +377,7 @@ namespace K2D2.Transfer
                 case StepKind.Escape: return "the escape";
                 case StepKind.Correction: return "the correction " + TransferFlight.CorrectionNumber(plan, StepIndex);
                 case StepKind.Capture: return "the capture";
+                case StepKind.Flyby: return "the flyby";
                 default: return "the transfer";
             }
         }
