@@ -256,99 +256,15 @@ namespace K2D2.Transfer
                 if (inside == null)
                     return FlightFailure($"The cruise does not reach {name}.");
                 NoteCruise(built, cruise.TakeWhile(p => p != inside), flyby);
-                double tPe = inside.PeriapsisUT >= inside.StartUT ? inside.PeriapsisUT : inside.StartUT;
-                KeplerPropagator.Propagate(inside.StartR, inside.StartV, B.Mu, tPe - inside.StartUT, out var rPe, out var vPe);
-                if (rPe.magnitude < Floor(flyby))
-                    return FlightFailure($"The flyby of {name} would pass below its atmosphere or terrain ({Km(flyby, rPe.magnitude)} km).");
 
-                // 4. The excess wanted out of the flyby: Lambert from the flyby body at the periapsis
-                // to the target's branch, then the flown exit matched to it (as the climb).
-                S.StateRelativeToParent(flyby, tPe, out var rBp, out var vBp);
-                S.StateRelativeToParent(cT, tA, out var rT, out var vT);
-                if (!Lambert.Solve(rBp, rT, tA - tPe, muA, c.Prograde2, 0, false, out var w1, out var w2))
-                    return Failed($"No transfer found from {name} to {S[cT].Name}.");
-                Vector3d wanted = w1 - vBp, wa = w2 - vT;
-                Vector3d dv = Vector3d.zero;
-                Patch exit = null;
-                List<Patch> outPatches = null;
-                for (int iter = 0; iter < MaxExitIterations; iter++)
-                {
-                    if (!FlyFlyby(flyby, rPe, vPe, tPe, wanted, out dv, out exit, out outPatches, out string why))
-                        return FlightFailure($"The flyby of {name} cannot be flown as planned: {why}.");
-                    double rest = tA - exit.StartUT;
-                    if (!(rest > 0) || !Lambert.Solve(exit.StartR, rT, rest, muA, c.Prograde2, 0, false, out var x1, out var x2))
-                        break;
-                    Vector3d miss = x1 - exit.StartV;
-                    wa = x2 - vT;
-                    if (miss.magnitude < ExitTolerance || dv.sqrMagnitude == 0)
-                        break;
-                    wanted += miss;
-                }
-
-                // 5. The arrival from the flown exit, then the flyby burn aimed at its first target.
-                var arr = ChooseArrival(wa, tA, k + 2, true, Ancestor, exit.StartR, exit.StartV, exit.StartUT);
-                double residual = double.NaN;
-                double horizon = tA + 0.25 * (tA - exit.StartUT);
-                for (int iter = 0; iter < 3; iter++)
-                {
-                    var target = arr.FirstTarget;
-                    if (double.IsNaN(target.Pe) || !ArrivalTargeting.Solve(S, Ancestor, exit.StartR, exit.StartV, exit.StartUT, target.Body,
-                            target.Pe, target.Inc, target.Plane, horizon, tA, double.NaN, ArrivalTargeting.MaxDeltaV,
-                            out var dvAim, out _, out _, out _, out _, out _))
-                        break;
-                    residual = dvAim.magnitude;
-                    if (residual < ExitTolerance || dv.sqrMagnitude == 0)
-                        break;
-                    if (!FlyFlyby(flyby, rPe, vPe, tPe, wanted + dvAim, out var dv2, out var exit2, out var p2, out _))
-                        break;
-                    wanted += dvAim;
-                    dv = dv2;
-                    exit = exit2;
-                    outPatches = p2;
-                }
-
-                // The cruise after the flyby, to the arrival: an SOI the plan does not include is warned about.
-                NoteCruise(built, PatchedPropagator.Propagate(S, Ancestor, exit.StartR, exit.StartV, exit.StartUT, tA, null, 4), flyby);
-
-                // 6. The steps.
                 var plan = NewPlan();
-                plan.CaseName = CaseName + " via " + name;
-                plan.Assist = AssistKind.Sibling;
-                plan.FlybyBody = flyby;
                 plan.Steps.AddRange(leg.Steps);
                 plan.Steps.AddRange(flight.Steps);
+                var failed = AppendFlyby(built, plan, flyby, inside.StartR, inside.StartV, inside.StartUT, tA, c.Prograde2, k + 1,
+                    out var arr, out double tPe);
+                if (failed != null)
+                    return failed;
                 AddCorrections(plan.Steps, Ancestor, k, flyTarget, flight.TopExitUT, leg.FirstBurnUT, tPe, inside.StartUT, null);
-
-                Vector3d sIn = ArrivalTargeting.IncomingAsymptote(inside.StartR, inside.StartV, B.Mu);
-                Vector3d sOut = Hyperbola.Asymptote(rPe, vPe + dv, B.Mu);
-                double turn = sIn.sqrMagnitude > 0 && sOut.sqrMagnitude > 0 ? AngleDeg(sIn, sOut) : double.NaN;
-                string power = dv.sqrMagnitude > 0 ? Inv($", powered: {dv.magnitude:F0} m/s at the periapsis") : ", no burn";
-                var fly = Burn(StepKind.Flyby, flyby, tPe, dv,
-                    Inv($"Flyby of {name} at {Km(flyby, rPe.magnitude)} km: turns the path by {turn:F1}° toward {S[cT].Name}{power}. The corrections before it aim at its periapsis and plane; the ones after it aim at {S[arr.FirstTarget.Body].Name}"),
-                    k + 1);
-                fly.TargetExcess = wanted;
-                arr.FirstTarget.ApplyTo(fly);
-                plan.Steps.Add(fly);
-                plan.Steps.Add(Step(StepKind.Escape, flyby, exit.StartUT, 0, $"Leave the {name} SOI", k + 1));
-
-                plan.Steps.AddRange(arr.Steps);
-                plan.Warnings.AddRange(arr.Warnings);
-                plan.FinalLegRequest = arr.FinalLegRequest ?? AfterFlybyRequest(exit);
-                var arrival = S[cT];
-                double entry = tA - HyperbolicTime(arrival.LowOrbitRadius, Math.Max(1, wa.magnitude), arrival.Mu, arrival.Soi);
-                int before = plan.Steps.Count;
-                AddCorrections(plan.Steps, Ancestor, k + 2, arr.FirstTarget, exit.StartUT, tPe, tA, entry, arr.Notes);
-                if (plan.Steps.Count > before)
-                {
-                    var first = plan.Steps[before];
-                    first.Explanation = $"Correction after the {name} flyby: aims {Describe(arr.FirstTarget)} ({Solved})";
-                    if (residual >= ArrivalTargeting.SkipThreshold)
-                    {
-                        first.DeltaVMagnitude = residual;
-                        first.Explanation += Inv($". Estimated from the planned flyby: {residual:F0} m/s");
-                    }
-                }
-
                 var departure = plan.Steps.FirstOrDefault(st => st.Kind == StepKind.Injection);
                 if (departure != null)
                     departure.Explanation += $". Gravity assist via {name}: see the flyby step";
@@ -362,6 +278,105 @@ namespace K2D2.Transfer
                 plan.ExcessBody = cF;
                 plan.RequiredExcess = aim;
                 return Finish(built, plan, leg.FirstBurnUT, arr.ArrivalUT, targets);
+            }
+
+            // The flyby of 'flyby' met from (rIn, vIn) at utIn in its SOI (periapsis ahead), then the trip
+            // to the target's branch arriving at tA: the Flyby and its SOI exit on flybyLeg, the
+            // corrections and the arrival on flybyLeg + 1, appended to the plan with its assist fields.
+            // Null when it can be flown; else the failure.
+            Built AppendFlyby(Built built, TransferPlan plan, int flyby, Vector3d rIn, Vector3d vIn, double utIn, double tA,
+                bool prograde2, int flybyLeg, out Arrival arr, out double tPe)
+            {
+                arr = null;
+                var B = S[flyby];
+                string name = B.Name;
+                int cT = Down[0];
+                double muA = S[Ancestor].Mu;
+                tPe = utIn + Finite(TimeToPeriapsis(rIn, vIn, B.Mu), 0);
+                KeplerPropagator.Propagate(rIn, vIn, B.Mu, tPe - utIn, out var rPe, out var vPe);
+                if (rPe.magnitude < Floor(flyby))
+                    return FlightFailure($"The flyby of {name} would pass below its atmosphere or terrain ({Km(flyby, rPe.magnitude)} km).");
+
+                // The excess wanted out of the flyby: Lambert from the flyby body at the periapsis to
+                // the target's branch, then the flown exit matched to it (as the climb).
+                S.StateRelativeToParent(flyby, tPe, out var rBp, out var vBp);
+                S.StateRelativeToParent(cT, tA, out var rT, out var vT);
+                if (!(tA > tPe) || !Lambert.Solve(rBp, rT, tA - tPe, muA, prograde2, 0, false, out var w1, out var w2))
+                    return Failed($"No transfer found from {name} to {S[cT].Name}.");
+                Vector3d wanted = w1 - vBp, wa = w2 - vT;
+                Vector3d dv = Vector3d.zero;
+                Patch exit = null;
+                for (int iter = 0; iter < MaxExitIterations; iter++)
+                {
+                    if (!FlyFlyby(flyby, rPe, vPe, tPe, wanted, out dv, out exit, out _, out string why))
+                        return FlightFailure($"The flyby of {name} cannot be flown as planned: {why}.");
+                    double rest = tA - exit.StartUT;
+                    if (!(rest > 0) || !Lambert.Solve(exit.StartR, rT, rest, muA, prograde2, 0, false, out var x1, out var x2))
+                        break;
+                    Vector3d miss = x1 - exit.StartV;
+                    wa = x2 - vT;
+                    if (miss.magnitude < ExitTolerance || dv.sqrMagnitude == 0)
+                        break;
+                    wanted += miss;
+                }
+
+                // The arrival from the flown exit, then the flyby burn aimed at its first target.
+                arr = ChooseArrival(wa, tA, flybyLeg + 1, true, Ancestor, exit.StartR, exit.StartV, exit.StartUT);
+                double residual = double.NaN;
+                double horizon = tA + 0.25 * (tA - exit.StartUT);
+                for (int iter = 0; iter < 3; iter++)
+                {
+                    var target = arr.FirstTarget;
+                    if (double.IsNaN(target.Pe) || !ArrivalTargeting.Solve(S, Ancestor, exit.StartR, exit.StartV, exit.StartUT, target.Body,
+                            target.Pe, target.Inc, target.Plane, horizon, tA, double.NaN, ArrivalTargeting.MaxDeltaV,
+                            out var dvAim, out _, out _, out _, out _, out _))
+                        break;
+                    residual = dvAim.magnitude;
+                    if (residual < ExitTolerance || dv.sqrMagnitude == 0)
+                        break;
+                    if (!FlyFlyby(flyby, rPe, vPe, tPe, wanted + dvAim, out var dv2, out var exit2, out _, out _))
+                        break;
+                    wanted += dvAim;
+                    dv = dv2;
+                    exit = exit2;
+                }
+
+                // The cruise after the flyby, to the arrival: an SOI the plan does not include is warned about.
+                NoteCruise(built, PatchedPropagator.Propagate(S, Ancestor, exit.StartR, exit.StartV, exit.StartUT, tA, null, 4), flyby);
+
+                plan.CaseName = CaseName + " via " + name;
+                plan.Assist = AssistKind.Sibling;
+                plan.FlybyBody = flyby;
+                Vector3d sIn = ArrivalTargeting.IncomingAsymptote(rIn, vIn, B.Mu);
+                Vector3d sOut = Hyperbola.Asymptote(rPe, vPe + dv, B.Mu);
+                double turn = sIn.sqrMagnitude > 0 && sOut.sqrMagnitude > 0 ? AngleDeg(sIn, sOut) : double.NaN;
+                string power = dv.sqrMagnitude > 0 ? Inv($", powered: {dv.magnitude:F0} m/s at the periapsis") : ", no burn";
+                var fly = Burn(StepKind.Flyby, flyby, tPe, dv,
+                    Inv($"Flyby of {name} at {Km(flyby, rPe.magnitude)} km: turns the path by {turn:F1}° toward {S[cT].Name}{power}. The corrections before it aim at its periapsis and plane; the ones after it aim at {S[arr.FirstTarget.Body].Name}"),
+                    flybyLeg);
+                fly.TargetExcess = wanted;
+                arr.FirstTarget.ApplyTo(fly);
+                plan.Steps.Add(fly);
+                plan.Steps.Add(Step(StepKind.Escape, flyby, exit.StartUT, 0, $"Leave the {name} SOI", flybyLeg));
+
+                plan.Steps.AddRange(arr.Steps);
+                plan.Warnings.AddRange(arr.Warnings);
+                plan.FinalLegRequest = arr.FinalLegRequest ?? AfterFlybyRequest(exit);
+                var arrival = S[cT];
+                double entry = tA - HyperbolicTime(arrival.LowOrbitRadius, Math.Max(1, wa.magnitude), arrival.Mu, arrival.Soi);
+                int before = plan.Steps.Count;
+                AddCorrections(plan.Steps, Ancestor, flybyLeg + 1, arr.FirstTarget, exit.StartUT, tPe, tA, entry, arr.Notes);
+                if (plan.Steps.Count > before)
+                {
+                    var first = plan.Steps[before];
+                    first.Explanation = $"Correction after the {name} flyby: aims {Describe(arr.FirstTarget)} ({Solved})";
+                    if (residual >= ArrivalTargeting.SkipThreshold)
+                    {
+                        first.DeltaVMagnitude = residual;
+                        first.Explanation += Inv($". Estimated from the planned flyby: {residual:F0} m/s");
+                    }
+                }
+                return null;
             }
 
             // An SOI on a cruise that the plan does not include (the flyby body is planned).

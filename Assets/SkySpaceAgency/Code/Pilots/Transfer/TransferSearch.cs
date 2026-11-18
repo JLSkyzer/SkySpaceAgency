@@ -236,7 +236,8 @@ namespace K2D2.Transfer
 
             // The request's bodies, case and vessel orbit. Non-null: the plan to return at once (a
             // refusal, or the cases that need no search: already in the target's SOI, escaping).
-            TransferPlan Setup()
+            // openOrbit (4.6, a resume inside a flyby body's SOI): the vessel's path may be open.
+            TransferPlan Setup(bool openOrbit = false)
             {
                 var target = S[To];
                 ArrRp = double.IsNaN(Q.ArrivalPeriapsisRadius) ? target.LowOrbitRadius : Q.ArrivalPeriapsisRadius;
@@ -274,6 +275,8 @@ namespace K2D2.Transfer
                     return Refuse("Invalid vessel state.");
                 VesselEl = OrbitMath.Elements(Q.R0, Q.V0, S[From].Mu);
                 bool closed = VesselEl.IsClosed && VesselEl.ApoapsisRadius < S[From].Soi;
+                if (openOrbit)
+                    return null;
                 if (!closed)
                     return To == Ancestor ? AlreadyEscaping() : Refuse(NotClosed);
                 if (VesselEl.PeriapsisRadius < Floor(From))

@@ -202,6 +202,33 @@ namespace K2D2.Transfer
                 (wait > 0 ? $"in {KerbinCalendar.Duration(wait)}" : "now");
         }
 
+        // One line of the assist choice (4.6): "● Direct: 2 140 m/s, 1y 120d"; a refused plan
+        // gives "Direct: refused (why)".
+        public static string AssistLine(string label, TransferPlan plan, bool selected)
+        {
+            if (plan == null || !plan.Ok)
+                return $"{label}: refused ({plan?.Refusal ?? "no plan"})";
+            string total = Math.Round(plan.TotalDeltaV).ToString("#,0", new NumberFormatInfo { NumberGroupSeparator = " " });
+            return $"{(selected ? "● " : "○ ")}{label}: {total} m/s, {ShortDuration(plan.TripSeconds)}";
+        }
+
+        // "Direct", or "Via Eve" for a gravity assist.
+        public static string AssistLabel(TransferPlan plan, BodySystem s) =>
+            plan != null && plan.Assist != AssistKind.None && plan.FlybyBody >= 0 && s != null && plan.FlybyBody < s.Count
+                ? "Via " + s[plan.FlybyBody].Name
+                : "Direct";
+
+        // Years and days for a trip of a day or more ("1y 120d", "85d"), else the full duration.
+        static string ShortDuration(double seconds)
+        {
+            if (!(seconds >= KerbinCalendar.DaySeconds) || double.IsInfinity(seconds))
+                return KerbinCalendar.Duration(seconds);
+            long total = (long)Math.Floor(seconds);
+            long years = total / (long)KerbinCalendar.YearSeconds;
+            long days = total % (long)KerbinCalendar.YearSeconds / (long)KerbinCalendar.DaySeconds;
+            return years > 0 ? $"{years}y {days}d" : $"{days}d";
+        }
+
         public static string Trip(TransferPlan plan) =>
             $"Trip: {KerbinCalendar.Duration(plan.TripSeconds)}, arrival {KerbinCalendar.Date(plan.ArrivalUT)}";
 
