@@ -88,6 +88,21 @@ namespace K2D2.Transfer
             double wantedPeriapsisRadius, double wantedInclinationDeg, double horizonUT, double plannedArrivalUT,
             double captureApoapsisRadius, double maxDeltaV,
             out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg,
+            out double predictedArrivalUT, out double predictedCaptureDeltaV, out bool converged) =>
+            Solve(s, body, r, v, ut, targetBody, wantedPeriapsisRadius, wantedInclinationDeg, Vector3d.zero, horizonUT,
+                plannedArrivalUT, captureApoapsisRadius, maxDeltaV, out deltaV, out predictedPeriapsisRadius,
+                out predictedInclinationDeg, out predictedArrivalUT, out predictedCaptureDeltaV, out converged);
+
+        // The same, aimed at a plane (4.5): wantedPlaneNormal is a unit orbit normal in the target body's
+        // own frame (zero: none). The arrival hyperbola's plane must contain its incoming asymptote Ŝ, so
+        // the aim is the plane closest to the wanted one, normal ĥ = normalize(n̂ − (n̂·Ŝ)Ŝ); what is left,
+        // asin(|n̂·Ŝ|), is flown after the arrival (PlaneResidualDeg). A plane takes precedence over an
+        // inclination. When n̂ is within PlaneAimMinDeg of Ŝ, every plane through Ŝ is about as far from
+        // the wanted one, and the aim is the periapsis only.
+        public static bool Solve(BodySystem s, int body, Vector3d r, Vector3d v, double ut, int targetBody,
+            double wantedPeriapsisRadius, double wantedInclinationDeg, Vector3d wantedPlaneNormal,
+            double horizonUT, double plannedArrivalUT, double captureApoapsisRadius, double maxDeltaV,
+            out Vector3d deltaV, out double predictedPeriapsisRadius, out double predictedInclinationDeg,
             out double predictedArrivalUT, out double predictedCaptureDeltaV, out bool converged)
         {
             deltaV = Vector3d.zero;
@@ -106,6 +121,8 @@ namespace K2D2.Transfer
                 S = s, Body = body, R = r, V = v, UT = ut, Target = targetBody, HorizonUT = horizonUT,
                 WantedPeriapsis = wantedPeriapsisRadius, WantedInclinationDeg = wantedInclinationDeg,
                 PlannedArrivalUT = plannedArrivalUT, MaxDv = maxDeltaV > 0 ? maxDeltaV : MaxDeltaV,
+                WantedPlaneNormal = IsFinite(wantedPlaneNormal) && wantedPlaneNormal.magnitude > 0
+                    ? wantedPlaneNormal.normalized : Vector3d.zero,
             };
             double mu = s[targetBody].Mu;
             bool found = false;
@@ -132,6 +149,63 @@ namespace K2D2.Transfer
             }
             return found;
         }
+
+        // Below this angle (°) between a wanted plane's normal and the arrival asymptote, a plane aim
+        // gains at most this much on the 90° left, and its direction would swing with every small
+        // change of the asymptote during the solve: the periapsis alone is aimed at.
+        public const double PlaneAimMinDeg = 1;
+
+        // The unit incoming asymptote Ŝ of an open conic (the velocity's direction far before the
+        // periapsis), in the frame of r and v; zero for a closed conic.
+        public static Vector3d IncomingAsymptote(Vector3d r, Vector3d v, double mu)
+        {
+            var el = OrbitMath.Elements(r, v, mu);
+            if (el.IsClosed || !(el.Eccentricity > 1))
+                return Vector3d.zero;
+            double e = el.Eccentricity;
+            var eHat = el.EccentricityVector / e;
+            var qHat = Vector3d.Cross(el.AngularMomentum, eHat).normalized;
+            var sHat = (1 / e) * eHat + Math.Sqrt(1 - 1 / (e * e)) * qHat;
+            return IsFinite(sHat) ? sHat.normalized : Vector3d.zero;
+        }
+
+        // The normal of the plane through Ŝ closest to the plane of normal n̂: normalize(n̂ − (n̂·Ŝ)Ŝ);
+        // zero when that length is under minLength (n̂ along Ŝ: every such plane is as far).
+        public static Vector3d ClosestPlaneNormal(Vector3d sHat, Vector3d targetNormal, double minLength = 1e-6)
+        {
+            var h = targetNormal - Vector3d.Dot(targetNormal, sHat) * sHat;
+            double length = h.magnitude;
+            if (!(length >= minLength) || !IsFinite(h))
+                return Vector3d.zero;
+            return h / length;
+        }
+
+        // The angle (°) left between that closest plane and the wanted one: asin(min(1, |n̂·Ŝ|)).
+        public static double PlaneResidualDeg(Vector3d sHat, Vector3d targetNormal) =>
+            Math.Asin(Math.Min(1, Math.Abs(Vector3d.Dot(targetNormal, sHat)))) * 180 / Math.PI;
+
+        // The angle (°) between the arrival orbit's plane and the plane of normal targetNormal (target
+        // body's own frame), flying deltaV now; NaN without an arrival before horizonUT. Logs, tests.
+        public static double ArrivalPlaneErrorDeg(BodySystem s, int body, Vector3d r, Vector3d v, double ut, Vector3d deltaV,
+            int targetBody, Vector3d targetNormal, double horizonUT)
+        {
+            if (s == null || targetBody < 0 || targetBody >= s.Count || !(horizonUT > ut) || !(targetNormal.magnitude > 0))
+                return double.NaN;
+            var patches = PatchedPropagator.Propagate(s, body, r, v + deltaV, ut, horizonUT, null);
+            foreach (var p in patches)
+                if (p.Body == targetBody)
+                {
+                    var frame = s[targetBody].FrameToCommon;
+                    var h = Vector3d.Cross(CelestialFrames.ToLocal(frame, p.StartR), CelestialFrames.ToLocal(frame, p.StartV));
+                    if (!(h.magnitude > 0))
+                        return double.NaN;
+                    return AngleDeg(h.normalized, targetNormal.normalized);
+                }
+            return double.NaN;
+        }
+
+        static double AngleDeg(Vector3d a, Vector3d b) =>
+            Math.Atan2(Vector3d.Cross(a, b).magnitude, Vector3d.Dot(a, b)) * 180 / Math.PI;
 
         // Whether the conic (r, v around a body of SOI radius soi) still has its periapsis ahead
         // inside the SOI: a closed orbit within the SOI always does, an open path only inbound.
@@ -432,6 +506,7 @@ namespace K2D2.Transfer
             public int Body, Target;
             public Vector3d R, V;
             public double UT, HorizonUT, WantedPeriapsis, WantedInclinationDeg, PlannedArrivalUT;
+            public Vector3d WantedPlaneNormal; // unit, the target's own frame; zero: none
             public double MaxDv = MaxDeltaV;
 
             // The residual for the trajectory flown with 'dv': on an encounter, the B-plane error (the
@@ -508,11 +583,8 @@ namespace K2D2.Transfer
                 }
 
                 double vInf = Math.Sqrt(-mu / el.SemiMajorAxis);
-                double e = el.Eccentricity;
                 var h = el.AngularMomentum;
-                var eHat = el.EccentricityVector / e;
-                var qHat = Vector3d.Cross(h, eHat).normalized;
-                var sHat = (1 / e) * eHat + Math.Sqrt(1 - 1 / (e * e)) * qHat; // incoming asymptote
+                var sHat = IncomingAsymptote(startR, startV, mu);
                 var bVec = Vector3d.Cross(sHat, h) / vInf;
                 double bWanted = WantedPeriapsis * Math.Sqrt(1 + 2 * mu / (WantedPeriapsis * vInf * vInf));
 
@@ -520,7 +592,23 @@ namespace K2D2.Transfer
                 double sinDecl = tRaw.magnitude; // sine of the angle between the asymptote and the axis
                 var tHat = sinDecl < 1e-6 ? Vector3d.Cross(sHat, new Vector3d(1, 0, 0)).normalized : tRaw / sinDecl;
                 var rHat = Vector3d.Cross(sHat, tHat);
-                if (double.IsNaN(WantedInclinationDeg) || sinDecl < 1e-6)
+
+                // A plane (4.5): B aimed along Ŝ × ĥ, ĥ the closest plane through Ŝ (B̂ = Ŝ × ĥ, as
+                // bVec = Ŝ × h / v∞); the periapsis alone when the wanted normal is too near Ŝ.
+                bool planeAim = WantedPlaneNormal.magnitude > 0;
+                var hAim = planeAim
+                    ? ClosestPlaneNormal(sHat, WantedPlaneNormal, Math.Sin(PlaneAimMinDeg * Math.PI / 180))
+                    : Vector3d.zero;
+                if (hAim.magnitude > 0)
+                {
+                    var planeError = bVec - bWanted * Vector3d.Cross(sHat, hAim);
+                    eval.Kind = 2;
+                    eval.Residual = new[] { Vector3d.Dot(planeError, tHat), Vector3d.Dot(planeError, rHat) };
+                    eval.Norm = Math.Sqrt(eval.Residual[0] * eval.Residual[0] + eval.Residual[1] * eval.Residual[1]);
+                    return eval;
+                }
+
+                if (planeAim || double.IsNaN(WantedInclinationDeg) || sinDecl < 1e-6)
                 {
                     eval.Kind = 1;
                     eval.Residual = new[] { bVec.magnitude - bWanted };

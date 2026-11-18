@@ -514,4 +514,144 @@ public class ArrivalTargetingTests
             + $"Ike entry T+{(atIke.StartUT - plan.DepartureUT) / KerbinDay:F2} d (planned arrival T+{plan.TripSeconds / KerbinDay:F2}); legs 0 flown {flown:F1} m/s");
         Assert.LessOrEqual(dv.magnitude, ArrivalTargeting.MaxDeltaV);
     }
+
+    // ---------------------------------------------------------------- plane aim (4.5, Task 1)
+
+    // A plane normal from an inclination and a longitude of the ascending node (°), in its body's frame.
+    static Vector3d PlaneNormal(double incDeg, double nodeDeg) =>
+        new Vector3d(Math.Sin(incDeg * Deg) * Math.Sin(nodeDeg * Deg), -Math.Sin(incDeg * Deg) * Math.Cos(nodeDeg * Deg), Math.Cos(incDeg * Deg));
+
+    static double Angle(Vector3d a, Vector3d b) => Math.Atan2(Vector3d.Cross(a, b).magnitude, Vector3d.Dot(a, b)) / Deg;
+
+    // The pilot's most general solve, with a plane.
+    bool SolvePlane(Flight f, Vector3d normal, double plannedUT, double horizonUT, BodySystem s, out Vector3d dv, out bool converged)
+    {
+        var watch = Stopwatch.StartNew();
+        bool ok = ArrivalTargeting.Solve(s, f.Body, f.R, f.V, f.UT, _duna, s[_duna].LowOrbitRadius, double.NaN, normal, horizonUT,
+            plannedUT, double.NaN, ArrivalTargeting.MaxDeltaV, out dv, out double rp, out double inc, out _, out _, out converged);
+        TestContext.Out.WriteLine($"plane solve ({normal.x:F4}, {normal.y:F4}, {normal.z:F4}): ok {ok}, dv {dv.magnitude:F4} m/s, Pe {rp / 1000:F3} km, "
+            + $"inclination {inc:F3}°, converged {converged}, {watch.Elapsed.TotalMilliseconds:F0} ms");
+        return ok;
+    }
+
+    Flight AtFirstCorrection(TransferPlan plan)
+    {
+        var f = Start(plan);
+        FlyBurnsTo(plan, f, plan.Steps.First(st => st.Kind == StepKind.Correction).UT);
+        return f;
+    }
+
+    Vector3d ArrivalAsymptote(Patch a) => ArrivalTargeting.IncomingAsymptote(a.StartR, a.StartV, _s[a.Body].Mu);
+
+    [Test]
+    public void IncomingAsymptote_MatchesTheVelocityFarOut()
+    {
+        double mu = _s[_duna].Mu, rp = 420_000, vInf = 1000;
+        double e = 1 + rp * vInf * vInf / mu, a = -mu / (vInf * vInf), p = a * (1 - e * e), r = 0.9 * _s[_duna].Soi;
+        double nu = -Math.Acos((p / r - 1) / e); // inbound
+        var eHat = new Vector3d(Math.Cos(0.3), Math.Sin(0.3), 0);
+        var qHat = new Vector3d(-Math.Sin(0.3) * Math.Cos(0.4), Math.Cos(0.3) * Math.Cos(0.4), Math.Sin(0.4));
+        var rv = r * (Math.Cos(nu) * eHat + Math.Sin(nu) * qHat);
+        var vv = Math.Sqrt(mu / p) * (-Math.Sin(nu) * eHat + (e + Math.Cos(nu)) * qHat);
+        var sHat = ArrivalTargeting.IncomingAsymptote(rv, vv, mu);
+        Assert.AreEqual(1, sHat.magnitude, 1e-12);
+        Assert.Less(Angle(sHat, vv), 0.5);
+        Assert.AreEqual(Vector3d.zero, ArrivalTargeting.IncomingAsymptote(new Vector3d(420_000, 0, 0), new Vector3d(0, Math.Sqrt(mu / 420_000), 0), mu));
+    }
+
+    [Test]
+    public void ClosestPlaneNormal_IsPerpendicularToTheAsymptote_AndNearestToTheTarget()
+    {
+        var rng = new Random(4501);
+        Vector3d Unit() => new Vector3d(rng.NextDouble() - 0.5, rng.NextDouble() - 0.5, rng.NextDouble() - 0.5).normalized;
+        for (int k = 0; k < 50; k++)
+        {
+            var sHat = Unit();
+            var n = Unit();
+            var h = ArrivalTargeting.ClosestPlaneNormal(sHat, n);
+            Assert.Less(Math.Abs(Vector3d.Dot(h, sHat)), 1e-12);
+            Assert.AreEqual(1, h.magnitude, 1e-12);
+            Assert.AreEqual(ArrivalTargeting.PlaneResidualDeg(sHat, n), Angle(h, n), 1e-9);
+            // No other plane through the asymptote is nearer: a few turned about it.
+            foreach (double turn in new[] { -10.0, -1, 1, 10 })
+                Assert.GreaterOrEqual(Angle(OrbitMath.Rotate(h, sHat, turn * Deg), n), Angle(h, n) - 1e-9);
+        }
+        var s1 = Unit();
+        Assert.AreEqual(Vector3d.zero, ArrivalTargeting.ClosestPlaneNormal(s1, s1));
+        Assert.AreEqual(90, ArrivalTargeting.PlaneResidualDeg(s1, s1), 1e-6);
+    }
+
+    [Test]
+    public void PlaneTarget_KerbinDuna_ArrivesInTheClosestPlane()
+    {
+        var plan = KerbinToDuna();
+        var f = AtFirstCorrection(plan);
+        var n = PlaneNormal(35, 70);
+        Assert.IsTrue(SolvePlane(f, n, plan.ArrivalUT, Horizon(plan), _s, out var dv, out bool converged));
+        Assert.IsTrue(converged);
+        var after = Arrival(f, dv, Horizon(plan), _duna);
+        Assert.IsNotNull(after);
+        Assert.AreEqual(_s[_duna].LowOrbitRadius, after.PeriapsisRadius, 1000);
+        double residual = ArrivalTargeting.PlaneResidualDeg(ArrivalAsymptote(after), n);
+        double error = ArrivalTargeting.ArrivalPlaneErrorDeg(_s, f.Body, f.R, f.V, f.UT, dv, _duna, n, Horizon(plan));
+        TestContext.Out.WriteLine($"  plane error {error:F4}° against the residual {residual:F4}° (asymptote of the arrival)");
+        Assert.AreEqual(residual, error, 0.2);
+        Assert.Less(dv.magnitude, 150);
+    }
+
+    [Test]
+    public void PlaneTarget_InTheAsymptotePlane_ExactPlane()
+    {
+        var plan = KerbinToDuna();
+        var f = AtFirstCorrection(plan);
+        var before = Arrival(f, Vector3d.zero, Horizon(plan), _duna);
+        Assert.IsNotNull(before);
+        var sHat = ArrivalAsymptote(before);
+        // A plane through the asymptote, 60° from the uncorrected arrival's plane.
+        var h0 = Vector3d.Cross(before.StartR, before.StartV).normalized;
+        var n = OrbitMath.Rotate(h0, sHat, 60 * Deg);
+        Assert.Less(Math.Abs(Vector3d.Dot(n, sHat)), 1e-9);
+        Assert.IsTrue(SolvePlane(f, n, plan.ArrivalUT, Horizon(plan), _s, out var dv, out _));
+        double error = ArrivalTargeting.ArrivalPlaneErrorDeg(_s, f.Body, f.R, f.V, f.UT, dv, _duna, n, Horizon(plan));
+        TestContext.Out.WriteLine($"  plane error {error:F4}°, dv {dv.magnitude:F3} m/s");
+        Assert.Less(error, 0.05);
+    }
+
+    // Review Focus 1: the target's frame turned, its normal given in it: the same burn.
+    [Test]
+    public void PlaneTarget_TurnedTargetFrame_SameBurn()
+    {
+        var plan = KerbinToDuna();
+        var f = AtFirstCorrection(plan);
+        var nCommon = PlaneNormal(35, 70);
+        Assert.IsTrue(SolvePlane(f, nCommon, plan.ArrivalUT, Horizon(plan), _s, out var dvIdentity, out _));
+        double errIdentity = ArrivalTargeting.ArrivalPlaneErrorDeg(_s, f.Body, f.R, f.V, f.UT, dvIdentity, _duna, nCommon, Horizon(plan));
+
+        var nodes = Enumerable.Range(0, _s.Count).Select(i => _s[i]).ToList();
+        var q = QuaternionD.AngleAxis(50, new Vector3d(0, 0, 1)) * QuaternionD.AngleAxis(30, new Vector3d(1, 0, 0));
+        nodes[_duna].FrameToCommon = q;
+        var turned = new BodySystem(nodes);
+        var nLocal = CelestialFrames.ToLocal(q, nCommon);
+        Assert.IsTrue(SolvePlane(f, nLocal, plan.ArrivalUT, Horizon(plan), turned, out var dvTurned, out _));
+        double errTurned = ArrivalTargeting.ArrivalPlaneErrorDeg(turned, f.Body, f.R, f.V, f.UT, dvTurned, _duna, nLocal, Horizon(plan));
+        Assert.AreEqual(0, (dvTurned - dvIdentity).magnitude, 1e-3);
+        Assert.AreEqual(errIdentity, errTurned, 1e-6);
+    }
+
+    // Review Focus 2: the wanted normal along the asymptote: the periapsis alone, no NaN.
+    [Test]
+    public void PlaneTarget_AlongTheAsymptote_PeriapsisOnly()
+    {
+        var plan = KerbinToDuna();
+        var f = AtFirstCorrection(plan);
+        var before = Arrival(f, Vector3d.zero, Horizon(plan), _duna);
+        var n = ArrivalAsymptote(before);
+        Assert.IsTrue(SolvePlane(f, n, plan.ArrivalUT, Horizon(plan), _s, out var dvPlane, out _));
+        Assert.IsTrue(ArrivalTargeting.Solve(_s, f.Body, f.R, f.V, f.UT, _duna, _s[_duna].LowOrbitRadius, double.NaN, Horizon(plan),
+            plan.ArrivalUT, double.NaN, ArrivalTargeting.MaxDeltaV, out var dvNone, out _, out _, out _, out _, out _));
+        Assert.IsFalse(double.IsNaN(dvPlane.magnitude));
+        Assert.AreEqual(0, (dvPlane - dvNone).magnitude, 1e-6);
+        double error = ArrivalTargeting.ArrivalPlaneErrorDeg(_s, f.Body, f.R, f.V, f.UT, dvPlane, _duna, n, Horizon(plan));
+        Assert.AreEqual(90, error, 1.5);
+    }
 }
