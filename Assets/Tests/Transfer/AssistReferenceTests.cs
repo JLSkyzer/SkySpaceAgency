@@ -29,9 +29,11 @@ public static class AssistCases
 
     // Kerbin -> Duna: no flyby pays (pinned below 3 %), and the Mun departure saving.
     public const double DunaUT0 = 0;
-    // Negative: from 100 km, the Mun costs 156 m/s more than a direct departure for this window's
-    // 960.5 m/s excess (48 flyby dates x 16 flights x 360 phases).
-    public const double MunDepartureSaving = -156.043;
+    // Negative: from 100 km, the Mun costs 13 m/s more than a direct departure for this window's
+    // 960.5 m/s excess (48 flyby dates x 16 flights from 0.3 to 1.5 Hohmann x 360 phases). With
+    // flights from 0.5 Hohmann only, as first written, the reference found -156 m/s: the cheap
+    // flybys come on fast injections (the production search flies one of 0.46 Hohmann).
+    public const double MunDepartureSaving = -13.20;
 }
 
 public class AssistReferenceTests

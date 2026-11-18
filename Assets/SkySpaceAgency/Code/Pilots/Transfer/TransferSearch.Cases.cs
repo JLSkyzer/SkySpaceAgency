@@ -275,6 +275,46 @@ namespace K2D2.Transfer
 
             TransferPlan Porkchop()
             {
+                var candidates = PorkchopCandidates(out var refusal);
+                if (candidates == null)
+                    return refusal;
+                Report(0.8f);
+                var (best, cand) = Cheapest(candidates, c => BuildPorkchop(c.t, c.tof, c.prograde));
+                // A direct descent into a moon: the moon's phase at the arrival sets the correction and
+                // the capture. Moving the arrival by fractions of the moon's period costs almost nothing
+                // on the cruise: keep the cheapest phase.
+                var entryCorrection = best.Plan.Ok && Down.Count > 1
+                    ? best.Plan.Steps.FirstOrDefault(st => st.Kind == StepKind.Correction && st.Body == Down[0])
+                    : null;
+                if (entryCorrection != null && entryCorrection.DeltaVMagnitude > PhaseShiftMinCorrection)
+                {
+                    double moonPeriod = S.OrbitalPeriod(Down[1]);
+                    for (int i = -PhaseShifts / 2; i < PhaseShifts / 2; i++)
+                    {
+                        if (i == 0)
+                            continue;
+                        var shifted = (cand.t, cand.tof + i * moonPeriod / PhaseShifts, cand.prograde);
+                        var b = BuildPorkchop(shifted.t, shifted.Item2, shifted.prograde);
+                        Trace?.Invoke(Inv($"[Transfer] arrival moved {i}/{PhaseShifts} of a {S[Down[1]].Name} period: ") +
+                            (b.Plan.Ok ? Inv($"{b.Plan.TotalDeltaV:F1} m/s") : $"refused ({b.Plan.Refusal})"));
+                        if (b.Cost < best.Cost)
+                        {
+                            best = b;
+                            cand = shifted;
+                        }
+                    }
+                }
+                Report(0.9f);
+                best = ResolveDeparture(best, shift =>
+                    BuildPorkchop(cand.t + shift * ShiftUnit(), cand.tof - shift * ShiftUnit(), cand.prograde));
+                return best.Plan;
+            }
+
+            // The porkchop's refined candidates (departure UT, flight, direction), cheapest first.
+            // Null, with the refusal, when there is none.
+            List<(double t, double tof, bool prograde)> PorkchopCandidates(out TransferPlan refusal)
+            {
+                refusal = null;
                 int k = Up.Count - 1;
                 int cF = Up[k], cT = Down[0];
                 double mu = S[Ancestor].Mu;
@@ -329,37 +369,11 @@ namespace K2D2.Transfer
 
                 var candidates = GridRefiner.Refine(grid, gridDir, t0, dt, tofLo, dTof, Cost, RefinedCandidates, Ct);
                 if (candidates.Count == 0)
-                    return Refuse(double.IsInfinity(MaxTrip) ? $"No transfer found to {S[To].Name}." : NoWindow);
-                Report(0.8f);
-                var (best, cand) = Cheapest(candidates, c => BuildPorkchop(c.t, c.tof, c.prograde));
-                // A direct descent into a moon: the moon's phase at the arrival sets the correction and
-                // the capture. Moving the arrival by fractions of the moon's period costs almost nothing
-                // on the cruise: keep the cheapest phase.
-                var entryCorrection = best.Plan.Ok && Down.Count > 1
-                    ? best.Plan.Steps.FirstOrDefault(st => st.Kind == StepKind.Correction && st.Body == Down[0])
-                    : null;
-                if (entryCorrection != null && entryCorrection.DeltaVMagnitude > PhaseShiftMinCorrection)
                 {
-                    double moonPeriod = S.OrbitalPeriod(Down[1]);
-                    for (int i = -PhaseShifts / 2; i < PhaseShifts / 2; i++)
-                    {
-                        if (i == 0)
-                            continue;
-                        var shifted = (cand.t, cand.tof + i * moonPeriod / PhaseShifts, cand.prograde);
-                        var b = BuildPorkchop(shifted.t, shifted.Item2, shifted.prograde);
-                        Trace?.Invoke(Inv($"[Transfer] arrival moved {i}/{PhaseShifts} of a {S[Down[1]].Name} period: ") +
-                            (b.Plan.Ok ? Inv($"{b.Plan.TotalDeltaV:F1} m/s") : $"refused ({b.Plan.Refusal})"));
-                        if (b.Cost < best.Cost)
-                        {
-                            best = b;
-                            cand = shifted;
-                        }
-                    }
+                    refusal = Refuse(double.IsInfinity(MaxTrip) ? $"No transfer found to {S[To].Name}." : NoWindow);
+                    return null;
                 }
-                Report(0.9f);
-                best = ResolveDeparture(best, shift =>
-                    BuildPorkchop(cand.t + shift * ShiftUnit(), cand.tof - shift * ShiftUnit(), cand.prograde));
-                return best.Plan;
+                return candidates;
             }
 
             // The cheapest built candidate; when none could be built, the first one (for its refusal).
@@ -394,10 +408,16 @@ namespace K2D2.Transfer
                 return EstimateLeave(Up.Count - 1, vinf) + EstimateArrive(0, (v2 - vT).magnitude);
             }
 
-            Built BuildPorkchop(double t, double tof, bool prograde)
+            Built BuildPorkchop(double t, double tof, bool prograde) => BuildPorkchop(t, tof, prograde, -1);
+
+            // departureMoon >= 0 (4.6): the departure flies by that moon of the vessel's body
+            // (LeaveViaMoon), and the cruise is leg 2 (decision 7 of the plan).
+            Built BuildPorkchop(double t, double tof, bool prograde, int departureMoon)
             {
                 Ct.ThrowIfCancellationRequested();
                 int k = Up.Count - 1;
+                int cruiseLeg = departureMoon >= 0 ? k + 2 : k;
+                Leg Depart(Vector3d w) => departureMoon >= 0 ? LeaveViaMoon(departureMoon, w, t) : Leave(k, w, t);
                 int cF = Up[k], cT = Down[0];
                 S.StateRelativeToParent(cF, t, out var rF, out var vF);
                 S.StateRelativeToParent(cT, t + tof, out var rT, out var vT);
@@ -416,7 +436,7 @@ namespace K2D2.Transfer
                 double mismatch = double.NaN;
                 for (int iter = 0; iter < MaxExitIterations; iter++)
                 {
-                    leg = Leave(k, aim, t);
+                    leg = Depart(aim);
                     if (!leg.Ok)
                         return Failed(leg.Refusal);
                     flight = FlyClimb(leg);
@@ -456,7 +476,7 @@ namespace K2D2.Transfer
                         predictedPe = rp;
                         if (dvAim.magnitude < 1e-3)
                             break;
-                        var aimed = Leave(k, aim + dvAim, t);
+                        var aimed = Depart(aim + dvAim);
                         if (!aimed.Ok)
                             break;
                         var aimedFlight = FlyClimb(aimed);
@@ -472,10 +492,10 @@ namespace K2D2.Transfer
                 // Aim with the estimate's descent, then choose the descent on budgeted costs (the
                 // direct one flown from the aimed cruise to the intermediate SOI), and aim again when the
                 // choice changed the leg's target.
-                var first = BuildArrival(0, wa.magnitude, t + tof, k);
+                var first = BuildArrival(0, wa.magnitude, t + tof, cruiseLeg);
                 double predicted = AimAt(first.FirstTarget);
                 var arr = flight.Ok
-                    ? ChooseArrival(wa, t + tof, k, true, Ancestor, flight.AfterR, flight.AfterV, flight.AfterUT)
+                    ? ChooseArrival(wa, t + tof, cruiseLeg, true, Ancestor, flight.AfterR, flight.AfterV, flight.AfterUT)
                     : first;
                 if (arr.FirstTarget.Body != first.FirstTarget.Body || !SameRadius(arr.FirstTarget.Pe, first.FirstTarget.Pe))
                 {
@@ -497,9 +517,15 @@ namespace K2D2.Transfer
                     plan.Warnings.Add($"Departure could not be aimed at the arrival periapsis at {S[cT].Name}: the corrections will do it.");
                 var arrival = S[cT];
                 double entry = t + tof - HyperbolicTime(arrival.LowOrbitRadius, Math.Max(1, wa.magnitude), arrival.Mu, arrival.Soi);
-                AddCorrections(plan.Steps, Ancestor, k, arr.FirstTarget, exit, leg.FirstBurnUT, t + tof, entry, arr.Notes);
+                AddCorrections(plan.Steps, Ancestor, cruiseLeg, arr.FirstTarget, exit, leg.FirstBurnUT, t + tof, entry, arr.Notes);
                 var targets = ClimbTargets(leg);
-                targets[k] = arr.FirstTarget;
+                targets[cruiseLeg] = arr.FirstTarget;
+                if (departureMoon >= 0)
+                {
+                    plan.Assist = AssistKind.Departure;
+                    plan.FlybyBody = departureMoon;
+                    plan.CaseName = CaseName + " via " + S[departureMoon].Name;
+                }
                 plan.ExcessBody = cF;
                 plan.RequiredExcess = aim;
                 return Finish(built, plan, leg.FirstBurnUT, arr.ArrivalUT, targets);

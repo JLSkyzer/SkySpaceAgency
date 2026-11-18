@@ -76,7 +76,7 @@ public static class BruteForceAssistReference
     // From a circular equatorial parking orbit around `body` (injection phase sampled at 360 points),
     // the cheapest injection + powered flyby of `moon` whose outgoing `body`-relative velocity has the
     // asymptote wantedExcess. The flyby date runs over one moon period around tExit minus the coast
-    // from the moon to the SOI; the injection's flight from 0.5 to 1.5 Hohmann. `saving` is the ideal
+    // from the moon to the SOI; the injection's flight from 0.3 to 1.5 Hohmann. `saving` is the ideal
     // straight departure (Oberth) minus that cost.
     public static double MoonDeparture(BodySystem s, int body, double parkingRadius, int moon, Vector3d wantedExcess, double tExit,
         int flybys, int tofs, out double saving)
@@ -101,7 +101,7 @@ public static class BruteForceAssistReference
                 continue;
             for (int j = 0; j < tofs; j++)
             {
-                double tof = hoh * (0.5 + 1.0 * j / (tofs - 1));
+                double tof = hoh * (0.3 + 1.2 * j / (tofs - 1));
                 for (int p = 0; p < 360; p++)
                 {
                     double phi = p * Math.PI / 180;
