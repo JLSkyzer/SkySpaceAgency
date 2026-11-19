@@ -309,7 +309,10 @@ namespace SkySpaceAgency.Landing
                     boost_back_run = false;
 
                     setMode(Mode.Off);
-                    ReleaseSasTarget();
+                    // After a vessel change current_vessel may already be the new vessel: its SAS
+                    // is not ours to touch.
+                    if (!reset_by_vessel_change)
+                        ReleaseSasTarget();
                     // A stopped run has no lower stage to drop any more.
                     staged_drops_left = 0;
                     stage_drop.Reset();

@@ -80,6 +80,9 @@ namespace SkySpaceAgency.Landing
         double efficiency;
         Vector3d response_velocity;
         double response_UT = double.NaN;
+        // Built again only at the solve rate (or for another body), not every frame.
+        ImpactModel model;
+        CelestialBodyComponent model_body;
 
         // Whether the burn steers onto the landing target; without one it only cancels the
         // sideways speed and comes straight down. Always false in this mod for now.
@@ -108,6 +111,8 @@ namespace SkySpaceAgency.Landing
             response_UT = achieved_sideways = double.NaN;
             efficiency = first_efficiency;
             attitude_error_deg = 180;
+            model = null;
+            model_body = null;
         }
 
         static double Accel(LandingPilot landing) =>
@@ -122,7 +127,12 @@ namespace SkySpaceAgency.Landing
             TimeWarpTools.SetRateIndex(0, false);
 
             var body = vessel.mainBody;
-            var model = new ImpactModel(body, now);
+            bool solve = double.IsNaN(last_solve_UT) || now - last_solve_UT >= solve_interval_s;
+            if (model == null || solve || !ReferenceEquals(model_body, body))
+            {
+                model = new ImpactModel(body, now);
+                model_body = body;
+            }
             model.StateAt(vessel.Orbit, now, out Vector3d position, out Vector3d inertial_velocity);
             if (position.magnitude < 1)
                 return;
@@ -143,7 +153,7 @@ namespace SkySpaceAgency.Landing
                 return;
             }
 
-            if (double.IsNaN(last_solve_UT) || now - last_solve_UT >= solve_interval_s)
+            if (solve)
             {
                 last_solve_UT = now;
                 SolveBraking(vessel, AtmoLandingTiming.AirOf(body), model, position, air_velocity, up, v_vertical, horizontal, height, max_accel);

@@ -1,6 +1,6 @@
 {
     "name": "SkySpaceAgency",
-    "rootNamespace": "K2D2",
+    "rootNamespace": "SkySpaceAgency",
     "references": [
         "Unity.Entities",
         "Unity.Collections",

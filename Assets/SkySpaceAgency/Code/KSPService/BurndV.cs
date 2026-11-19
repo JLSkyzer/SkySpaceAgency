@@ -172,6 +172,60 @@ namespace SkySpaceAgency.KSPService
             active_isp = (float)SkySpaceAgency.Landing.Braking.ThrustMath.CombinedIsp(active_thrusts, active_isps);
         }
 
+        /// <summary>
+        /// Δv of the current stage (the first in firing order: the highest DeltaVStageInfo.Stage),
+        /// m/s, under the current conditions (vacuum value when that one is not finite); NaN when
+        /// the game has no readout.
+        /// </summary>
+        public double CurrentStageDv()
+        {
+            var info = current_vessel.VesselComponent?.VesselDeltaV?.StageInfo;
+            if (info == null)
+                return double.NaN;
+            DeltaVStageInfo current = null;
+            foreach (DeltaVStageInfo s in info)
+                if (s != null && (current == null || s.Stage > current.Stage))
+                    current = s;
+            if (current == null)
+                return double.NaN;
+            double dv = current.DeltaVActual;
+            if (double.IsNaN(dv) || double.IsInfinity(dv))
+                dv = current.DeltaVinVac;
+            return double.IsNaN(dv) || double.IsInfinity(dv) ? double.NaN : dv;
+        }
+
+        /// <summary>The game's flags of each engine, one line each, to check IsActive in game.</summary>
+        public List<string> DescribeEngines()
+        {
+            var lines = new List<string>();
+            var engines = current_vessel.VesselComponent?.VesselDeltaV?.EngineInfo;
+            if (engines == null)
+            {
+                lines.Add("no engine info");
+                return lines;
+            }
+            for (int i = 0; i < engines.Count; i++)
+            {
+                var engine = engines[i]?.Engine;
+                if (engine == null)
+                {
+                    lines.Add($"engine {i}: null");
+                    continue;
+                }
+                try
+                {
+                    lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        "engine {0}: EngineIgnited={1} EngineShutdown={2} IsOperational={3} RequestedMassFlow={4:0.####}",
+                        i, engine.EngineIgnited, engine.EngineShutdown, engine.IsOperational, engine.RequestedMassFlow));
+                }
+                catch (System.NullReferenceException)
+                {
+                    lines.Add($"engine {i}: could not be read");
+                }
+            }
+            return lines;
+        }
+
         // public override void onGUI()
         // {
         //     if (current_vessel.VesselComponent == null) return;

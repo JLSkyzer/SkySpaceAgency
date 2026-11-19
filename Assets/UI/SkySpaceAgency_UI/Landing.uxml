@@ -167,7 +167,7 @@
                         <SsaUI.SsaToggle label="Auto Warp" name="auto_warp_atmo" tooltip="Warp time before burn" />
                         <ui:VisualElement name="warp_settings_atmo" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
                             <ui:IntegerField label="Rot. Warp Duration" value="42" name="rotation_warp_duration_atmo" tooltip="During Rotation Warp, Attitude is checked" />
-                            <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="30" max="90" name="max_rotation_atmo" label="Safe Warp Rotation °" tooltip="Max angle (stop warp when reached)" />
+                            <SsaUI.SsaSlider label-on-top="true" print-value="true" min="5" value="10" max="30" name="max_rotation_atmo" label="Safe Warp Rotation °" tooltip="Max angle (stop warp when reached)" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement name="Brake_atmo">
@@ -205,7 +205,7 @@
                         <SsaUI.SsaToggle label="Auto Warp" name="auto_warp_vac" tooltip="Warp time before burn" />
                         <ui:VisualElement name="warp_settings_vac" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
                             <ui:IntegerField label="Rot. Warp Duration" value="42" name="rotation_warp_duration_vac" tooltip="During Rotation Warp, Attitude is checked" />
-                            <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="30" max="90" name="max_rotation_vac" label="Safe Warp Rotation °" tooltip="Max angle (stop warp when reached)" />
+                            <SsaUI.SsaSlider label-on-top="true" print-value="true" min="5" value="10" max="30" name="max_rotation_vac" label="Safe Warp Rotation °" tooltip="Max angle (stop warp when reached)" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement name="Brake_vac">

@@ -65,13 +65,38 @@ namespace SkySpaceAgency.Node
 
         BurndV engines;
 
-        // Without a lit engine the burn would only sit at full throttle doing nothing, so a node
-        // run does not start without one (staging during a burn is still fine). Active is our
-        // definition (BurndV.IsActive: ignited, not shut down), from K2-D2 1.4.0.
-        bool HasActiveEngine()
+        // Without an engine that could thrust the burn would only sit at full throttle doing
+        // nothing, so a node run does not start then (staging during a burn is still fine), from
+        // K2-D2 1.4.0. Upstream wants a lit engine; whether EngineIgnited stays true at throttle 0
+        // is not verified in game, so the current stage's Δv also counts (NodeEngineCheck).
+        bool HasActiveEngine(bool refusing = false)
         {
             engines.Compute_Thrust();
-            return engines.has_active_engine;
+            bool active = engines.has_active_engine;
+            double stage_dv = engines.CurrentStageDv();
+            NodeEngineState state = NodeEngineCheck.Evaluate(active, stage_dv);
+            bool can_start = NodeEngineCheck.CanStart(state);
+            if (!can_start || NodeEngineCheck.Disagrees(active, stage_dv))
+                LogEngineFlags(state, active, stage_dv, refusing);
+            return can_start;
+        }
+
+        // The last case logged (vessel, state, lit, stage Δv > 0): the UI asks every frame.
+        object engine_log_vessel;
+        string engine_log_key;
+
+        void LogEngineFlags(NodeEngineState state, bool active, double stage_dv, bool force)
+        {
+            object vessel = current_vessel?.VesselComponent;
+            string key = $"{state}|{active}|{stage_dv > 0}";
+            if (!force && ReferenceEquals(vessel, engine_log_vessel) && key == engine_log_key)
+                return;
+            engine_log_vessel = vessel;
+            engine_log_key = key;
+            logger.LogInfo(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "[NodeExPilot] engines: {0} (lit engine {1}, current stage Δv {2:0.#} m/s)", state, active, stage_dv));
+            foreach (string line in engines.DescribeEngines())
+                logger.LogInfo($"[NodeExPilot] {line}");
         }
 
         public const string NoActiveEngineMessage = "No active engine - stage or switch one on.";
@@ -663,7 +688,7 @@ namespace SkySpaceAgency.Node
                 {
                     checkManeuver();
                     // Refused: the status line already says why (see UpdateUI).
-                    if (next_maneuver_node != null && !HasActiveEngine())
+                    if (next_maneuver_node != null && !HasActiveEngine(refusing: true))
                     {
                         logger.LogInfo("[NodeExPilot] start refused: no active engine");
                         base.isRunning = true;

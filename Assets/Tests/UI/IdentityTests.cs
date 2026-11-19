@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using SkySpaceAgency;
 using NUnit.Framework;
 using UnityEngine;
@@ -34,6 +35,33 @@ public class IdentityTests
 
         Assert.Greater(scanned, 100, "the scan found no source files");
         Assert.IsEmpty(offenders, "The mod's identity literals outside ModIdentity.cs:\n" + string.Join("\n", offenders));
+    }
+
+    // The other flavour's name left in an assembly definition (a rootNamespace, say) or in a style
+    // sheet outside its comments: a leftover of the rename between the two flavours.
+    [Test]
+    public void OtherFlavourName_NotInAsmdefOrUss()
+    {
+        string assets = Application.dataPath;
+        var files = Directory.GetFiles(assets, "*.asmdef", SearchOption.AllDirectories)
+            .Concat(Directory.GetFiles(assets, "*.uss", SearchOption.AllDirectories))
+            .Where(f => f.IndexOf("StreamingAssets", System.StringComparison.Ordinal) < 0);
+
+        string other = ModIdentity.OtherFlavourVabFormatPrefix;
+        var offenders = new List<string>();
+        int scanned = 0;
+        foreach (string file in files)
+        {
+            scanned++;
+            string text = File.ReadAllText(file);
+            if (file.EndsWith(".uss"))
+                text = Regex.Replace(text, @"/\*.*?\*/", "", RegexOptions.Singleline);
+            if (text.IndexOf(other, System.StringComparison.Ordinal) >= 0)
+                offenders.Add(file.Substring(assets.Length - "Assets".Length));
+        }
+
+        Assert.Greater(scanned, 3, "the scan found no asmdef or uss files");
+        Assert.IsEmpty(offenders, $"'{other}' outside comments in:\n" + string.Join("\n", offenders));
     }
 
     [Test]
