@@ -117,6 +117,29 @@ namespace KTools
             return copied;
         }
 
+        // A setting whose key was renamed: the value saved under oldKey is copied to key when key is
+        // absent, once, before the setting reads it (now if the file is loaded, else on its load,
+        // ahead of the setting's own load handler since this one subscribes first). oldKey stays in
+        // the file, so a mod version that still reads it keeps its value. Returns key, to be passed
+        // straight to the setting's constructor.
+        public string Renamed(string key, string oldKey)
+        {
+            if (loaded)
+                CopyKeyIfMissing(oldKey, key);
+            else
+                onloaded_event += () => CopyKeyIfMissing(oldKey, key);
+            return key;
+        }
+
+        bool CopyKeyIfMissing(string oldKey, string key)
+        {
+            if (data == null || data.ContainsKey(key) || !data.TryGetValue(oldKey, out var value))
+                return false;
+            data[key] = value;
+            needSave = true;
+            return true;
+        }
+
         protected string file_path = "";
         Dictionary<string, string> data = new Dictionary<string, string>();
 

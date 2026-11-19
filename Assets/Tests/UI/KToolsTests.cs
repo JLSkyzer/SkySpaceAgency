@@ -101,4 +101,49 @@ public class KToolsTests
         Assert.AreEqual("45", K2Slider.FormatValue(0.45f, "percent"));
         Assert.AreEqual("1,235", K2Slider.FormatValue(1234.6f, "N0"));
     }
+
+    // K2-D2 1.4.0 renamed warp.elevation/heading to attitude.*: an old file keeps its value.
+    [Test]
+    public void Renamed_OldKeyOnly_ValueCarriedOver()
+    {
+        var file = File("warp.elevation", "35");
+        var s = new ClampSetting<float>(file.Renamed("attitude.elevation", "warp.elevation"), 0, -90, 90, file);
+        Assert.AreEqual(35f, s.V);
+        Assert.AreEqual(35f, file.GetFloat("attitude.elevation", -1), "written under the new key");
+        Assert.AreEqual(35f, file.GetFloat("warp.elevation", -1), "the old key stays for older versions");
+    }
+
+    [Test]
+    public void Renamed_NewKeyPresent_OldKeyIgnored()
+    {
+        var file = SettingsFile.InMemory(new Dictionary<string, string> { { "warp.heading", "90" }, { "attitude.heading", "270" } });
+        var s = new ClampSetting<float>(file.Renamed("attitude.heading", "warp.heading"), 0, 0, 360, file);
+        Assert.AreEqual(270f, s.V);
+
+        // Read once: a later change of the new key is not overwritten by the old one.
+        s.V = 180;
+        var again = new ClampSetting<float>(file.Renamed("attitude.heading", "warp.heading"), 0, 0, 360, file);
+        Assert.AreEqual(180f, again.V);
+    }
+
+    [Test]
+    public void Renamed_NeitherKey_Default()
+    {
+        var file = SettingsFile.InMemory();
+        var s = new ClampSetting<float>(file.Renamed("attitude.elevation", "warp.elevation"), 12, -90, 90, file);
+        Assert.AreEqual(12f, s.V);
+    }
+
+    [Test]
+    public void Renamed_FileLoadedAfterConstruction_CopiedBeforeTheSettingReads()
+    {
+        var file = File("warp.elevation", "-20");
+        file.loaded = false;
+        var s = new ClampSetting<float>(file.Renamed("attitude.elevation", "warp.elevation"), 0, -90, 90, file);
+        file.loaded = true;
+        var evt = typeof(SettingsFile).GetField("onloaded_event",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        ((SettingsFile.onLoaded)evt.GetValue(file))();
+        Assert.AreEqual(-20f, s.V);
+    }
 }

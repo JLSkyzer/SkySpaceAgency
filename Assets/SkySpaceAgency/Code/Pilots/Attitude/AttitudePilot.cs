@@ -7,8 +7,10 @@ namespace K2D2.Controller
 {
     class AttitudeSettings
     {
-        public static ClampSetting<float> elevation = new("warp.elevation", 0, -90, 90);
-        public static ClampSetting<float> heading = new("warp.heading", 0, 0, 360);
+        // Renamed from warp.* in K2-D2 1.4.0; a value saved under the old key is read once, when
+        // the new one is absent.
+        public static ClampSetting<float> elevation = new(SettingsFile.Instance.Renamed("attitude.elevation", "warp.elevation"), 0, -90, 90);
+        public static ClampSetting<float> heading = new(SettingsFile.Instance.Renamed("attitude.heading", "warp.heading"), 0, 0, 360);
     }
 
     public class AttitudePilot : Pilot
