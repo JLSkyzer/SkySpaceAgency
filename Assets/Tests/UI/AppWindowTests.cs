@@ -112,13 +112,23 @@ public class AppWindowTests
     public void Minimise_KeepsOnlyTheHeader()
     {
         using var o = AppUiHarness.Open("lift", new Rect(AppWindowGeometry.DefaultPosition, AppWindowGeometry.DefaultSize), FullHd);
+        bool? raised = null;
+        o.View.minimisedChanged += m => raised = m;
         o.View.SetMinimised(true);
+        Assert.AreEqual(true, raised);
         o.Layout();
         Assert.Less(o.View.layout.height, 120);
         Assert.AreEqual(DisplayStyle.None, o.View.Tabs.resolvedStyle.display);
         o.View.SetMinimised(false);
+        Assert.AreEqual(false, raised);
         o.Layout();
         Assert.AreEqual(AppWindowGeometry.DefaultSize.y, o.View.layout.height, 0.5f);
+        Assert.AreEqual(AppWindowGeometry.MinSize.y, o.View.style.minHeight.value.value, 0.5f, "the minimum height comes back too");
+        // Minimised before any height was set inline: restoring leaves no inline height behind.
+        var fresh = new AppWindowView("t", "s");
+        fresh.SetMinimised(true);
+        fresh.SetMinimised(false);
+        Assert.AreEqual(StyleKeyword.Null, fresh.style.height.keyword);
     }
 
     [Test]

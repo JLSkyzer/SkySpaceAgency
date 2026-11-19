@@ -65,7 +65,7 @@ namespace SkySpaceAgency.AppUI
         PanelRenderer _panel;
         AppWindowView _view;
         WindowSizeSaver _size;
-        bool _open, _reclamp;
+        bool _open, _reclamp, _awaitLayout;
 
         public AppWindowView View => _view;
         public static event Action OpenClassicWindow;
@@ -143,7 +143,14 @@ namespace SkySpaceAgency.AppUI
             _size = new WindowSizeSaver(_view, AppSettings.HeightKey, AppSettings.WidthKey, AppWindowGeometry.MinSize);
 
             host.RegisterCallback<GeometryChangedEvent>(_ => _reclamp = true);
-            _view.Header.MinimiseButton.clicked += () => _size.Paused = _view.Minimised;
+            // After opening or restoring from minimised, the layout read in LateUpdate is the old one
+            // until the next layout pass: re-clamp only once the window has been laid out again.
+            _view.RegisterCallback<GeometryChangedEvent>(_ => _awaitLayout = false);
+            _view.minimisedChanged += minimised =>
+            {
+                _size.Paused = minimised;
+                if (!minimised) { _awaitLayout = true; _reclamp = true; }
+            };
             IsWindowOpen = false;
             ApplyScale();
             L.Log($"AppWindow: built, scale {UiScale.Percent(AppSettings.Scale.V)} on the game's {PanelScale.Stock():0.##}");
@@ -164,43 +171,46 @@ namespace SkySpaceAgency.AppUI
                 _open = value;
                 if (_view == null) return;
                 _view.style.display = value ? DisplayStyle.Flex : DisplayStyle.None;
-                if (value) _reclamp = true;
+                if (value) { _awaitLayout = true; _reclamp = true; }
             }
         }
 
         void ApplyScale()
         {
             if (_panel == null) return;
-            float want = UiScale.Combine(PanelScale.Stock(), AppSettings.Scale.V);
+            float stock = PanelScale.Stock();
+            float want = UiScale.Combine(stock, AppSettings.Scale.V);
             if (PanelScale.Apply(_panel.panelSettings, want))
             {
                 _reclamp = true;
-                L.Log($"AppWindow: panel scale {want:0.###} (game {PanelScale.Stock():0.###} x ours {UiScale.Percent(AppSettings.Scale.V)})");
+                L.Log($"AppWindow: panel scale {want:0.###} (game {stock:0.###} x ours {UiScale.Percent(AppSettings.Scale.V)})");
             }
         }
+
+        // Both: UITK for KSP2 may rewrite the panel scale before or after our LateUpdate in a frame.
+        void Update() => ApplyScale();
 
         void LateUpdate()
         {
             ApplyScale();
-            if (_reclamp && _open && _view?.panel != null && !_view.Minimised)
-            {
+            if (_reclamp && _open && !_awaitLayout && _view?.panel != null && !_view.Minimised && Reclamp())
                 _reclamp = false;
-                Reclamp();
-            }
         }
 
         // Keeps the window inside the panel after a scale or resolution change (the panel shrinks in panel pixels).
-        void Reclamp()
+        // False while there is no layout to clamp yet (the caller tries again next frame).
+        bool Reclamp()
         {
             Rect bounds = _view.panel.visualTree.contentRect;
             Rect now = _view.layout;
-            if (bounds.width <= 0 || now.width <= 0) return;
+            if (bounds.width <= 0 || now.width <= 0 || now.height <= 0) return false;
             Rect r = AppWindowGeometry.Restore(now.position, now.size, bounds.size);
-            if (r == now) return;
+            if (r == now) return true;
             _view.style.left = r.x;
             _view.style.top = r.y;
             _view.style.width = r.width;
             _view.style.height = r.height;
+            return true;
         }
     }
 }

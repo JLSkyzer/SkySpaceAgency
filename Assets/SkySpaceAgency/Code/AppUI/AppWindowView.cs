@@ -78,7 +78,7 @@ namespace SkySpaceAgency.AppUI
 
         readonly VisualElement _pages;
         readonly Dictionary<string, VisualElement> _pageByCode = new();
-        float _heightBeforeMinimise = -1;
+        StyleLength _heightBeforeMinimise, _minHeightBeforeMinimise;
 
         public AppHeader Header { get; }
         public AppTabBar Tabs { get; }
@@ -134,22 +134,31 @@ namespace SkySpaceAgency.AppUI
                 if (p is AppPage page) page.SetNarrow(narrow);
         }
 
-        /// <summary>Minimised, only the header shows; the height comes back when it is restored.</summary>
+        /// <summary>Raised after SetMinimised changed the state (true: minimised).</summary>
+        public event System.Action<bool> minimisedChanged;
+
+        /// <summary>
+        /// Minimised, only the header shows; the inline height and minimum height (set by the resize
+        /// handle, the size saver, the defaults) come back as they were when it is restored.
+        /// </summary>
         public void SetMinimised(bool minimised)
         {
             if (minimised == Minimised) return;
             Minimised = minimised;
             if (minimised)
             {
-                _heightBeforeMinimise = resolvedStyle.height;
+                _heightBeforeMinimise = style.height;
+                _minHeightBeforeMinimise = style.minHeight;
                 style.height = StyleKeyword.Auto;
                 style.minHeight = StyleKeyword.Auto;
             }
-            else if (_heightBeforeMinimise > 0)
+            else
             {
                 style.height = _heightBeforeMinimise;
+                style.minHeight = _minHeightBeforeMinimise;
             }
             EnableInClassList(MinimisedClass, minimised);
+            minimisedChanged?.Invoke(minimised);
         }
     }
 }

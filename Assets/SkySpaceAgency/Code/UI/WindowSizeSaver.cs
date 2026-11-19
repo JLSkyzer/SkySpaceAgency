@@ -26,8 +26,25 @@ namespace SkySpaceAgency.UI
         IVisualElementScheduledItem _pendingSave;
         bool _clampedToPanel;
 
-        /// <summary>While true, size changes are not saved (the new window, minimised to its header).</summary>
-        public bool Paused { get; set; }
+        bool _paused;
+
+        /// <summary>
+        /// While true, size changes are not saved (the new window, minimised to its header). Pausing
+        /// first writes a save still waiting for its delay, from the size laid out before the pause.
+        /// </summary>
+        public bool Paused
+        {
+            get => _paused;
+            set
+            {
+                if (value && !_paused)
+                {
+                    _pendingSave?.Pause();
+                    Save();
+                }
+                _paused = value;
+            }
+        }
 
         public WindowSizeSaver(VisualElement target, string heightKey, string widthKey, Vector2 minSize)
         {
