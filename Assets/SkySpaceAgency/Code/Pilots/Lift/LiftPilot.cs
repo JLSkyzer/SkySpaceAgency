@@ -34,7 +34,18 @@ namespace K2D2.Lift
         Vector3d direction = Vector3d.zero;
 
         // sub pilots
-        internal Ascent ascent = null;
+        // Both ascent controllers are built up front (K2-D2 1.4.0); the profile picks which one
+        // flies, and that choice is frozen for the run (run_ascent) so changing it mid-flight
+        // can't swap the controller under the burn. Until the run starts, `ascent` is the selected
+        // one (the tab's readouts).
+        internal Ascent ascent_guided = null;
+        AscentControllerBase run_ascent = null;
+
+        internal AscentControllerBase ascent => run_ascent ?? SelectedAscent();
+
+        // Only Guided exists so far; the Gravity Turn controller is added with ReactiveAscent.
+        AscentControllerBase SelectedAscent() => ascent_guided;
+
         Adjust adjust = null;
         Coasting coasting = null;   
         FinalCircularize final_circularize;
@@ -56,8 +67,8 @@ namespace K2D2.Lift
 
             current_vessel = K2D2_Plugin.Instance.current_vessel;
        
-            ascent = new Ascent(settings, ascent_path);
-            adjust = new Adjust(settings, ascent);
+            ascent_guided = new Ascent(settings, ascent_path);
+            adjust = new Adjust(settings, this);
             coasting = new Coasting(this, settings);
             final_circularize = new FinalCircularize(this, settings);
             wait_launch = new WaitLaunch(this, settings);
@@ -117,6 +128,7 @@ namespace K2D2.Lift
                         }
 
                         current_subpilot = null;
+                        run_ascent = null;
 
                         // Transfer and rendezvous goals: no plan search left running, and no warp
                         // left on by the pad wait, the trim or the hand-over.
@@ -193,7 +205,8 @@ namespace K2D2.Lift
         void OnStartController()
         {
             transfer = null;
-            ascent.transfer_plan = null;
+            ascent_guided.transfer_plan = null;
+            run_ascent = SelectedAscent();
             settings.SetApOverride(-1);
             if (settings.goal.V == LiftGoal.PrepareTransfer || settings.goal.V == LiftGoal.Rendezvous)
                 status = LiftStatus.WaitLaunch;
@@ -382,8 +395,10 @@ namespace K2D2.Lift
         
             if (current_vessel == null) return;
 
-            if (isRunning || page.isVisible)
+            if (isRunning)
                 ascent.computeValues(status == LiftStatus.Ascent);
+            else if (page.isVisible)
+                ascent.computeIdleValues(current_vessel);
 
             if (!isRunning)
                 return;

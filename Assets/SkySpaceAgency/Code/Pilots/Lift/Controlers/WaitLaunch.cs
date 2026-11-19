@@ -176,7 +176,7 @@ namespace K2D2.Lift
                 LeadMeasured = measured,
             };
             lift.transfer = p;
-            lift.ascent.transfer_plan = p;
+            lift.ascent_guided.transfer_plan = p;
 
             double lat = Math.Asin(Math.Max(-1, Math.Min(1, r.z / r.magnitude)));
             double horizon = Horizon(omega);

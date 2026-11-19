@@ -49,6 +49,37 @@ namespace K2D2.Lift
 
         public Setting<int> destination_Ap_km = new("lift.destination_Ap_km", 100);
 
+        // ASCENT PROFILE (K2-D2 1.4.0, see AscentProfile.cs) - which ExecuteController flies the
+        // Ascent phase. LiftPilot freezes the choice at the start of a run. Keys, defaults and
+        // ranges are upstream's, verbatim (test SettingKeysMatchUpstream), so a K2-D2 1.4.x
+        // settings file reads the same.
+        public EnumSetting<AscentProfile> ascent_profile = new("lift.ascent_profile", AscentProfile.Guided);
+
+        // GRAVITY TURN tunables (see ReactiveAscent.cs) - only shown/used when ascent_profile is
+        // GravityTurn.
+
+        // How fast the rocket needs to be rising (vertical speed) before it performs its pitch
+        // kick and starts the actual turn - player-tunable since heavier/higher-TWR rockets reach
+        // a good kick speed at very different times.
+        public ClampSetting<float> gravity_turn_kick_speed_mps = new("lift.gravity_turn_kick_speed_mps", 100f, 10f, 300f);
+
+        public ClampSetting<float> gravity_turn_pitch_kick_deg = new("lift.gravity_turn_pitch_kick_deg", 7.5f, 1f, 25f);
+        // Below about 25 s the climb flattens out in thick air: the air pressure soars, and the
+        // max-Q limit cutting the throttle can leave it falling.
+        public ClampSetting<float> gravity_turn_hold_time_s = new("lift.gravity_turn_hold_time_s", 45f, 25f, 120f);
+
+        // On: the kick angle and hold time are worked out just before the kick (see AscentPredictor),
+        // and their two sliders are hidden. The slider values are still the fallback if it can't
+        // make a plan.
+        public Setting<bool> gravity_turn_auto = new("lift.gravity_turn_auto", true);
+        // High enough that near the end the rocket keeps raising its apoapsis instead of levelling off
+        // in the air (see GravityTurnControl).
+        public ClampSetting<float> gravity_turn_min_throttle = new("lift.gravity_turn_min_throttle", 0.25f, 0f, 0.5f);
+
+        // Throttle limits during the turn (see ReactiveAscent.ThrottleCap).
+        public ClampSetting<float> gravity_turn_max_twr = new("lift.gravity_turn_max_twr", 2.5f, 1.2f, 5f);
+        public ClampSetting<float> gravity_turn_max_q_kpa = new("lift.gravity_turn_max_q_kpa", 40f, 10f, 100f);
+
         public ClampSetting<float> max_throttle = new ("lift.max_throttle", 1, 0.05f, 1);
         public ClampSetting<float> end_ascent_pc = new ("lift.end_ascent_pc", 0.1f, 0, 1);
 

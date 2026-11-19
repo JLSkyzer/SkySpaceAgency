@@ -16,18 +16,19 @@ namespace K2D2.Lift
     public class Adjust : ExecuteController
     {
         LiftSettings lift_settings = null;
-        Ascent ascent = null;
+        // Telemetry comes from lift.ascent, the ascent controller chosen for this run (K2-D2 1.4.0).
+        LiftPilot lift = null;
 
         TurnTo turn_to = null;
         KSPVessel current_vessel;
 
         float wanted_throttle = 0;
 
-        public Adjust(LiftSettings lift_settings, Ascent ascent)
+        public Adjust(LiftSettings lift_settings, LiftPilot lift)
         {
             current_vessel = K2D2_Plugin.Instance.current_vessel;
             this.lift_settings = lift_settings;
-            this.ascent = ascent;
+            this.lift = lift;
         }
 
         public override void Start()
@@ -48,8 +49,8 @@ namespace K2D2.Lift
 
         public override void UpdateInfoRows(System.Action<string, string> addRow)
         {
-            addRow("Altitude", $"{ascent.current_altitude_km:n2} km");
-            addRow("Apoapsis Alt.", $"{ascent.ap_km:n2} km");
+            addRow("Altitude", $"{lift.ascent.current_altitude_km:n2} km");
+            addRow("Apoapsis Alt.", $"{lift.ascent.ap_km:n2} km");
             addRow("Throttle", $"{wanted_throttle:n2}");
         }
 
@@ -64,9 +65,9 @@ namespace K2D2.Lift
 
 
             finished = false;
-            ascent.computeValues(false);
+            lift.ascent.computeValues(false);
 
-            float remaining_Ap = lift_settings.target_Ap_km - ascent.ap_km;
+            float remaining_Ap = lift_settings.target_Ap_km - lift.ascent.ap_km;
             if (remaining_Ap <= lift_settings.end_adjust_error) // we stop at 0.1% of dest AP
             {
                 // Whatever throttle the line below set last frame is still commanded - without
@@ -89,7 +90,7 @@ namespace K2D2.Lift
                 return;
             }
 
-            float delta_ap_per_second = ascent.delta_ap_per_second;
+            float delta_ap_per_second = lift.ascent.delta_ap_per_second;
 
             if (delta_ap_per_second == 0)
             {

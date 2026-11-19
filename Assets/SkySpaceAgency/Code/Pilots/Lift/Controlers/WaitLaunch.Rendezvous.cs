@@ -131,7 +131,7 @@ namespace K2D2.Lift
                 p.PlannedLaunchUT = previous.PlannedLaunchUT;
             }
             lift.transfer = p;
-            lift.ascent.transfer_plan = p;
+            lift.ascent_guided.transfer_plan = p;
 
             double lat = Math.Asin(Math.Max(-1, Math.Min(1, r.z / r.magnitude))) * 180 / Math.PI;
             double parkingPreview = RendezvousLaunch.ParkingRadius(elT.PeriapsisRadius, node.LowOrbitRadius, node.Radius, out string parkingWhy);

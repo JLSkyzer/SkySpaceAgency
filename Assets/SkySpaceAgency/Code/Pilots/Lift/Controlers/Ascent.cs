@@ -13,7 +13,7 @@ namespace K2D2.Lift
     /// <summary>
     /// rotation used for docking
     /// </summary>
-    public class Ascent : ExecuteController
+    public class Ascent : AscentControllerBase
     {
         public ILogger logger = ModIdentity.Logger("Ascent");
 
@@ -29,10 +29,9 @@ namespace K2D2.Lift
             this.ascent_path = ascent_path;
         }
 
-        public float current_altitude_km = 0;
-        public float ap_km = 0;
-        float last_ap_km = 0;
-        public float delta_ap_per_second;
+        // current_altitude_km, ap_km, delta_ap_per_second live on AscentControllerBase, shared
+        // with ReactiveAscent (see AscentProfile.cs) so Adjust/LiftUI read them the same way
+        // whichever ascent profile flies.
         float wanted_elevation;
 
         float wanted_throttle = 0;
@@ -158,41 +157,12 @@ namespace K2D2.Lift
             prev_roll_rotation_valid = true;
         }
 
-        public void computeValues(bool compute_delta_ap_per_second)
+        public override void computeValues(bool compute_delta_ap_per_second)
         {
             if (current_vessel.VesselComponent == null)
                 return;
 
-            // Reads Apoapsis/referenceBody through the IKeplerPatch/IOrbit interface rather than
-            // casting to the concrete PatchedConicsOrbit type: Redux's ECS layer hands back
-            // Redux.Ecs.Components.CurrentPatchedConicsOrbit for the actively-flown vessel, an
-            // unrelated sibling class that also implements IKeplerPatch, so a hard cast throws
-            // InvalidCastException for exactly the vessel this autopilot is flying.
-            IKeplerPatch orbit = current_vessel.VesselComponent.Orbit;
-            ap_km = (float)(orbit.Apoapsis - orbit.referenceBody.radius) / 1000;
-            current_altitude_km = (float)(current_vessel.GetSeaAltitude() / 1000);
-
-            if (last_ap_km == 0)
-            {
-                last_ap_km = ap_km;
-            }
-            else
-            {
-                float delta_ap = ap_km - last_ap_km;
-                last_ap_km = ap_km;
-                if (compute_delta_ap_per_second)
-                {
-                    // compute delta_ap_per_second only on ascent
-                    float throttle = (float)current_vessel.GetThrottle();
-                    if (throttle > 0.1f && Time.deltaTime != 0)
-                    {
-                        float new_delta_ap_per_second = delta_ap / (Time.deltaTime * throttle);
-                        delta_ap_per_second = Mathf.Lerp(delta_ap_per_second, new_delta_ap_per_second, 0.1f);
-                    }
-                    else
-                        delta_ap_per_second = 0;
-                }
-            }
+            UpdateBasicTelemetry(current_vessel, compute_delta_ap_per_second);
 
             wanted_elevation = ascent_path.compute_elevation(current_altitude_km);
         }
@@ -419,15 +389,7 @@ namespace K2D2.Lift
             heading_correction *= HeadingCorrectionWeight(horizontal_speed);
         }
 
-        // The heading correction fades in with the horizontal speed, from 0 at 5 m/s to full at
-        // 50 m/s: rising straight off the pad, the direction of a few cm/s of drift is noise and
-        // would swing the heading around (K2-D2 1.4.0).
-        public static float HeadingCorrectionWeight(double horizontal_speed_mps)
-        {
-            if (double.IsNaN(horizontal_speed_mps))
-                return 0;
-            return Mathf.Clamp01((float)(horizontal_speed_mps - 5) / 45f);
-        }
+        // HeadingCorrectionWeight: on AscentControllerBase (shared with ReactiveAscent).
 
         float SurfaceSpeedHeading() => SurfaceSpeedHeading(out _);
 
