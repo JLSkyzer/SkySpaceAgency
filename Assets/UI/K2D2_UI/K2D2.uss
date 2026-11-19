@@ -53,7 +53,7 @@ DropdownField.unity-popup-field {
 }
 
 /* K2UI.Console ("Node Infos" / dV / duration readouts, and every other tab's console-style
-   text panel) - K2UI.uss's own .console rule hardcodes a completely different font (Sax Mono,
+   text panel) - K2UI.uss's own .console rule used to name a missing font (Sax Mono,
    a K2D2-specific asset, not part of the stock theme at all) plus its own color. Same class-
    beats-type override problem as .k2-status-line above, so it never picked up the generic
    Label rule below - fixed the same way. */

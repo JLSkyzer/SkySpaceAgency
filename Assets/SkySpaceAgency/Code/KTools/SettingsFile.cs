@@ -58,6 +58,17 @@ namespace KTools
             return _named_instances.TryGetValue(name, out var existing) ? existing : null;
         }
 
+        // A loaded file that lives in memory only (never read from nor saved to disk), for the
+        // EditMode tests of the settings classes.
+        static public SettingsFile InMemory(Dictionary<string, string> values = null)
+        {
+            var file = new SettingsFile();
+            if (values != null)
+                file.data = new Dictionary<string, string>(values);
+            file.loaded = true;
+            return file;
+        }
+
         public List<IResettable> reset_register = new();
 
         public void Reset(string chapter = null)

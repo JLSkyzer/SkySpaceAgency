@@ -5,6 +5,7 @@
 ### From K2-D2 1.4.0 / 1.4.1 (IanMealworm; window fixes by LeoMarinDev)
 
 - **Scenes and campaigns** (K2-D2 1.4.1; not yet flown in game): the pilots are stopped once when the flight scene is left, not on every frame after; **photo mode counts as flight**, so a landing or a burn keeps flying while the player takes a picture (the window hides, then comes back); leaving a campaign closes the window and stops the pilots; nothing of the mod runs in a campaign that has it off (the rails warp watchdog included), except giving back a physics warp one of our burns started. The game's developer console is no longer forced shut every frame. No more "skipped by serialization" warnings at startup.
+- **Settings and text fixes** (K2-D2 1.4.0): a slider setting read back from the settings file is kept within its range (before, only the slider clamped it; the installed settings files of 2026-11-19 hold no value out of range), and a field showing an out-of-range value is put back; durations print their tenths of a second (".9", not the milliseconds); **Reset All** (About) also resets both Land profiles' files; "@schlosrat" spelled right in the credits; a missing font reference removed from the console style.
 
 ### Changed
 
