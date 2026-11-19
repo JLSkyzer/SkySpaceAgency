@@ -401,3 +401,36 @@ Plan `docs/superpowers/plans/2026-11-19-new-ui-foundations.md`. Captures de réf
 11. Onglet « Orbit » (ou un autre onglet de vol) : le message « moves to this window in step 2 », et « Classic window »
     ouvre la fenêtre classique.
 
+## 27. Nouvelle interface, étape 2 : tous les onglets (2026-11-19)
+
+Plan `docs/superpowers/plans/2026-11-19-new-ui-tab-migration.md`, inventaire `docs/superpowers/notes/new-ui-inventory/`
+(chaque fichier finit par une liste « Not verified in game » à reprendre ici onglet par onglet). Captures de référence :
+`docs/design/ui/migration/`. La section 26 (fenêtre, déplacement, taille, échelle) reste à faire aussi.
+
+1. **Bascule.** Alt+Y et le bouton d'AppBar ouvrent la nouvelle fenêtre ; le bouton d'AppBar reste allumé tant qu'elle
+   est ouverte. SETTINGS > Interface > « Classic UI » : Alt+Y ouvre l'ancienne fenêtre, jamais les deux à la fois ; son
+   bouton « New UI » revient à la nouvelle. Une erreur d'onglet n'apparaît qu'une fois dans le log
+   (`AppWindow: tab '…' update failed`) : n'en voir aucune.
+2. **En-tête.** Puces : nom du vaisseau (point vert pendant un vol de pilote), « corps · situation », Δv, TWR.
+3. **Onglet allumé.** L'onglet du pilote qui vole s'affiche en vert.
+4. **NODES.** Liste des nœuds réels, Circularize AP/PE, Start/Running…, Abort, pause en fin, sections Node info et
+   Advanced (Reset), navball (sens du repère à vérifier), carte « Hold attitude » (élévation, cap, Hold/Release).
+5. **ORBIT.** Vue de dessus : orbite actuelle cyan, orbite visée dorée, burns bleus ; Create nodes puis Start/Stop ;
+   capture depuis un survol ; frise des étapes.
+6. **LIFT.** Tous les buts (Orbit, Prepare transfer, Rendezvous), profils Guided et Gravity Turn ; courbe prévue et
+   trajectoire volée ; tuiles et barres d'étages ; statuts du pilote dans la pastille.
+7. **LAND.** Profil atmosphère / vide qui suit le corps, modes, cible (liste, carte, coordonnées, « Here »), étage
+   choisi, précision, Apply du coefficient de traînée, profil de descente, chaleur, Brake/Land.
+8. **TRANSFER.** Tuiles de destination, arrivée, Plan / Re-plan / Cancel search, choix Direct / Via, Start, Resume,
+   Cancel saved plan, carte (sens de l'arc, angle de phase), budget Δv.
+9. **RENDEZVOUS.** Liste des cibles avec distances, mode Rendezvous / + Dock / Dock only, ports et « Change », Prepare
+   only, chaîne vers un autre corps, vue d'approche, CHECKS, tuile RCS LEFT (lecture du MonoPropellant à vérifier).
+10. **SETTINGS.** Échelle (section 26), Classic UI, barre compacte, auto-staging, warp des burns, debug, Reset All (deux
+    clics), crédits complets, version.
+11. **RETURN.** Page « planned », contrôles grisés, badge PLANNED dans la barre d'onglets.
+12. **Barre compacte.** Fenêtre fermée pendant un vol : la barre apparaît en haut (pilote, phase, valeurs, Stop, ouvrir
+    la fenêtre) ; corail quand la garde de chauffe agit ; disparaît à la fin du vol ou si on la coupe dans SETTINGS.
+13. **Réglages partagés.** Changer un réglage dans la nouvelle fenêtre puis passer en Classic UI : l'ancienne montre la
+    même valeur (et l'inverse). Relancer le jeu : les valeurs restent.
+14. **Fenêtre basse.** À 760 x 480, la frise défile avec les colonnes ; la barre d'actions reste visible.
+
