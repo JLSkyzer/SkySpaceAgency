@@ -19,17 +19,6 @@ namespace K2D2.KSPService
 
         public VesselVehicle VesselVehicle;
 
-        private FlightCtrlState flightCtrlState;
-        private VesselDataProvider VesselDataProvider;
-
-        public KSPVessel()
-        {
-            // VesselComponent = GetActiveSimVessel();
-            // VesselVehicle = GetActiveSimVehicle();
-            // VesselDataProvider = this.Game.ViewController.DataProvider.VesselDataProvider;
-            // telemetryDataProvider = this.Game.ViewController.DataProvider.TelemetryDataProvider;
-        }
-
         static KSPVessel _current;
 
         public static KSPVessel current
@@ -46,7 +35,6 @@ namespace K2D2.KSPService
             VesselComponent = GetActiveSimVessel();
             VesselVehicle = GetActiveSimVehicle();
             if (Game == null || Game.ViewController == null) return;
-            VesselDataProvider = this.Game.ViewController.DataProvider.VesselDataProvider;
             telemetryDataProvider = this.Game.ViewController.DataProvider.TelemetryDataProvider;
         }
 
@@ -71,7 +59,6 @@ namespace K2D2.KSPService
             if (!Game.ViewController.TryGetActiveVehicle(out var vehicle)) return null;
             return vehicle as VesselVehicle;
         }
-
 
         ///////////////////////// from former Vessel Infos /////////////
 
@@ -142,15 +129,7 @@ namespace K2D2.KSPService
             VesselVehicle.SetSpeedDisplayMode(mode);
         }
 
-        // Available Instructions===========================================================================================
-
-
-        // Values
-        // public void SetThrottle(float throttle)
-        // {
-        //     flightCtrlState.mainThrottle = throttle;
-        // }
-
+        // Control inputs===================================================================================================
 
         public float X
         {
@@ -263,206 +242,11 @@ namespace K2D2.KSPService
             }
         }
 
-        public float Yaw
-        {
-            get
-            {
-                if (VesselVehicle == null) return 0;
-                return VesselVehicle.yaw;
-            }
-            set
-            {
-                if (VesselVehicle == null) return;
-
-                value = Mathf.Clamp(value, -1, 1);
-
-                var update = new FlightCtrlStateIncremental
-                {
-                    yaw = value
-                };
-
-                VesselVehicle.AtomicSet(update);
-            }
-        }
-
-        public float PitchTrim
-        {
-            get
-            {
-                if (VesselVehicle == null) return 0;
-                return VesselVehicle.pitchTrim;
-            }
-            set
-            {
-                if (VesselVehicle == null) return;
-
-                value = Mathf.Clamp(value, -1, 1);
-
-                var update = new FlightCtrlStateIncremental
-                {
-                    pitchTrim = value
-                };
-
-                VesselVehicle.AtomicSet(update);
-            }
-        }
-
-        public float RollTrim
-        {
-            get
-            {
-                if (VesselVehicle == null) return 0;
-                return VesselVehicle.rollTrim;
-            }
-            set
-            {
-                if (VesselVehicle == null) return;
-
-                value = Mathf.Clamp(value, -1, 1);
-
-                var update = new FlightCtrlStateIncremental
-                {
-                    rollTrim = value
-                };
-
-                VesselVehicle.AtomicSet(update);
-            }
-        }
-
-        public float YawTrim
-        {
-            get
-            {
-                if (VesselVehicle == null) return 0;
-                return VesselVehicle.yawTrim;
-            }
-            set
-            {
-                if (VesselVehicle == null) return;
-
-                value = Mathf.Clamp(value, -1, 1);
-
-                var update = new FlightCtrlStateIncremental
-                {
-                    yawTrim = value
-                };
-
-                VesselVehicle.AtomicSet(update);
-            }
-        }
-
-        public void SetWheelSteer(float wheelSteer)
-        {
-            flightCtrlState.wheelSteer = wheelSteer;
-        }
-
-        public void SetWheelThrottle(float wheelThrottle)
-        {
-            flightCtrlState.wheelThrottle = wheelThrottle;
-        }
-
-        // Trims
-        public void SetWheelSteerTrim(float wheelSteerTrim)
-        {
-            flightCtrlState.wheelSteerTrim = wheelSteerTrim;
-        }
-
-        // Input
-
-        public void SetInputPitch(float inputPitch)
-        {
-            flightCtrlState.inputPitch = inputPitch;
-        }
-
-        public void SetInputRoll(float inputRoll)
-        {
-            flightCtrlState.inputRoll = inputRoll;
-        }
-
-        public void SetInputYaw(float inputYaw)
-        {
-            flightCtrlState.inputYaw = inputYaw;
-        }
-
-        //==================================================================================================================
-
-        /// <summary>
-        /// Start a set of instructions. Has to be called before any other instruction.
-        /// See Instruction Set for all available instructions.
-        /// Wipes the previous instruction set.
-        /// Fetches the VesselComponent.
-        /// To Execute the instruction set call ExecuteControlInstruction()
-        /// </summary>
-        public void StartControlInstruction()
-        {
-            // Get the active Vessel
-            VesselComponent = GetActiveSimVessel();
-            // Create a new Flight Instruction set of typ: FlightCtrlState
-            flightCtrlState = new FlightCtrlState()
-            {
-                mainThrottle = VesselComponent.flightCtrlState.mainThrottle,
-            };
-        }
-
-        /// <summary>
-        /// Executes the instruction set.
-        /// </summary>
-
-        public void ExecuteControlInstruction()
-        {
-            // Send the new flight instructions to the Vessel
-            VesselComponent.SetFlightControlState(flightCtrlState);
-            // Sync the VesselDataProvider and VesselComponent
-            VesselDataProvider.SyncTo(VesselComponent);
-            // Execute the instruction
-            Game.ViewController.DataProvider.ActiveVessel.SetValueInternal(VesselDataProvider);
-        }
-
-        // =================================================================================================================
-
         // AutoPilot========================================================================================================
-        // Note: No Instruction set needed can be called as is
-
 
         public VesselAutopilot Autopilot => VesselComponent == null ? null : VesselComponent.Autopilot;
 
-        /// <summary>
-        /// Enables or disables the SAS
-        /// 
-        /// </summary>
-        /// <param name="sas"></param>
-        public void SetSAS(bool sas)
-        {
-            Game.ViewController.DataProvider.TelemetryDataProvider.SASRetrograde.SetValueInternal(sas);
-        }
-
-
         // Telemetry Data===================================================================================================
-
-        /// <summary>
-        /// Retrieve the current activation value of yaw
-        /// </summary>
-        public double GetYaw()
-        {
-            return VesselComponent.flightCtrlState.yaw;
-        }
-
-
-        /// <summary>
-        /// Retrieve the current activation value of pitch
-        /// </summary>
-        public double GetPitch()
-        {
-            return VesselComponent.flightCtrlState.pitch;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of roll
-        /// </summary>
-        public double GetRoll()
-        {
-            return VesselComponent.flightCtrlState.roll;
-        }
 
         /// <summary>
         /// Retrieve the current activation value of throttle
@@ -472,81 +256,7 @@ namespace K2D2.KSPService
             return VesselComponent.flightCtrlState.mainThrottle;
         }
 
-        /// <summary>
-        /// Retrieve the current activation value of wheelSteer
-        /// </summary>
-        public double GetWheelSteer()
-        {
-            return VesselComponent.flightCtrlState.wheelSteer;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of wheelThrottle
-        /// </summary>
-        public double GetWheelThrottle()
-        {
-            return VesselComponent.flightCtrlState.wheelThrottle;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of pitchTrim
-        /// </summary>
-        public double GetPitchTrim()
-        {
-            return VesselComponent.flightCtrlState.pitchTrim;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of yawTrim
-        /// </summary>
-        public double GetYawTrim()
-        {
-            return VesselComponent.flightCtrlState.yawTrim;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of rollTrim
-        /// </summary>
-        public double GetRollTrim()
-        {
-            return VesselComponent.flightCtrlState.rollTrim;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of wheelSteerTrim
-        /// </summary>
-        public double GetWheelSteerTrim()
-        {
-            return VesselComponent.flightCtrlState.wheelSteerTrim;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of inputPitch
-        /// </summary>
-        public double GetInputPitch()
-        {
-            return VesselComponent.flightCtrlState.inputPitch;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of inputRoll
-        /// </summary>
-        public double GetInputRoll()
-        {
-            return VesselComponent.flightCtrlState.inputRoll;
-        }
-
-        /// <summary>
-        /// Retrieve the current activation value of inputYaw
-        /// </summary>
-        public double GetInputYaw()
-        {
-            return VesselComponent.flightCtrlState.inputYaw;
-        }
-
-
         // =================================================================================================================
-
 
         // General Vessel Data===================================================================================================
 
@@ -558,7 +268,6 @@ namespace K2D2.KSPService
             // member, only GetValue(). Reverted.
             return Game.ViewController.DataProvider.TelemetryDataProvider.AltimeterDisplayMode.GetValue();
         }
-
 
         public bool Landed()
         {
@@ -581,7 +290,6 @@ namespace K2D2.KSPService
             return telemetryDataProvider.GetAltitudeDisplayValue(AltimeterDisplayMode.GroundLevel);
         }
 
-
         public double GetSeaAltitude()
         {
             return telemetryDataProvider.GetAltitudeDisplayValue(AltimeterDisplayMode.SeaLevel);
@@ -592,76 +300,24 @@ namespace K2D2.KSPService
             return Math.Min(GetSeaAltitude(), GetGroundAltitude());
         }
 
-        public double GetDisplayAltitude()
+        // K2-D2 1.4.0's ground height (IanMealworm): GetGlobalGroundAltitude, with the vessel's own
+        // terrain height (VesselComponent.AltitudeFromTerrain) standing in low down when the ground
+        // reading fell back to the sea-level one (see AltitudeReading). Logged only for now
+        // ("[Landing] altitude:"); no caller uses it yet.
+        public double GetGlobalGroundAltitudeWithTerrain()
         {
-            AltimeterDisplayMode altimeterDisplayMode = GetAltimeterDisplayMode();
-            return telemetryDataProvider.GetAltitudeDisplayValue(altimeterDisplayMode);
+            return AltitudeReading.GroundWithTerrainFallback(GetSeaAltitude(), GetGroundAltitude(),
+                VesselComponent.AltitudeFromTerrain);
         }
 
-
-        /// <summary>
-        /// Returns the velocity of the vessel that is displayed HUD.
-        /// </summary>
-        public double GetDisplaySpeed()
+        // K2-D2 1.4.0's GetApproxAltitude: 0 while landed or splashed, never below 0, on the
+        // terrain-aware ground height. Logged only for now; GetApproxAltitude keeps its meaning
+        // for its callers (landing, WarpTo, drone).
+        public double GetApproxAltitudeGrounded()
         {
-            // CORRECTED: reverted .Value back to .GetValue(), same reasoning as GetAltimeterDisplayMode
-            // above and the former KSPVesselInformation.cs's (deleted in 2026-11) GetManeuverNodeVector.
-            SpeedDisplayMode speedDisplayMode =
-                Game.ViewController.DataProvider.TelemetryDataProvider.SpeedDisplayMode.GetValue();
-            return telemetryDataProvider.GetSpeedDisplayValue(speedDisplayMode);
+            return AltitudeReading.Grounded(VesselComponent.Landed || VesselComponent.Splashed,
+                GetGlobalGroundAltitudeWithTerrain(), VesselComponent.SimulationObject.objVesselBehavior.BoundingSphere.radius);
         }
-
-        /// <summary>
-        /// Can be Target, Surface or Orbit.
-        /// </summary>
-        public SpeedDisplayMode GetSpeedDisplayMode()
-        {
-            // CORRECTED: reverted .Value back to .GetValue() - see GetAltimeterDisplayMode above.
-            return Game.ViewController.DataProvider.TelemetryDataProvider.SpeedDisplayMode.GetValue();
-        }
-
-        public double getApoapsis()
-        {
-            return VesselComponent.Orbit.Apoapsis;
-        }
-
-        public double getPeriapsis()
-        {
-            return VesselComponent.Orbit.Periapsis;
-        }
-
-        public double getCurrenOrbitHeight()
-        {
-            return VesselComponent.Orbit.radius;
-
-        }
-
-        public double getCurrentOrbitSpeed()
-        {
-            // orbitalSpeed only exists on the concrete PatchedConicsOrbit type, not on the
-            // IKeplerPatch interface VesselComponent.Orbit is typed as, so this getter needs an
-            // explicit cast, unlike the other getters here which use members already on
-            // IOrbit/IKeplerOrbit.
-            return ((PatchedConicsOrbit)VesselComponent.Orbit).orbitalSpeed;
-        }
-
-        public double getEccentricity()
-        {
-            return VesselComponent.Orbit.eccentricity;
-        }
-
-        public double getInclination()
-        {
-            return VesselComponent.Orbit.inclination;
-        }
-
-        public Vector getOrbitalVelocity()
-        {
-            return VesselComponent.OrbitalVelocity;
-        }
-
-
-
 
         // =================================================================================================================
 

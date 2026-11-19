@@ -225,6 +225,30 @@ namespace K2D2.Landing
             }
 
             logger.LogInfo("current_pilot " + mode);
+            LogAltitudes();
+        }
+
+        // Today's height readings next to K2-D2 1.4.0's (KSPVessel.GetApproxAltitudeGrounded,
+        // GetGlobalGroundAltitudeWithTerrain), once per phase, to compare them in game before any
+        // caller switches. Nothing reads the new values yet.
+        void LogAltitudes()
+        {
+            try
+            {
+                var v = current_vessel;
+                var c = v.VesselComponent;
+                var inv = CultureInfo.InvariantCulture;
+                logger.LogInfo(string.Format(inv,
+                    "[Landing] altitude: in {0}: approx {1:0.0} m, grounded {2:0.0} m; ground {3:0.0} m, with terrain {4:0.0} m " +
+                    "(sea {5:0.0}, ground reading {6:0.0}, AltitudeFromTerrain {7:0.0}, radius {8:0.0}, landed {9}, splashed {10})",
+                    mode, v.GetApproxAltitude(), v.GetApproxAltitudeGrounded(), v.GetGlobalGroundAltitude(),
+                    v.GetGlobalGroundAltitudeWithTerrain(), v.GetSeaAltitude(), v.GetGroundAltitude(), c.AltitudeFromTerrain,
+                    c.SimulationObject.objVesselBehavior.BoundingSphere.radius, c.Landed, c.Splashed));
+            }
+            catch (Exception e)
+            {
+                logger.LogInfo($"[Landing] altitude: in {mode}: unreadable ({e.GetType().Name})");
+            }
         }
 
         public void nextMode()
