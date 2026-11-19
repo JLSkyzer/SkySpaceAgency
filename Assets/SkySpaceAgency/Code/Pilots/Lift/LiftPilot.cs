@@ -97,6 +97,10 @@ namespace K2D2.Lift
                     return;
                 LiftStatus previous = _status;
                 _status = value;
+                // The roll program can leave SAS in locked-rotation mode at the end of the ascent;
+                // the prograde holds that follow need it off (K2-D2 1.4.0).
+                if (previous == LiftStatus.Ascent)
+                    ReleaseRollLock();
                 switch (value)
                 {
                     case LiftStatus.Off:
@@ -347,9 +351,30 @@ namespace K2D2.Lift
         public WarpTo warp_to = new WarpTo();
 
 
+        void ReleaseRollLock()
+        {
+            var sas = current_vessel?.Autopilot?.SAS;
+            if (sas != null)
+                sas.lockedMode = false;
+        }
+
         public void NextMode()
         {
-            status = LiftGoalRules.NextStatus(status, transfer?.Goal ?? settings.goal.V);
+            LiftGoal goal = transfer?.Goal ?? settings.goal.V;
+            // Without auto-circularize (Orbit goal only) the run ends once apoapsis is final, after
+            // Adjust, and leaves the circularization to the player, optionally paused (K2-D2 1.4.0).
+            if (status == LiftStatus.Adjust && LiftGoalRules.EndsAfterAdjust(goal, settings.auto_circularize.V))
+            {
+                logger.LogInfo($"[Lift] ascent complete without auto-circularize (pause {(settings.pause_on_final.V ? "on" : "off")})");
+                if (settings.pause_on_final.V)
+                {
+                    TimeWarpTools.SetRateIndex(0, false);
+                    TimeWarpTools.SetIsPaused(true);
+                }
+                EndLiftPilot(true, "Ascent complete - plan your circularization at apoapsis");
+                return;
+            }
+            status = LiftGoalRules.NextStatus(status, goal, settings.auto_circularize.V);
         }
 
         public override void Update()

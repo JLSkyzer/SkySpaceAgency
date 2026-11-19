@@ -237,6 +237,7 @@ namespace K2D2.Lift
             bool transfer_goal = settings.goal.V == LiftGoal.PrepareTransfer;
             bool rendezvous_goal = settings.goal.V == LiftGoal.Rendezvous;
             goal_drop.SetValueWithoutNotify(GoalLabel(settings.goal.V));
+            settings.UpdateCircularizeToggles(settings.goal.V);
             transfer_group.Show(transfer_goal || rendezvous_goal);
             // The heading comes from the launch window for a transfer or a rendezvous.
             heading_row.Show(!transfer_goal && !rendezvous_goal);

@@ -66,14 +66,13 @@ namespace K2D2.Lift
             get => target_Ap_km * end_adjust_pc.V/100;
         }
 
-        // Default on: run straight through ascent -> atmosphere clear -> circularize with no
-        // pause, since FinalCircularize (Controlers/Final.cs) now creates and flies the
-        // circularize burn itself instead of waiting on a manually- or FlightPlan-created node.
-        // Turning this off falls back to the old flow - Coasting.cs only actually pauses on
-        // pause_on_final below when this is off.
+        // On: the run ends with a circularization burn at apoapsis (FinalCircularize). Off (Orbit
+        // goal only; the transfer and rendezvous goals always circularize): it ends once apoapsis is
+        // final, after Adjust, optionally pausing (pause_on_final) so the player can plan their own.
         public Setting<bool> auto_circularize = new ("lift.auto_circularize", true);
 
-        public Setting<bool> pause_on_final = new ("lift.pause_on_final", true);
+        // Default off since K2-D2 1.4.0 (a saved value is kept).
+        public Setting<bool> pause_on_final = new ("lift.pause_on_final", false);
 
         public Setting<bool> heading_correction = new ("lift.heading_correction", true);
 
@@ -139,6 +138,17 @@ namespace K2D2.Lift
             end_adjust_alt.text = $"Final Adjust Alt : {target_Ap_km - end_adjust_error:n2} km";
         }
 
+        K2Toggle auto_circularize_toggle, pause_toggle;
+
+        // The transfer and rendezvous goals always circularize: no auto-circularize toggle for them,
+        // and the pause (only used without auto-circularize) is greyed whenever it cannot apply.
+        public void UpdateCircularizeToggles(LiftGoal goal)
+        {
+            bool forced = LiftGoalRules.CircularizationForced(goal);
+            auto_circularize_toggle?.Show(!forced);
+            pause_toggle?.SetEnabled(!forced && !auto_circularize.V);
+        }
+
         public void setupUI(VisualElement root)
         {
             end_ascent_alt =  root.Q<Label>("end_ascent_alt");
@@ -160,9 +170,9 @@ namespace K2D2.Lift
             root.Q<K2Slider>("end_adjust_pc").Bind(end_adjust_pc);
             end_adjust_pc.listen(v => setLabels());
 
-            root.Q<K2Toggle>("auto_circularize").Bind(auto_circularize);
+            auto_circularize_toggle = root.Q<K2Toggle>("auto_circularize").Bind(auto_circularize);
 
-            root.Q<K2Toggle>("pause_on_final").Bind(pause_on_final);
+            pause_toggle = root.Q<K2Toggle>("pause_on_final").Bind(pause_on_final);
 
             // ROLL PROGRAM - .listen(), not .listeners += (see LandingSettings.setupUI's comment on
             // precision_landing for why that distinction matters): this defaults to off, so a plain

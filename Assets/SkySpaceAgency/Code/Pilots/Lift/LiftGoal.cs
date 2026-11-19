@@ -219,10 +219,21 @@ namespace K2D2.Lift
 
         // ---------------------------------------------------------------- rendezvous goal (4.4)
 
+        // Only the Orbit goal may leave the circularization to the player ("Circularize Once Ascent
+        // Complete" off, K2-D2 1.4.0): the transfer and rendezvous goals need the parking orbit.
+        public static bool CircularizationForced(LiftGoal goal) => goal != LiftGoal.Orbit;
+
+        // The run ends after Adjust, apoapsis set, without circularizing.
+        public static bool EndsAfterAdjust(LiftGoal goal, bool autoCircularize) =>
+            !autoCircularize && !CircularizationForced(goal);
+
         // The status after a finished one. Orbit and PrepareTransfer keep the order they always had
-        // (PlaneTrim, the last, back to Off); the rendezvous goal hands over after the circularization.
-        public static LiftPilot.LiftStatus NextStatus(LiftPilot.LiftStatus finished, LiftGoal goal)
+        // (PlaneTrim, the last, back to Off); the rendezvous goal hands over after the circularization;
+        // the Orbit goal without auto-circularize stops after Adjust.
+        public static LiftPilot.LiftStatus NextStatus(LiftPilot.LiftStatus finished, LiftGoal goal, bool autoCircularize = true)
         {
+            if (finished == LiftPilot.LiftStatus.Adjust && EndsAfterAdjust(goal, autoCircularize))
+                return LiftPilot.LiftStatus.Off;
             if (goal == LiftGoal.Rendezvous && finished == LiftPilot.LiftStatus.Circularize)
                 return LiftPilot.LiftStatus.Handoff;
             if (finished == LiftPilot.LiftStatus.PlaneTrim || finished == LiftPilot.LiftStatus.Handoff)

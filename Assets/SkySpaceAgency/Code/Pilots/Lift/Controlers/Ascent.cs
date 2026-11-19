@@ -405,9 +405,10 @@ namespace K2D2.Lift
             return h < 0 ? h + 360 : h;
         }
 
+        // Orbit goal only: the transfer and rendezvous goals steer their own heading (applyDirection).
         void computeSpeedHeading()
         {
-            h_speed_heading = SurfaceSpeedHeading();
+            h_speed_heading = SurfaceSpeedHeading(out double horizontal_speed);
 
             heading_correction = GeneralTools.diffAngle(settings.heading.V, h_speed_heading);
 
@@ -415,9 +416,22 @@ namespace K2D2.Lift
                 heading_correction = 45;
             else if (heading_correction < -45)
                 heading_correction = -45;
+            heading_correction *= HeadingCorrectionWeight(horizontal_speed);
         }
 
-        float SurfaceSpeedHeading()
+        // The heading correction fades in with the horizontal speed, from 0 at 5 m/s to full at
+        // 50 m/s: rising straight off the pad, the direction of a few cm/s of drift is noise and
+        // would swing the heading around (K2-D2 1.4.0).
+        public static float HeadingCorrectionWeight(double horizontal_speed_mps)
+        {
+            if (double.IsNaN(horizontal_speed_mps))
+                return 0;
+            return Mathf.Clamp01((float)(horizontal_speed_mps - 5) / 45f);
+        }
+
+        float SurfaceSpeedHeading() => SurfaceSpeedHeading(out _);
+
+        float SurfaceSpeedHeading(out double horizontal_speed)
         {
             // use Up local coordinate as reference frame
             var Upcoords = current_vessel.VesselVehicle.Up.coordinateSystem;
@@ -427,8 +441,8 @@ namespace K2D2.Lift
 
             var UpSpeed = Up.normalized * Vector3d.Dot(SurfaceVelocity, Up);
             var LocalHSpeed = SurfaceVelocity - UpSpeed;
+            horizontal_speed = LocalHSpeed.magnitude;
 
-       
             return (float)-Vector3d.SignedAngle(LocalHSpeed.normalized, North, Up);
         }
 

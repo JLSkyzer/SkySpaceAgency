@@ -319,6 +319,45 @@ public class LiftGoalTests
         Assert.AreEqual(LiftPilot.LiftStatus.PlaneTrim, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Circularize, LiftGoal.PrepareTransfer));
     }
 
+    // K2-D2 1.4.0: "Circularize Once Ascent Complete" off ends the Orbit goal's run after Adjust;
+    // the transfer and rendezvous goals always circularize.
+    [Test]
+    public void NextStatus_OrbitWithoutAutoCircularize_EndsAfterAdjust()
+    {
+        Assert.AreEqual(LiftPilot.LiftStatus.Off, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Adjust, LiftGoal.Orbit, false));
+        Assert.AreEqual(LiftPilot.LiftStatus.Circularize, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Adjust, LiftGoal.Orbit, true));
+        Assert.AreEqual(LiftPilot.LiftStatus.Adjust, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Coasting, LiftGoal.Orbit, false), "only Adjust's end changes");
+        Assert.AreEqual(LiftPilot.LiftStatus.Coasting, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Ascent, LiftGoal.Orbit, false));
+    }
+
+    [Test]
+    public void NextStatus_TransferAndRendezvous_CircularizeWithoutAutoCircularize()
+    {
+        foreach (var goal in new[] { LiftGoal.PrepareTransfer, LiftGoal.Rendezvous })
+        {
+            Assert.IsTrue(LiftGoalRules.CircularizationForced(goal), $"{goal}");
+            Assert.IsFalse(LiftGoalRules.EndsAfterAdjust(goal, false), $"{goal}");
+            Assert.AreEqual(LiftPilot.LiftStatus.Circularize, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Adjust, goal, false), $"{goal}");
+        }
+        Assert.AreEqual(LiftPilot.LiftStatus.Handoff, LiftGoalRules.NextStatus(LiftPilot.LiftStatus.Circularize, LiftGoal.Rendezvous, false));
+        Assert.IsFalse(LiftGoalRules.CircularizationForced(LiftGoal.Orbit));
+        Assert.IsTrue(LiftGoalRules.EndsAfterAdjust(LiftGoal.Orbit, false));
+        Assert.IsFalse(LiftGoalRules.EndsAfterAdjust(LiftGoal.Orbit, true));
+    }
+
+    // ---------------------------------------------------------------- heading correction (K2-D2 1.4.0)
+
+    [Test]
+    public void HeadingCorrectionWeight_FadesInFrom5To50MetersPerSecond()
+    {
+        Assert.AreEqual(0f, Ascent.HeadingCorrectionWeight(0), 1e-6, "on the pad");
+        Assert.AreEqual(0f, Ascent.HeadingCorrectionWeight(5), 1e-6);
+        Assert.AreEqual(0.5f, Ascent.HeadingCorrectionWeight(27.5), 1e-6);
+        Assert.AreEqual(1f, Ascent.HeadingCorrectionWeight(50), 1e-6);
+        Assert.AreEqual(1f, Ascent.HeadingCorrectionWeight(400), 1e-6);
+        Assert.AreEqual(0f, Ascent.HeadingCorrectionWeight(double.NaN), 1e-6, "no reading");
+    }
+
     [Test]
     public void MissedLaunch_RendezvousReplansAll_TransferNextPass()
     {
