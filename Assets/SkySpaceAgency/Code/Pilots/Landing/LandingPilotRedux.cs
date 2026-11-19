@@ -10,7 +10,8 @@ namespace K2D2.Landing
 {
     // What Redux itself says about the landing, logged next to ours (K2-D2 1.4.0, IanMealworm):
     // its impact prediction (ReduxImpactPrediction) against compute_real_collision, and the game's
-    // own body spin against our rotation sign. Logs only: nothing here flies the vessel.
+    // own body spin against our rotation sign, and Redux's stage recovery (a recovered stage being
+    // flown). Logs only: nothing here flies the vessel.
     public partial class LandingPilot
     {
         static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -28,6 +29,7 @@ namespace K2D2.Landing
         bool redux_read_failed = false;
         bool spin_logged = false;
         float run_start_real = 0;
+        string stage_recovery_phase = null;
 
         // At each start (isRunning).
         void ResetReduxLogs()
@@ -37,6 +39,32 @@ namespace K2D2.Landing
             redux_last_state = null;
             spin_logged = false;
             run_start_real = Time.realtimeSinceStartup;
+            stage_recovery_phase = null;
+            LogStageRecovery("at landing start");
+        }
+
+        // Redux's stage recovery (ReduxStageRecovery): at the start, then on each phase change.
+        void LogStageRecovery(string when)
+        {
+            ReduxReplay replay;
+            try
+            {
+                replay = ReduxStageRecovery.Get();
+            }
+            catch (Exception e)
+            {
+                if (stage_recovery_phase != "unreadable")
+                    logger.LogInfo($"[StageRecovery] {when}: unreadable ({e.GetType().Name}: {e.Message})");
+                stage_recovery_phase = "unreadable";
+                return;
+            }
+            if (replay.phase == stage_recovery_phase)
+                return;
+            string from = stage_recovery_phase;
+            stage_recovery_phase = replay.phase;
+            logger.LogInfo($"[StageRecovery] {when}: Redux stage recovery " + (from != null ? $"{from} -> " : "") + replay.phase +
+                (replay.vessel_name != null ? string.Format(Inv, " ({0}, captured at UT {1:0.0})", replay.vessel_name, replay.captured_UT) : "") +
+                (replay.flying_stage ? " - flying a recovered stage" : ""));
         }
 
         // Every frame of a run, after computeValues.
@@ -52,6 +80,7 @@ namespace K2D2.Landing
             if (vessel == null)
                 return;
             var body = vessel.Orbit.referenceBody;
+            LogStageRecovery($"in {mode}");
 
             if (!spin_logged && (rotation_sign_body == body.Name || now_real - run_start_real >= SpinLogWait))
             {
