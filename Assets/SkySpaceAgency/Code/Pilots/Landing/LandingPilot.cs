@@ -380,6 +380,9 @@ namespace SkySpaceAgency.Landing
             gear.Reset();
             // Same events end a map pick that is still waiting (no-op when none waits).
             (_page as LandingUI)?.CancelPick("reset: vessel or scene change, or a pilot start");
+            // A pick started from the new window's LAND tab (it watches ReduxPlacement.Waiting).
+            if (ReduxPlacement.Waiting)
+                ReduxPlacement.Cancel();
             // A stage choice belongs to the vessel it was made on.
             if (reset_by_vessel_change)
                 landing_stage_choice = 0;
@@ -1080,7 +1083,7 @@ namespace SkySpaceAgency.Landing
             // check pending at touchdown completes on time even with the Land tab hidden.
             gear.Update(current_vessel?.VesselComponent);
 
-            if (!page.isVisible && !isRunning) return;
+            if (!IsShown && !isRunning) return;
             if (current_vessel == null || current_vessel.VesselVehicle == null)
                 return;
 

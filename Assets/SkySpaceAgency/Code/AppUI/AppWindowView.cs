@@ -153,7 +153,9 @@ namespace SkySpaceAgency.AppUI
         /// <summary>Every frame while open: the shown tab updates, every tab's button lights while its pilot flies.</summary>
         public void Tick()
         {
-            CurrentTab?.Tick();
+            var current = CurrentTab;
+            current?.ShownPilot?.MarkShownInNewUi();
+            current?.Tick();
             foreach (var t in _tabs)
                 Tabs.TabElement(t.Code)?.EnableInClassList(RunningClass, SafeRunning(t));
         }

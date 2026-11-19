@@ -418,7 +418,7 @@ namespace SkySpaceAgency.Lift
 
             if (isRunning)
                 ascent.computeValues(status == LiftStatus.Ascent);
-            else if (page.isVisible)
+            else if (IsShown)
                 ascent.computeIdleValues(current_vessel);
 
             if (!isRunning)

@@ -357,6 +357,7 @@ namespace SkySpaceAgency.AppUI
         // ------------------------------------------------------------------ run
 
         public override bool IsRunning => _pilot != null && _pilot.isRunning;
+        public override SkySpaceAgency.Controller.Pilot ShownPilot => _pilot;
 
         void ToggleRun()
         {

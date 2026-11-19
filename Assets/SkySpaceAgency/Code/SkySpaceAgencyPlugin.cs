@@ -358,10 +358,15 @@ namespace SkySpaceAgency
         /// <summary>Switches between the two windows (the Settings switch and the classic window's button).</summary>
         internal void SwitchUi(bool classic)
         {
-            bool open = (main_window != null && main_window.IsWindowOpen) || (app_window != null && app_window.IsWindowOpen);
-            SkySpaceAgency.AppUI.AppSettings.ClassicUi.V = classic;
+            // A window hidden by photo mode counts as open, and is not brought back by the scene rule
+            // afterwards (that would leave both windows open).
+            bool open = (main_window != null && main_window.IsWindowOpen) || (app_window != null && app_window.IsWindowOpen)
+                || window_hidden_by_scene || app_hidden_by_scene;
+            window_hidden_by_scene = app_hidden_by_scene = false;
+            // Close the old one first, while the setting still says which one drives the app bar button.
             if (main_window != null && !classic) main_window.IsWindowOpen = false;
             if (app_window != null && classic) app_window.IsWindowOpen = false;
+            SkySpaceAgency.AppUI.AppSettings.ClassicUi.V = classic;
             if (open && window_allowed) SetDefaultWindowOpen(true);
         }
 

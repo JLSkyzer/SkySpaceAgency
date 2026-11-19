@@ -101,6 +101,7 @@ namespace SkySpaceAgency.AppUI
         string _engineName;
 
         public override bool IsRunning => _pilot != null && _pilot.isRunning;
+        public override SkySpaceAgency.Controller.Pilot ShownPilot => _pilot;
         public override HudState Hud => IsRunning ? _hud : null;
 
         // ---------------------------------------------------------------- build

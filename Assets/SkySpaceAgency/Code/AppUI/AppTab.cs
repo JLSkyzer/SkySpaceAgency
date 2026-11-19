@@ -61,6 +61,9 @@ namespace SkySpaceAgency.AppUI
         /// <summary>True while this tab's pilot flies: the tab is lit, and the compact flight bar shows it.</summary>
         public virtual bool IsRunning => false;
 
+        /// <summary>The pilot whose idle values this tab shows (stamped every frame the tab is shown, see Pilot.IsShown).</summary>
+        public virtual SkySpaceAgency.Controller.Pilot ShownPilot => null;
+
         /// <summary>The compact flight bar's content while this tab's pilot flies (null: nothing to show).</summary>
         public virtual HudState Hud => null;
 
