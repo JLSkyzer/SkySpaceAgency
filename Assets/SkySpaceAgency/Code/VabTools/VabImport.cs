@@ -44,7 +44,7 @@ namespace K2D2.VabTools
                 return Fail("Not a JSON object.");
 
             string format = VabJson.Str(root["format"]);
-            if (format == VabExport.Format)
+            if (ModIdentity.IsVabFormat(format, VabExport.FormatKind))
             {
                 JToken embedded = root["game_assembly"];
                 bool fromString = embedded != null && embedded.Type == JTokenType.String;
@@ -61,7 +61,7 @@ namespace K2D2.VabTools
                     root["game_assembly"] = assembly;
                 return Done(VabImportFormat.ModExport, root, assembly, new List<JObject> { assembly });
             }
-            if (format == VabDump.Format)
+            if (ModIdentity.IsVabFormat(format, VabDump.FormatKind))
                 return Fail("This is a parts dump, not a rocket: import an export or a game assembly.");
 
             if (root["Assemblies"] is JArray entries)
@@ -81,7 +81,7 @@ namespace K2D2.VabTools
             if (root["parts"] is JArray)
                 return Done(VabImportFormat.RawAssembly, root, root, new List<JObject> { root });
 
-            return Fail("Unrecognized JSON: expected a SkySpaceAgency export, a game assembly (with \"parts\") " +
+            return Fail("Unrecognized JSON: expected a " + ModIdentity.Title + " export, a game assembly (with \"parts\") " +
                         "or a VAB workspace file (with \"Assemblies\").");
         }
 

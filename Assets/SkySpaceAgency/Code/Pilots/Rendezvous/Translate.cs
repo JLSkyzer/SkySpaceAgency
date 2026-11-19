@@ -25,7 +25,7 @@ namespace K2D2.Rendezvous
     {
         enum Stage { Idle, ProbeRcs, ProbeEngine, Run }
 
-        readonly ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Translate");
+        readonly ILogger logger = ModIdentity.Logger("Translate");
         readonly BurndV burn_dV = new BurndV();
         KSPVessel current_vessel;
 

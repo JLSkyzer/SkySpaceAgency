@@ -30,7 +30,7 @@ namespace K2D2.Node
 
     public class WarpTo : ExecuteController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Controller.WarpTo");
+        public ILogger logger = ModIdentity.Logger("Controller.WarpTo");
 
         int wanted_warp_index = 0;
         ManeuverNodeData maneuver = null;

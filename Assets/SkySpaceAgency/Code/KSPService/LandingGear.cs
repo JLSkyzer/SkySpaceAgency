@@ -23,7 +23,7 @@ namespace K2D2.KSPService
     {
         public const double RecheckDelay = 3; // s of game time
 
-        readonly ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.LandingGear");
+        readonly ILogger logger = ModIdentity.Logger("LandingGear");
 
         bool requested = false;
         double recheck_ut = -1;   // < 0: no re-check pending

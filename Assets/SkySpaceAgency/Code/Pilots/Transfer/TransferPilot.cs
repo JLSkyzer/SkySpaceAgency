@@ -36,7 +36,7 @@ namespace K2D2.Transfer
     {
         public static TransferPilot Instance { get; private set; }
 
-        internal readonly ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Transfer");
+        internal readonly ILogger logger = ModIdentity.Logger("Transfer");
 
         // ---------------------------------------------------------------- what the tab reads
 

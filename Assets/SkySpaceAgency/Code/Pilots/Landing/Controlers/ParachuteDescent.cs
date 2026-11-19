@@ -13,7 +13,7 @@ namespace K2D2.Landing
     // 4. LandingPilot ends the run on LandedOrSplashed: this controller never sets finished.
     public class ParachuteDescent : ExecuteController
     {
-        readonly ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.ParachuteDescent");
+        readonly ILogger logger = ModIdentity.Logger("ParachuteDescent");
 
         readonly LandingPilot landing;
 

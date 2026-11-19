@@ -20,7 +20,7 @@ namespace K2D2.Lift
     // update.
     public class RendezvousHandoff : ExecuteController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Lift");
+        public ILogger logger = ModIdentity.Logger("Lift");
 
         readonly LiftPilot lift;
         KSPVessel current_vessel;

@@ -40,11 +40,12 @@ namespace K2D2.VabTools
     // The parts dump document (spec, "Contenu du dump", and choix 1).
     public static class VabDump
     {
-        public const string Format = "SkySpaceAgency.PartsDump";
+        public const string Format = ModIdentity.VabFormatPrefix + "." + FormatKind;
+        public const string FormatKind = "PartsDump";
         public const int Version = 1;
 
         public const string Instructions =
-            "Parts dump of the SkySpaceAgency mod, made in the KSP2 Redux VAB. 'parts' lists every part the game " +
+            "Parts dump of the " + ModIdentity.Title + " mod, made in the KSP2 Redux VAB. 'parts' lists every part the game " +
             "knows: \"unlocked\": true means this VAB offers the part now and the mod's Import accepts it; never use " +
             "a part with \"unlocked\": false. Masses are in t, thrust in kN, Isp in s; engine Isp values are the " +
             "definition's atmosphereCurve evaluated at 0 and 1 atm, and thrust_asl_kN is derived from them. " +
@@ -58,11 +59,11 @@ namespace K2D2.VabTools
             "the PartIds of the stage), mirrored in AssemblyOABConfig.StagingState; symmetric copies listed " +
             "together in SymmetrySets. Copy partState and module state from example_assembly parts of the same " +
             "kind and change only what you need. Send the rocket back as a .json file holding the SerializedAssembly " +
-            "at the top level, or inside a SkySpaceAgency export under 'game_assembly'.";
+            "at the top level, or inside a " + ModIdentity.Title + " export under 'game_assembly'.";
 
         public const string NoExampleNote =
             " example_assembly is null: no rocket was open in the VAB at dump time. Ask the player to open or " +
-            "build a small rocket in the VAB and dump again, or to send a SkySpaceAgency export, and copy its " +
+            "build a small rocket in the VAB and dump again, or to send a " + ModIdentity.Title + " export, and copy its " +
             "structure.";
 
         public static string InstructionsFor(bool hasExample) => hasExample ? Instructions : Instructions + NoExampleNote;

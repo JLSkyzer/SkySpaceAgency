@@ -37,7 +37,7 @@ namespace K2D2.Rendezvous
     {
         public static RendezvousPilot Instance { get; private set; }
 
-        internal readonly ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Rendezvous");
+        internal readonly ILogger logger = ModIdentity.Logger("Rendezvous");
 
         // ---------------------------------------------------------------- what the tab reads
 

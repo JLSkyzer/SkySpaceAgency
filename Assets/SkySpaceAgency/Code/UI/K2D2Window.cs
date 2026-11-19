@@ -148,6 +148,16 @@ namespace K2D2.UI
             // Add a click event handler to the close button
             closeButton.clicked += () => IsWindowOpen = false;
 
+            // The window title comes from ModIdentity (the uxml holds a neutral default). AppShell's
+            // Title is set by reflection: the type lives in Redux's controls assembly, which this
+            // assembly does not reference.
+            var shell = _rootElement.Q("MainFrame") ?? _rootElement;
+            var titleProperty = shell.GetType().GetProperty("Title");
+            if (titleProperty != null && titleProperty.PropertyType == typeof(string))
+                titleProperty.SetValue(shell, ModIdentity.Title);
+            else
+                L.Log($"K2D2Window.OnUiReload: {shell.GetType().Name} has no Title property, the window title stays the uxml default.");
+
             // list all pilot panel
             all_panels.Clear();
             foreach(var pilot in K2D2_Plugin.Instance.pilots_manager.pilots)
@@ -191,6 +201,8 @@ namespace K2D2.UI
             // of ripping out for something that wasn't actually part of this ask.
             var info_button = title_bar.Q<Button>("info-toggle");
             var staging_toggle = title_bar.Q<ToggleButton>("staging-toggle");
+            if (info_button != null)
+                info_button.tooltip = ModIdentity.AboutButtonTooltip;
             if (info_button == null)
             {
                 L.Log("K2D2Window.OnUiReload: title_bar.Q<Button>(\"info-toggle\") returned null.");

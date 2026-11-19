@@ -59,7 +59,7 @@ namespace K2D2.Lift
             this.lift_settings = lift_settings;
         }
 
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.LiftAscentPath");
+        public ILogger logger = ModIdentity.Logger("LiftAscentPath");
 
         public float compute_elevation(float altitude_km)
         {

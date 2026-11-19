@@ -15,7 +15,7 @@ namespace K2D2.Node
 {
     public class NodeExPilot : Pilot
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.NodeExecute");
+        public ILogger logger = ModIdentity.Logger("NodeExecute");
 
         public static NodeExPilot Instance { get; set; }
 

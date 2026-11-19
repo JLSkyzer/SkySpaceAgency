@@ -12,14 +12,14 @@ using UnityEngine.UIElements;
 namespace K2D2.UI
 {
     /// <summary>
-    /// The "SkySpaceAgency — VAB tools" window: export, import, parts dump, open folder, status line.
+    /// The VAB tools window (title ModIdentity.VabWindowTitle): export, import, parts dump, open folder, status line.
     /// Built in code, so it needs no Addressables entry of its own (only K2D2_Window.uxml is one):
     /// it borrows that asset's style sheets and AppShell's USS class names. VAB only: it closes
     /// itself in any other scene. The flight window keeps its own scene gating.
     /// </summary>
     public class VabToolsWindow : MonoBehaviour
     {
-        public const string WindowId = "SkySpaceAgencyVabTools";
+        public const string WindowId = ModIdentity.VabWindowId;
         const string NoFileChoice = "(no .json file in vab/imports or vab/exports)";
 
         VisualElement _window;
@@ -86,7 +86,7 @@ namespace K2D2.UI
             header.AddToClassList("oab-window-header");
             header.style.flexDirection = FlexDirection.Row;
             header.style.alignItems = Align.Center;
-            var title = new Label("SkySpaceAgency — VAB tools") { name = "header-title" };
+            var title = new Label(ModIdentity.VabWindowTitle) { name = "header-title" };
             title.AddToClassList("oab-window-header-title");
             title.style.flexGrow = 1;
             var close = new Button(() => IsWindowOpen = false) { name = "close-button", text = "x" };

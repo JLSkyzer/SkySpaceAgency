@@ -21,7 +21,7 @@ namespace K2D2.Lift
             Handoff         // rendezvous goal only: ends the run and starts the Rendezvous pilot
         }
 
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Lift");
+        public ILogger logger = ModIdentity.Logger("Lift");
 
         public static LiftPilot Instance { get; set; }
 

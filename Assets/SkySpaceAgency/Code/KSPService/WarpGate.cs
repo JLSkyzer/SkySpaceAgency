@@ -90,7 +90,7 @@ namespace K2D2
     /// </summary>
     public static class WarpGate
     {
-        static readonly ILogger log = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Warp");
+        static readonly ILogger log = ModIdentity.Logger("Warp");
         static readonly EngineQuietTimer timer = new EngineQuietTimer();
         static int last_frame = -1;
         static int forces;

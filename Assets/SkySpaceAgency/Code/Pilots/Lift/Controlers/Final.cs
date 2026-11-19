@@ -17,7 +17,7 @@ namespace K2D2.Lift
     // circularizing work to do.
     public class FinalCircularize : ExecuteController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Lift.FinalCircularize");
+        public ILogger logger = ModIdentity.Logger("Lift.FinalCircularize");
 
         LiftSettings lift_settings = null;
         KSPVessel current_vessel;

@@ -40,7 +40,7 @@ namespace K2D2.Controller
 
         DroneSettings settings = new DroneSettings();
 
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.DroneController");
+        public ILogger logger = ModIdentity.Logger("DroneController");
 
         public SASMode sas_mode = SASMode.SurfaceUp;
         public enum SASMode { Locked, SurfaceUp, KillHSpeed }

@@ -19,7 +19,7 @@ namespace K2D2.Node
 
     public static class BurnWarpSettings
     {
-        // Saved in skyspaceagency_settings.json; shown in the Node tab, ADVANCED, // WARP.
+        // Saved in this mod's main settings file; shown in the Node tab, ADVANCED, // WARP.
         public static EnumSetting<BurnWarpMode> mode = new EnumSetting<BurnWarpMode>("burn.warp_mode", BurnWarpModes.Default);
     }
 

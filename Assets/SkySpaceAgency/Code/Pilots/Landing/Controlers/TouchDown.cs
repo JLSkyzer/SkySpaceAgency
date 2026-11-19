@@ -17,7 +17,7 @@ namespace K2D2.Landing
     /// apply the wanted speed in the good direction
     public class TouchDown : ExecuteController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.TouchDown");
+        public ILogger logger = ModIdentity.Logger("TouchDown");
 
         public bool gravity_compensation;
         public float max_speed = 0;

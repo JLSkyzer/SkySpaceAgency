@@ -15,7 +15,7 @@ namespace K2D2.Lift
     /// </summary>
     public class Ascent : ExecuteController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Ascent");
+        public ILogger logger = ModIdentity.Logger("Ascent");
 
         LiftSettings settings = null;
         LiftAscentPath ascent_path = null;

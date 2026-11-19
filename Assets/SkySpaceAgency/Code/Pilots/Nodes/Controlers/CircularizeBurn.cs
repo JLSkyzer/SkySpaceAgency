@@ -38,7 +38,7 @@ namespace K2D2.Node
 
         ManeuverCreator maneuver_creator = new ManeuverCreator();
 
-        public CircularizeBurn() : base("SkySpaceAgency.CircularizeBurn") { }
+        public CircularizeBurn() : base(ModIdentity.LogPrefix + ".CircularizeBurn") { }
 
         string Apsis => at_apoapsis ? "AP" : "PE";
 

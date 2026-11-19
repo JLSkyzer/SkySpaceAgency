@@ -44,7 +44,7 @@ namespace K2D2.Controller
             K2D2PilotsMgr.Instance.RegisterPilot("Staging", this);
         } 
     
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.StagingController");
+        public ILogger logger = ModIdentity.Logger("StagingController");
 
         public bool is_staging = false;
         bool suspended_logged = false;

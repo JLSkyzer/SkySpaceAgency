@@ -17,7 +17,7 @@ namespace K2D2
 
         // private static readonly GameInstance Game = GameManager.Instance.Game;
 
-        ManualLogSource Logger = BepInEx.Logging.Logger.CreateLogSource("SkySpaceAgency.OtherModsInterface");
+        ManualLogSource Logger = BepInEx.Logging.Logger.CreateLogSource(ModIdentity.LoggerName("OtherModsInterface"));
 
         // Reflection access variables for launching MNC & K2-D2
         public static bool mncLoaded, fpLoaded  = false;

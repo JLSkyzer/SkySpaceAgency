@@ -9,7 +9,7 @@ namespace K2D2.KSPService
 {
     public class BurndV : BaseController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.BurndV");
+        public ILogger logger = ModIdentity.Logger("BurndV");
 
         KSPVessel current_vessel;
 

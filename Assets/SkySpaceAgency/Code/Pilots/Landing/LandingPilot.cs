@@ -18,7 +18,7 @@ namespace K2D2.Landing
     // the parachute precision return (PlaneChange → … → Jettison → Parachute) in LandingPilotReentry.cs.
     public partial class LandingPilot : Pilot
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.LandingController");
+        public ILogger logger = ModIdentity.Logger("LandingController");
 
         // Atmo/Vacuum profile split - see LandingSettings.cs's class comment. Two independent
         // instances, each backed by its own settings file (k2d2_landing_atmo.json /

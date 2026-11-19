@@ -171,7 +171,7 @@ namespace K2D2.Node
         WarpTo warp = new WarpTo();
         readonly BurnStaging staging = new BurnStaging();
 
-        public TargetOrbitBurn() : this("SkySpaceAgency.TargetOrbitBurn") { }
+        public TargetOrbitBurn() : this(ModIdentity.LogPrefix + ".TargetOrbitBurn") { }
 
         protected TargetOrbitBurn(string loggerName)
         {

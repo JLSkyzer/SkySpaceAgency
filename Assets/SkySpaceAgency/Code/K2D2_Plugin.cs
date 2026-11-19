@@ -51,18 +51,18 @@ namespace K2D2
 
         private static string _settingsPath;
         private static string SettingsPath =>
-            _settingsPath ??= Path.Combine(AssemblyFolder, "skyspaceagency_settings.json");
+            _settingsPath ??= Path.Combine(AssemblyFolder, ModIdentity.SettingsFileName);
 
         // Landing's Atmo/Vacuum profile split (see LandingSettings.cs/KTools.SettingsFile.cs) -
         // two genuinely separate physical files, so tuning one profile can never touch the other's
         // saved values. Same AssemblyFolder-relative pattern as SettingsPath above.
         private static string _atmoLandingSettingsPath;
         private static string AtmoLandingSettingsPath =>
-            _atmoLandingSettingsPath ??= Path.Combine(AssemblyFolder, "skyspaceagency_landing_atmo.json");
+            _atmoLandingSettingsPath ??= Path.Combine(AssemblyFolder, ModIdentity.LandingAtmoFileName);
 
         private static string _vacLandingSettingsPath;
         private static string VacLandingSettingsPath =>
-            _vacLandingSettingsPath ??= Path.Combine(AssemblyFolder, "skyspaceagency_landing_vac.json");
+            _vacLandingSettingsPath ??= Path.Combine(AssemblyFolder, ModIdentity.LandingVacFileName);
 
         // VAB tools files (exports/, imports/, dumps/), next to the DLL like the settings files above.
         internal static string VabFolder => Path.Combine(AssemblyFolder, "vab");
@@ -75,9 +75,9 @@ namespace K2D2
         [PublicAPI] public static K2D2_Plugin Instance { get; set; }
 
         // AppBar button IDs
-        internal const string ToolbarFlightButtonID = "BTN-SkySpaceAgencyFlight";
-        internal const string ToolbarOabButtonID = "BTN-SkySpaceAgencyOAB";
-        internal const string ToolbarKscButtonID = "BTN-SkySpaceAgencyKSC";
+        internal const string ToolbarFlightButtonID = ModIdentity.ToolbarFlightButtonId;
+        internal const string ToolbarOabButtonID = ModIdentity.ToolbarOabButtonId;
+        internal const string ToolbarKscButtonID = ModIdentity.ToolbarKscButtonId;
 
         public static ILogger logger;
 
@@ -142,7 +142,7 @@ namespace K2D2
             // tuned in land_vac since the split happened, and never touches land_atmo at all.
             int migrated = landVacFile.CopyMissingKeys(SettingsFile.Instance, "land.");
             if (migrated > 0)
-                logger.LogInfo($"[K2D2_Plugin] Migrated {migrated} existing Landing setting(s) from the main settings file into skyspaceagency_landing_vac.json.");
+                logger.LogInfo($"[K2D2_Plugin] Migrated {migrated} existing Landing setting(s) from the main settings file into {ModIdentity.LandingVacFileName}.");
 
             gameObject.hideFlags = HideFlags.HideAndDontSave;
             DontDestroyOnLoad(gameObject);
@@ -248,7 +248,7 @@ namespace K2D2
             var windowOptions = new WindowOptions
             {
                 // The ID of the window. It should be unique to your mod.
-                WindowId = "SkySpaceAgency",
+                WindowId = ModIdentity.WindowId,
                 // The transform of parent game object of the window.
                 // If null, it will be created under the main canvas.
                 Parent = null,

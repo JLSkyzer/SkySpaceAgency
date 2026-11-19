@@ -32,7 +32,7 @@ namespace K2D2.Node
     {
         public enum Outcome { None, Pending, Staged, Failed }
 
-        static readonly ILogger log = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Transfer");
+        static readonly ILogger log = ModIdentity.Logger("Transfer");
 
         readonly DryStageTimer timer = new DryStageTimer();
 

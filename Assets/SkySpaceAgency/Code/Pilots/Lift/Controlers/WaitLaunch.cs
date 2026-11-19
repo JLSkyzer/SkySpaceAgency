@@ -33,7 +33,7 @@ namespace K2D2.Lift
     // (BodyRotation.ChooseSign, as the Landing tab does).
     public partial class WaitLaunch : ExecuteController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.Lift");
+        public ILogger logger = ModIdentity.Logger("Lift");
 
         readonly LiftPilot lift;
         readonly LiftSettings settings;

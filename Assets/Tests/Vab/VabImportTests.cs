@@ -65,13 +65,44 @@ public class VabImportTests
     {
         StringAssert.StartsWith("Not a JSON object", VabImport.Parse("[1, 2]").Error);
         StringAssert.StartsWith("Unrecognized JSON", VabImport.Parse("{\"a\": 1}").Error);
-        StringAssert.Contains("parts dump", VabImport.Parse("{\"format\": \"SkySpaceAgency.PartsDump\"}").Error);
+        StringAssert.Contains("parts dump", VabImport.Parse("{\"format\": \"" + VabDump.Format + "\"}").Error);
         StringAssert.Contains("game_assembly",
-            VabImport.Parse("{\"format\": \"SkySpaceAgency.VabExport\", \"game_assembly\": null}").Error);
+            VabImport.Parse("{\"format\": \"" + VabExport.Format + "\", \"game_assembly\": null}").Error);
         StringAssert.Contains("game_assembly is not valid JSON",
-            VabImport.Parse("{\"format\": \"SkySpaceAgency.VabExport\", \"game_assembly\": \"{oops\"}").Error);
+            VabImport.Parse("{\"format\": \"" + VabExport.Format + "\", \"game_assembly\": \"{oops\"}").Error);
         StringAssert.StartsWith("Workspace entry #1", VabImport.Parse("{\"Assemblies\": [ {\"isMainAssembly\": true} ]}").Error);
         StringAssert.Contains("no assembly", VabImport.Parse("{\"Assemblies\": []}").Error);
+    }
+
+    // Files exchanged between the two flavours of the mod (SkySpaceAgency and K2-D2): same format,
+    // another prefix.
+    [TestCase("SkySpaceAgency")]
+    [TestCase("K2D2")]
+    public void Parse_ModExportOfEitherFlavour(string prefix)
+    {
+        var export = new JObject
+        {
+            ["format"] = prefix + "." + VabExport.FormatKind, ["version"] = 1, ["summary"] = new JObject(),
+            ["game_assembly"] = F.Rocket(),
+        };
+        VabImportResult r = VabImport.Parse(VabJson.Write(export));
+        Assert.IsTrue(r.Ok, r.Error);
+        Assert.AreEqual(VabImportFormat.ModExport, r.File.Format);
+    }
+
+    [TestCase("SkySpaceAgency")]
+    [TestCase("K2D2")]
+    public void Parse_PartsDumpOfEitherFlavour_IsRefused(string prefix)
+    {
+        StringAssert.Contains("parts dump",
+            VabImport.Parse("{\"format\": \"" + prefix + "." + VabDump.FormatKind + "\"}").Error);
+    }
+
+    [Test]
+    public void Parse_UnknownPrefix_IsNotAModExport()
+    {
+        var export = new JObject { ["format"] = "Other.VabExport", ["game_assembly"] = F.Rocket() };
+        StringAssert.StartsWith("Unrecognized JSON", VabImport.Parse(VabJson.Write(export)).Error);
     }
 
     [Test]

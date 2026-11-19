@@ -32,7 +32,7 @@ namespace K2D2.Node
 
     public class BurnManeuver : ExecuteController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.BurnManeuver");
+        public ILogger logger = ModIdentity.Logger("BurnManeuver");
 
         BurndV burn_dV = new BurndV();
         KSPVessel current_vessel;

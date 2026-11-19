@@ -36,11 +36,12 @@ namespace K2D2.VabTools
     // The export document (spec, "Contenu de l'export").
     public static class VabExport
     {
-        public const string Format = "SkySpaceAgency.VabExport";
+        public const string Format = ModIdentity.VabFormatPrefix + "." + FormatKind;
+        public const string FormatKind = "VabExport";
         public const int Version = 1;
 
         public const string InstructionsForAi =
-            "Exported by the SkySpaceAgency mod from the KSP2 Redux VAB. " +
+            "Exported by the " + ModIdentity.Title + " mod from the KSP2 Redux VAB. " +
             "'summary' is a readable digest computed by the game's VAB: per stage, in the game's stage order, " +
             "the parts, the active engines, masses (t), Isp (s), thrust (kN), TWR, delta-v (m/s) in vacuum, at sea " +
             "level and in the stage's situation ('actual'), and burn time (s); then every part (GUID, name, title, " +
@@ -52,7 +53,7 @@ namespace K2D2.VabTools
             "attachNodeStates entry points to part B (AttachedPartGuid and attachedPartNodeID), part B must have the " +
             "matching entry pointing back to A; when you add or remove a part, update the stages (PartIds in " +
             "stagingState and AssemblyOABConfig.StagingState) and SymmetrySets too. Use only part names marked " +
-            "\"unlocked\": true in a SkySpaceAgency parts dump of the same campaign: the import refuses any other " +
+            "\"unlocked\": true in a " + ModIdentity.Title + " parts dump of the same campaign: the import refuses any other " +
             "part. Resource amounts above a part's capacity are lowered to the capacity on import.";
 
         public static JObject Build(VabExportMeta meta, JObject summary, JToken gameAssembly)

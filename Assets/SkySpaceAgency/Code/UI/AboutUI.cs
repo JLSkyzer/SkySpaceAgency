@@ -27,7 +27,12 @@ namespace K2D2.UI
             // instead of toggling with a shared flag nothing sets to true anymore.
             enabled = false;
 
-            Label label = panel.Q<Label>("version");
+            // The mod's name comes from ModIdentity; the uxml holds a neutral default.
+            Label label = panel.Q<Label>("Title");
+            if (label != null)
+                label.text = ModIdentity.AboutTitle;
+
+            label = panel.Q<Label>("version");
             label.text = K2D2_Plugin.Instance.SWMetadata.SWInfo.Version;
 
             label = panel.Q<Label>("thanks");

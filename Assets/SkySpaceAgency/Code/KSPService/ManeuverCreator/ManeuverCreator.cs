@@ -30,7 +30,7 @@ namespace K2D2.KSPService
 
         public KSPVessel kspVessel { get; set; }
 
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.CircleController");
+        public ILogger logger = ModIdentity.Logger("CircleController");
 
         public ManeuverCreator()
         {
