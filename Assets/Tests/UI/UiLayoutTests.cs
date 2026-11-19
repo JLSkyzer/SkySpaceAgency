@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -28,6 +29,21 @@ public class UiLayoutTests
         Assert.IsNotNull(handle, "WindowResizeHandle missing from K2D2_Window.uxml");
         Assert.AreEqual("UitkForKsp2.Controls.WindowResizeHandle", handle.GetType().FullName);
         Assert.AreEqual("MainFrame", handle.GetType().GetProperty("TargetName")?.GetValue(handle));
+    }
+
+    // Lesson 2026-10-2x: KerbalUI.uss grows every dropdown (flex-grow 1). The Lift tab's ascent
+    // profile dropdown (K2-D2 1.4.0) is one row high, like the goal dropdown above it.
+    [Test]
+    public void Lift_AscentProfileDrop_IsOneRowHigh()
+    {
+        var scenario = UiLayoutHarness.Scenarios.First(s => s.Name == "lift_gravity_turn_open");
+        using var w = UiLayoutHarness.Open(scenario, UiLayoutHarness.TallWindowHeight);
+        var goal = w.Page.Q<DropdownField>("goal");
+        var drop = w.Page.Q<DropdownField>("ascent_profile_drop");
+        Assert.IsTrue(UiLayoutHarness.IsDisplayed(drop));
+        Assert.AreEqual(goal.layout.height, drop.layout.height, 0.5f);
+        Assert.LessOrEqual(drop.layout.height, 40f);
+        Assert.AreEqual(goal.layout.width, drop.layout.width, 0.5f);
     }
 
     [TestCaseSource(nameof(Cases))]

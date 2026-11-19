@@ -176,6 +176,30 @@ namespace K2D2.Lift
 
         K2Toggle auto_circularize_toggle, pause_toggle;
 
+        // ASCENT PROFILE (K2-D2 1.4.0). Must match nothing in the uxml: the choices are set here.
+        const string GuidedChoice = "Guided";
+        const string GravityTurnChoice = "Gravity Turn (Experimental)";
+        static string ProfileChoice(AscentProfile profile) => profile == AscentProfile.GravityTurn ? GravityTurnChoice : GuidedChoice;
+
+        DropdownField ascent_profile_drop;
+        VisualElement guided_profile_settings, guided_roll_settings, gravity_turn_settings, graph;
+
+        // The profile the run would fly (Gravity Turn for the Orbit goal only) decides which
+        // settings show; the dropdown itself shows for the Orbit goal only. The ascent graph only
+        // plots Guided's fixed pitch curve: hidden with Gravity Turn.
+        void UpdateProfileSettings()
+        {
+            if (ascent_profile_drop == null)
+                return;
+            bool orbit = goal.V == LiftGoal.Orbit;
+            AscentProfile flown = LiftGoalRules.ProfileFor(goal.V, ascent_profile.V);
+            ascent_profile_drop.Show(orbit);
+            guided_profile_settings.Show(flown == AscentProfile.Guided);
+            guided_roll_settings.Show(flown == AscentProfile.Guided);
+            gravity_turn_settings.Show(flown == AscentProfile.GravityTurn);
+            graph.Show(flown == AscentProfile.Guided);
+        }
+
         // The transfer and rendezvous goals always circularize: no auto-circularize toggle for them,
         // and the pause (only used without auto-circularize) is greyed whenever it cannot apply.
         public void UpdateCircularizeToggles(LiftGoal goal)
@@ -209,6 +233,37 @@ namespace K2D2.Lift
             auto_circularize_toggle = root.Q<K2Toggle>("auto_circularize").Bind(auto_circularize);
 
             pause_toggle = root.Q<K2Toggle>("pause_on_final").Bind(pause_on_final);
+
+            // ASCENT PROFILE (K2-D2 1.4.0): the dropdown, and the settings of each profile.
+            ascent_profile_drop = root.Q<DropdownField>("ascent_profile_drop");
+            guided_profile_settings = root.Q<VisualElement>("guided_profile_settings");
+            guided_roll_settings = root.Q<VisualElement>("guided_roll_settings");
+            gravity_turn_settings = root.Q<VisualElement>("gravity_turn_settings");
+            graph = root.Q<VisualElement>("graph");
+            ascent_profile_drop.choices = new System.Collections.Generic.List<string> { GuidedChoice, GravityTurnChoice };
+            ascent_profile_drop.RegisterValueChangedCallback(evt =>
+                ascent_profile.V = evt.newValue == GravityTurnChoice ? AscentProfile.GravityTurn : AscentProfile.Guided);
+            // Also follows Reset.
+            ascent_profile.listen(profile =>
+            {
+                ascent_profile_drop.SetValueWithoutNotify(ProfileChoice(profile));
+                UpdateProfileSettings();
+            });
+            goal.listeners += g => UpdateProfileSettings();
+
+            gravity_turn_settings.Q<K2Toggle>("gravity_turn_auto").Bind(gravity_turn_auto);
+            gravity_turn_settings.Q<K2Slider>("gravity_turn_kick_speed_mps").Bind(gravity_turn_kick_speed_mps);
+            var pitch_kick_slider = gravity_turn_settings.Q<K2Slider>("gravity_turn_pitch_kick_deg").Bind(gravity_turn_pitch_kick_deg);
+            var hold_time_slider = gravity_turn_settings.Q<K2Slider>("gravity_turn_hold_time_s").Bind(gravity_turn_hold_time_s);
+            // Auto picks these two itself, so the sliders only show when it's off.
+            gravity_turn_auto.listen(v =>
+            {
+                pitch_kick_slider.Show(!v);
+                hold_time_slider.Show(!v);
+            });
+            gravity_turn_settings.Q<K2Slider>("gravity_turn_min_throttle").Bind(gravity_turn_min_throttle);
+            gravity_turn_settings.Q<K2Slider>("gravity_turn_max_twr").Bind(gravity_turn_max_twr);
+            gravity_turn_settings.Q<K2Slider>("gravity_turn_max_q_kpa").Bind(gravity_turn_max_q_kpa);
 
             // ROLL PROGRAM - .listen(), not .listeners += (see LandingSettings.setupUI's comment on
             // precision_landing for why that distinction matters): this defaults to off, so a plain

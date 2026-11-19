@@ -59,6 +59,7 @@ public static class UiLayoutHarness
         new Scenario { Name = "orbit_capture", Tab = "orbit", Setup = SetupOrbitCapture },
         new Scenario { Name = "transfer_open", Tab = "transfer", Setup = p => { SetupTransfer(p); OpenFoldouts(p); } },
         new Scenario { Name = "lift_open", Tab = "lift", Setup = OpenFoldouts },
+        new Scenario { Name = "lift_gravity_turn_open", Tab = "lift", Setup = p => { SetupGravityTurn(p); OpenFoldouts(p); } },
         new Scenario { Name = "landing_atmo_open", Tab = "landing", Setup = p => { SetupLanding(p, atmo: true); OpenFoldouts(p); } },
         new Scenario { Name = "landing_vac_open", Tab = "landing", Setup = p => { SetupLanding(p, atmo: false); OpenFoldouts(p); } },
         new Scenario { Name = "rendezvous_open", Tab = "dock", Setup = OpenFoldouts },
@@ -69,6 +70,19 @@ public static class UiLayoutHarness
     {
         foreach (var f in page.Query<Foldout>().ToList())
             f.SetValueWithoutNotify(true);
+    }
+
+    // As LiftSettings.UpdateProfileSettings with the Gravity Turn profile (Orbit goal), Auto off
+    // (every slider shown).
+    static void SetupGravityTurn(VisualElement page)
+    {
+        var drop = page.Q<DropdownField>("ascent_profile_drop");
+        drop.choices = new List<string> { "Guided", "Gravity Turn (Experimental)" };
+        drop.SetValueWithoutNotify("Gravity Turn (Experimental)");
+        page.Q("guided_profile_settings").Show(false);
+        page.Q("guided_roll_settings").Show(false);
+        page.Q("graph").Show(false);
+        page.Q("gravity_turn_settings").Show(true);
     }
 
     // As 14.png: Ap and Pe ticked, Inclination unticked (OrbitUI disables its field).

@@ -13,6 +13,10 @@
                  Rendezvous (4.4) uses the same group: the target dropdown lists vessels, plus the
                  "Dock after the rendezvous" toggle. -->
             <ui:DropdownField label="Goal" index="-1" choices="" name="goal" tooltip="Orbit: the ascent to the Ap below. Prepare transfer: wait on the pad for the transfer's parking-orbit plane, lift into it and trim it. Rendezvous: wait on the pad for the launch pass with the cheapest rendezvous, lift under the target vessel and hand over to the Rendezvous pilot" />
+            <!-- Ascent profile (K2-D2 1.4.0, upstream element names): Guided or Gravity Turn. Shown for
+                 the Orbit goal only: the transfer and rendezvous goals always fly Guided
+                 (LiftGoalRules.ProfileFor). The choices are set in LiftSettings.setupUI. -->
+            <ui:DropdownField label="Ascent Profile" index="-1" choices="" name="ascent_profile_drop" tooltip="Guided: fixed pitch-over curve (the original K2-D2 ascent). Gravity Turn (Experimental): rises straight up, kicks over, then holds prograde and modulates the throttle to hold a target time to apoapsis. Orbit launches only; not yet flown in game" />
             <ui:VisualElement name="transfer_goal_group">
                 <ui:DropdownField label="Target" index="-1" choices="" name="transfer_target" tooltip="The body of the transfer, every body grouped by parent; for a rendezvous, a vessel around the launch body" />
                 <K2UI.K2Toggle label="Dock after the rendezvous" name="rendezvous_dock" tooltip="After the rendezvous, dock with a free compatible port (Rendezvous tab rules)" />
@@ -28,11 +32,24 @@
                      altitude reads in the amber value slot via K2Slider's new ValueText override
                      (see K2Slider.cs) instead of being baked into one plain-white title string,
                      matching the amber "cockpit gauge" value convention used elsewhere. -->
+                <!-- Guided only (hidden with Gravity Turn). -->
+                <ui:VisualElement name="guided_profile_settings">
                 <K2UI.K2Slider name="end_rotate_ratio" label="5° Alt" max="10" print-value="false" label-on-top="true" value="0" min="0.01" />
                 <K2UI.K2Slider name="mid_rotate_ratio" label="45° Alt" max="10" print-value="false" label-on-top="true" value="0.98" min="0.01" />
                 <ui:IntegerField label="90° Alt. :" value="42" name="start_altitude_km" style="justify-content: space-between;">
                     <ui:Label tabindex="-1" text="km" display-tooltip-when-elided="true" style="width: 28px; min-width: 10px; margin-right: 0; margin-left: 10px;" />
                 </ui:IntegerField>
+                </ui:VisualElement>
+                <!-- Gravity Turn only (K2-D2 1.4.0, upstream names and tooltips). -->
+                <ui:VisualElement name="gravity_turn_settings">
+                    <K2UI.K2Toggle label="Auto Kick &amp; Hold" name="gravity_turn_auto" tooltip="Works out the best Pitch Kick and Hold Time for this rocket just before the kick, from its measured drag and its stages. Turn this off to set Pitch Kick and Hold Time yourself. Their last values are also used if it can't make a plan" />
+                    <K2UI.K2Slider label-on-top="true" print-value="true" min="10" value="100" max="300" name="gravity_turn_kick_speed_mps" label="Kick Speed (m/s)" format="N0" tooltip="Vertical speed the rocket needs to reach during the initial straight-up rise before it performs its pitch kick" />
+                    <K2UI.K2Slider label-on-top="true" print-value="true" min="1" value="7.5" max="25" name="gravity_turn_pitch_kick_deg" label="Pitch Kick (°)" format="N1" tooltip="Tilt after the vertical rise, held until the velocity follows - prograde straight up has nothing to fall over from, so the turn needs this seed" />
+                    <K2UI.K2Slider label-on-top="true" print-value="true" min="25" value="45" max="120" name="gravity_turn_hold_time_s" label="Hold Time to Apoapsis (s)" format="N0" tooltip="Seconds to apoapsis the throttle holds during the turn. Lower makes a flatter climb (usually cheaper, but more time in thick air), higher a steeper one" />
+                    <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="0.25" max="0.5" name="gravity_turn_min_throttle" label="Min Throttle (%)" format="percent" tooltip="Throttle never goes below this during the turn. Near the end it keeps the rocket raising its apoapsis instead of levelling off in the air" />
+                    <K2UI.K2Slider label-on-top="true" print-value="true" min="1.2" value="2.5" max="5" name="gravity_turn_max_twr" label="Max TWR" format="N1" tooltip="The throttle is held down so thrust never exceeds this many times the rocket's weight - keeps powerful rockets from climbing too steeply and fast through thick air" />
+                    <K2UI.K2Slider label-on-top="true" print-value="true" min="10" value="40" max="100" name="gravity_turn_max_q_kpa" label="Max Dynamic Pressure (kPa)" format="N0" tooltip="The throttle eases off as the air pressure on the rocket nears this, to limit drag and aerodynamic stress" />
+                </ui:VisualElement>
                 <!-- Same title-left/amber-value-right treatment as the sliders above, reusing
                      K2Slider's own label_row/value_label CSS classes directly since this isn't a
                      K2Slider itself. -->
@@ -50,11 +67,13 @@
                      for the full reasoning, and exactly what "roll" means here - relative to
                      launch orientation, not an absolute compass reading). First pass, not yet
                      flight-tested. -->
+                <ui:VisualElement name="guided_roll_settings">
                 <K2UI.K2Toggle label="Roll Program" name="roll_program" tooltip="Roll the vessel to a chosen offset from its launch orientation once it clears the altitude below" />
                 <ui:VisualElement name="roll_program_settings">
                     <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="0.1" max="5" name="roll_program_altitude_km" label="Roll Program Altitude (km)" tooltip="Altitude at which the roll program executes" />
                     <K2UI.K2Slider label-on-top="true" print-value="true" min="-180" value="0" max="180" name="roll_program_angle_deg" label="Roll Program Angle (°)" tooltip="How many degrees to roll from the vessel's launch orientation (not an absolute compass heading)" />
                     <K2UI.K2Slider label-on-top="true" print-value="true" min="0.5" value="3" max="15" name="roll_program_rate_deg_s" label="Roll Program Rate (°/s)" tooltip="How fast the roll program is allowed to roll the vessel toward its target angle - lower is gentler but takes longer, higher settles faster but risks overshoot" />
+                </ui:VisualElement>
                 </ui:VisualElement>
             </ui:Foldout>
             <K2UI.K2Slider name="max_throttle" label="Max Throttle" max="10" print-value="false" label-on-top="false" value="0" min="0.01" />

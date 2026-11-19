@@ -310,7 +310,9 @@ namespace K2D2.Lift
 
             LiftSettings settings = pilot.settings;
 
-            pilot.ascent_path.updateProfile(pilot.ascent.current_altitude_km);
+            // The graph only shows for Guided (LiftSettings.UpdateProfileSettings).
+            if (LiftGoalRules.ProfileFor(settings.goal.V, settings.ascent_profile.V) == AscentProfile.Guided)
+                pilot.ascent_path.updateProfile(pilot.ascent.current_altitude_km);
 
             end_rotate_ratio.ValueText = $"{settings.end_rotate_altitude_km:n0} km";
             mid_rotate_ratio.ValueText = $"{settings.mid_rotate_altitude_km:n0} km";
