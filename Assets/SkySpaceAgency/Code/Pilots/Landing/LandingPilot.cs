@@ -68,6 +68,7 @@ namespace K2D2.Landing
             parachute_descent = new ParachuteDescent(this);
             jettison = new Jettison(this);
             stage_drop = new LandingStageDrop(this);
+            CreateAirTiming();
             _page = new LandingUI(this);
 
             Instance = this;
@@ -133,6 +134,8 @@ namespace K2D2.Landing
             // Precision commands to TouchDown last one mode at most (set again every frame).
             brake.precision_brake_throttle = float.NaN;
             brake.guidance_active = false;
+            // AtmoLandingBurn flies a Brake phase only (decided again by StartAirBrake).
+            air_brake = false;
 
             if (mode == Mode.Off)
             {
@@ -193,7 +196,10 @@ namespace K2D2.Landing
                     // legs early". LandingGear only acts on the first request of a run.
                     if (mode == Mode.TouchDown || settings.deploy_legs_early.V)
                         gear.Deploy(current_vessel.VesselComponent, $"entering {mode}");
-                    current_executor.setController(brake);
+                    // A vessel that coasted down inside the air brakes with the drag-aware burn
+                    // (LandingPilotAirTiming.cs); otherwise Touch Down's controller, as before.
+                    if (mode != Mode.Brake || !StartAirBrake())
+                        current_executor.setController(brake);
                     if (precision_run)
                     {
                         if (mode == Mode.Brake)
@@ -309,6 +315,7 @@ namespace K2D2.Landing
 
                     _active = true;
                     ResetReduxLogs();
+                    atmo_timing.Reset();
 
                     // Precision landing (decided by CheckCanStart: precision_run) starts with its
                     // four planned burns (orbit preparation, plane change, deorbit, mid-course
@@ -449,6 +456,8 @@ namespace K2D2.Landing
             burn_duration = burn_dV.active_dv > 0 ? speed_collision / burn_dV.active_dv : 0;
 
             UpdateBrakeSimulation(force: false);
+            // In air, coasting: the drag measurement and the drag-aware start (LandingPilotAirTiming.cs).
+            UpdateAirTiming();
             compute_startBurn();
         }
 
@@ -473,6 +482,9 @@ namespace K2D2.Landing
                 }
                 burn_duration = brake_result.BurnDuration;
             }
+
+            // A vessel coasting down inside the air: the start planned with its measured drag.
+            ApplyAirTiming(now_ut);
 
             // Backstop: whatever combination of the floors above, never schedule the burn as
             // already overdue. WarpTo silently no-ops the instant its target time is in the past,
@@ -1080,7 +1092,10 @@ namespace K2D2.Landing
                 if (isRunning)
                 {
                     // A parachute landing has no Touch Down phase to fall back to.
-                    if (mode != Mode.Parachute && !ReentryMode(mode) && altitude < settings.start_touchdown_altitude.V)
+                    // Nor does the drag-aware burn, which hands over to Touch Down itself (at 50 m):
+                    // its thrust can make the unpowered prediction miss the ground.
+                    if (mode != Mode.Parachute && !ReentryMode(mode) && !(mode == Mode.Brake && air_brake)
+                        && altitude < settings.start_touchdown_altitude.V)
                         setMode(Mode.TouchDown);
                 }
                 else
@@ -1160,6 +1175,11 @@ namespace K2D2.Landing
                     setMode(Mode.Brake);
                     return;
                 }
+            }
+            else if (mode == Mode.Brake && air_brake)
+            {
+                // AtmoLandingBurn sets its own throttle and attitude, and finishes at its 50 m
+                // handover: nextMode() then goes to Touch Down.
             }
             else if (mode == Mode.Brake)
             {
