@@ -1,0 +1,256 @@
+using System;
+using KSP.Api;
+using KSP.Sim;
+using KSP.Sim.impl;
+using KSP2FlightAssistant.MathLibrary;
+
+namespace K2D2.Landing
+{
+    // What ImpactModel needs from a body. Every vector is in the model's axes: the body frame
+    // (body.transform.bodyFrame) as it is at the model's epoch. GameImpactBody reads a real body;
+    // the tests use a fake one, turned or not.
+    public interface IImpactBody
+    {
+        double Mu { get; }
+        double Radius { get; }
+        double AtmosphereDepth { get; }     // 0 without an atmosphere
+        Vector3d Spin { get; }              // angular velocity, rad/s, in the model's axes
+
+        void LatLon(Vector3d body_fixed, out double latitude, out double longitude);
+        Vector3d SurfaceUp(double latitude, double longitude);
+        double TerrainRadius(double latitude, double longitude);
+    }
+
+    // A real body, read once at the model's epoch.
+    public class GameImpactBody : IImpactBody
+    {
+        public readonly CelestialBodyComponent Component;
+        readonly ITransformFrame frame;
+        readonly ICoordinateSystem inertial_frame;
+
+        public GameImpactBody(CelestialBodyComponent body)
+        {
+            Component = body;
+            frame = body.transform.bodyFrame;
+            inertial_frame = body.SimulationObject.transform.celestialFrame;
+            Spin = frame.ToLocalVector(body.relativeAngularVelocity);
+        }
+
+        public double Mu => Component.gravParameter;
+        public double Radius => Component.radius;
+        public double AtmosphereDepth => Component.hasAtmosphere ? Component.atmosphereDepth : 0;
+        public Vector3d Spin { get; }
+
+        public void LatLon(Vector3d body_fixed, out double latitude, out double longitude) =>
+            Component.GetLatLonAltFromRadius(new Position(frame, body_fixed), out latitude, out longitude, out _);
+
+        public Vector3d SurfaceUp(double latitude, double longitude) => Component.GetRelSurfaceNVector(latitude, longitude);
+
+        public double TerrainRadius(double latitude, double longitude) =>
+            Component.SurfaceProvider.GetTerrainAltitudeFromCenter(latitude, longitude);
+
+        // The orbit's state at UT. Same Zup->Yup swap and celestialFrame pairing as
+        // LandingPilot.compute_real_collision.
+        public void StateAt(IKeplerPatch orbit, double UT, out Vector3d r, out Vector3d v)
+        {
+            Vector3d p = orbit.GetRelativePositionAtUTZup(UT);
+            Vector3d u = orbit.GetOrbitalVelocityAtUTZup(UT);
+            r = frame.ToLocalPosition(new Position(inertial_frame, new Vector3d(p.x, p.z, p.y)));
+            v = frame.ToLocalVector(new Vector(inertial_frame, new Vector3d(u.x, u.z, u.y)));
+        }
+
+        public Vector3d ToModelAxes(Vector direction) => frame.ToLocalVector(direction);
+    }
+
+    // Where a coasting vessel would meet the ground, for an airless body (K2-D2 1.4.0,
+    // IanMealworm; the body is behind IImpactBody here so the math is tested without the game).
+    //
+    // With no atmosphere, a coast is exactly a Kepler orbit, so instead of stepping through time
+    // this jumps straight to any moment with KeplerPropagator. The only other ingredient is the
+    // body turning underneath: a point on the surface keeps the same coordinates in the body's
+    // rotating frame (body.transform.bodyFrame), so every position is converted into that frame
+    // for the moment it happens - which also makes lat/lon and terrain lookups straightforward.
+    //
+    // All vectors are in bodyFrame's axes as they are at `epoch_UT` (when this model was created).
+    // "Inertial" vectors don't turn with the body; "body-fixed" ones are where that point is on
+    // the surface. They are NOT the Zup vectors of Precision/ (inertial, celestial frame): never
+    // mix the two.
+    public class ImpactModel
+    {
+        public readonly IImpactBody impact_body;
+        public readonly double mu;
+        public readonly double epoch_UT;
+        readonly Vector3d spin_axis;
+        readonly double spin_rate; // rad/s
+
+        public ImpactModel(CelestialBodyComponent body, double now_UT) : this(new GameImpactBody(body), now_UT)
+        {
+        }
+
+        public ImpactModel(IImpactBody body, double now_UT)
+        {
+            impact_body = body;
+            mu = body.Mu;
+            epoch_UT = now_UT;
+
+            Vector3d omega = body.Spin;
+            spin_rate = omega.magnitude;
+            spin_axis = spin_rate > 0 ? omega / spin_rate : Vector3d.zero;
+        }
+
+        // The game's body, or null for a test body.
+        public CelestialBodyComponent body => (impact_body as GameImpactBody)?.Component;
+        public double radius => impact_body.Radius;
+
+        GameImpactBody Game => impact_body as GameImpactBody
+            ?? throw new InvalidOperationException("ImpactModel: game frames need a GameImpactBody");
+
+        // The orbit's state at UT, in this model's axes.
+        public void StateAt(IKeplerPatch orbit, double UT, out Vector3d r, out Vector3d v) => Game.StateAt(orbit, UT, out r, out v);
+
+        // Velocity through the air at r (the atmosphere turns with the body), in this model's axes.
+        public Vector3d AirVelocity(Vector3d r, Vector3d v) => v - Vector3d.Cross(spin_axis * spin_rate, r);
+
+        // A game-provided direction (any frame) in this model's axes.
+        public Vector3d ToModelAxes(Vector direction) => Game.ToModelAxes(direction);
+
+        // Where an inertial position at UT sits on the turning body.
+        public Vector3d BodyFixed(Vector3d inertial, double UT)
+        {
+            if (spin_rate == 0)
+                return inertial;
+
+            // Rotating backwards by however far the body has turned since epoch_UT (Rodrigues'
+            // rotation formula about the spin axis).
+            double angle = -spin_rate * (UT - epoch_UT);
+            double c = Math.Cos(angle), s = Math.Sin(angle);
+            return inertial * c + Vector3d.Cross(spin_axis, inertial) * s
+                + spin_axis * (Vector3d.Dot(spin_axis, inertial) * (1 - c));
+        }
+
+        public void LatLon(Vector3d body_fixed, out double latitude, out double longitude) =>
+            impact_body.LatLon(body_fixed, out latitude, out longitude);
+
+        public Vector3d SurfaceUp(double latitude, double longitude) => impact_body.SurfaceUp(latitude, longitude);
+
+        public double TerrainRadius(double latitude, double longitude) => impact_body.TerrainRadius(latitude, longitude);
+
+        public double TerrainRadius(Vector3d body_fixed)
+        {
+            LatLon(body_fixed, out double latitude, out double longitude);
+            return TerrainRadius(latitude, longitude);
+        }
+
+        public double Period(Vector3d r, Vector3d v) => LandingTargeting.OrbitalPeriodFromStateVectors(r, v, mu);
+
+        public static double PeriapsisRadius(Vector3d r, Vector3d v, double mu)
+        {
+            LandingTargeting.OrbitalElementsFromStateVectors(r, v, mu, out _, out _, out double periapsis);
+            return periapsis;
+        }
+
+        // First moment after UT that the coast from (r, v) comes down through `radius` (a sphere
+        // around the body's center), searching up to one orbit ahead.
+        public bool Impact(Vector3d r, Vector3d v, double UT, double radius,
+            out double impact_UT, out Vector3d impact_inertial)
+        {
+            impact_UT = 0;
+            impact_inertial = Vector3d.zero;
+
+            if (PeriapsisRadius(r, v, mu) > radius)
+                return false;
+
+            double period = Period(r, v);
+            double horizon = double.IsNaN(period) ? 3600 : period;
+            double step = Math.Min(horizon / 90, 30);
+
+            double previous = 0;
+            for (double t = step; t <= horizon + step; t += step)
+            {
+                KeplerPropagator.Propagate(r, v, mu, t, out Vector3d p, out _);
+                if (p.magnitude > radius)
+                {
+                    previous = t;
+                    continue;
+                }
+
+                double lo = previous, hi = t;
+                for (int i = 0; i < 40; i++)
+                {
+                    double mid = 0.5 * (lo + hi);
+                    KeplerPropagator.Propagate(r, v, mu, mid, out Vector3d m, out _);
+                    if (m.magnitude > radius) lo = mid; else hi = mid;
+                }
+
+                KeplerPropagator.Propagate(r, v, mu, hi, out impact_inertial, out _);
+                impact_UT = UT + hi;
+                return true;
+            }
+            return false;
+        }
+
+        // The state where the coast from (r, v) at UT comes down into the atmosphere - or (r, v)
+        // itself if it's already inside. False if the coast never gets there.
+        public bool EntryState(Vector3d r, Vector3d v, double UT, out Vector3d entry_r, out Vector3d entry_v)
+        {
+            entry_r = r;
+            entry_v = v;
+            double entry_radius = impact_body.Radius + impact_body.AtmosphereDepth;
+            if (r.magnitude <= entry_radius)
+                return true;
+            return DescentState(r, v, UT, entry_radius, out entry_r, out entry_v);
+        }
+
+        // The state where the coast from (r, v) at UT next comes down through `radius` - for a
+        // vessel climbing inside the atmosphere, the height it's at. False if it never does.
+        public bool DescentState(Vector3d r, Vector3d v, double UT, double radius, out Vector3d entry_r, out Vector3d entry_v)
+        {
+            entry_r = r;
+            entry_v = v;
+            if (!Impact(r, v, UT, radius, out double entry_UT, out _))
+                return false;
+            KeplerPropagator.Propagate(r, v, mu, entry_UT - UT, out entry_r, out entry_v);
+            return true;
+        }
+
+        // Lowest height above the real terrain along the coast from (r, v) at UT until end_UT,
+        // skipping the part within skip_near_m of `end_point` (the coast is meant to reach the
+        // ground there). Only the last part of the coast is sampled - before that the vessel is
+        // still at orbital height.
+        public double MinTerrainClearance(Vector3d r, Vector3d v, double UT, double end_UT,
+            Vector3d end_point_body_fixed, double skip_near_m, out Vector3d lowest_point)
+        {
+            const int samples = 120;
+            const double sampled_fraction = 0.35;
+
+            double clearance = double.PositiveInfinity;
+            lowest_point = Vector3d.zero;
+            double duration = end_UT - UT;
+            double start = duration * (1 - sampled_fraction);
+
+            for (int i = 0; i <= samples; i++)
+            {
+                double t = start + (duration - start) * i / samples;
+                KeplerPropagator.Propagate(r, v, mu, t, out Vector3d p, out _);
+                Vector3d ground = BodyFixed(p, UT + t);
+                if (SurfaceDistance(ground, end_point_body_fixed) < skip_near_m)
+                    continue;
+
+                double height = ground.magnitude - TerrainRadius(ground);
+                if (height < clearance)
+                {
+                    clearance = height;
+                    lowest_point = ground;
+                }
+            }
+            return clearance;
+        }
+
+        // Distance along the surface between the points under two positions.
+        public double SurfaceDistance(Vector3d a, Vector3d b)
+        {
+            double angle = Math.Atan2(Vector3d.Cross(a, b).magnitude, Vector3d.Dot(a, b));
+            return angle * impact_body.Radius;
+        }
+    }
+}
