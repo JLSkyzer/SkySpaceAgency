@@ -1,0 +1,86 @@
+/* Transfer tab of the new window (plan 2026-11-19-new-ui-tab-migration). Rules scoped under .ssa-app.
+   Sizes: docs/design/ui/transfer.svg pixels x 0.85. */
+
+/* ---- Destination tiles (112 x 76, gaps 8) ---- */
+.ssa-app .ssa-transfer-bodies { max-height: 144px; flex-grow: 0; flex-shrink: 0; margin-bottom: 2px; background-color: rgba(0, 0, 0, 0); border-width: 0; }
+.ssa-app .ssa-transfer-bodies .unity-scroll-view__content-viewport { background-color: rgba(0, 0, 0, 0); }
+.ssa-app .ssa-transfer-bodies .unity-scroll-view__content-container { padding: 0; }
+.ssa-app .ssa-transfer-bodies__grid { flex-direction: row; flex-wrap: wrap; justify-content: space-between; }
+.ssa-app .ssa-transfer-body {
+    width: 31.5%;
+    height: 65px;
+    margin-bottom: 7px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: var(--edge);
+    background-color: var(--night);
+    flex-direction: row;
+    align-items: center;
+    padding-left: 8px;
+    padding-right: 4px;
+}
+.ssa-app .ssa-transfer-body:hover { border-color: var(--muted); }
+.ssa-app .ssa-transfer-body--selected,
+.ssa-app .ssa-transfer-body--selected:hover { background-color: #2a1a24; border-color: #ff9a6b; border-width: 2px; }
+.ssa-app .ssa-transfer-body:disabled { opacity: 0.5; }
+.ssa-app .ssa-transfer-body__dot { flex-shrink: 0; border-radius: 12px; margin-right: 6px; }
+.ssa-app .ssa-transfer-body__dot--planet { width: 24px; height: 24px; border-radius: 12px; }
+.ssa-app .ssa-transfer-body__dot--moon { width: 18px; height: 18px; border-radius: 9px; }
+.ssa-app Label.ssa-transfer-body__label { font-size: 12px; color: var(--text); flex-shrink: 1; flex-grow: 1; }
+.ssa-app .ssa-transfer-body--selected Label.ssa-transfer-body__label { color: #ffd2bf; -unity-font-definition: var(--font-strong); }
+
+.ssa-app Label.ssa-transfer-label { margin-top: 10px; }
+.ssa-app .ssa-transfer-hint { margin-top: 2px; font-size: 11px; }
+.ssa-app .ssa-transfer-maxtrip Label.ssa-field__label { white-space: nowrap; }
+
+/* ---- Transfer map (704 x 508, darker than the other cards) ---- */
+.ssa-app .ssa-transfer-mapcard { background-color: #070c22; }
+.ssa-app .ssa-transfer-view { min-height: 0; flex-grow: 1; flex-shrink: 1; overflow: hidden; }
+.ssa-app .ssa-transfer-mapcard > .ssa-card__body { min-height: 0; flex-shrink: 1; }
+.ssa-app Label.ssa-transfer-view__empty {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 12px;
+    font-size: 12px;
+    color: var(--dim);
+    -unity-text-align: middle-center;
+}
+.ssa-app .ssa-transfer-facts { flex-direction: row; justify-content: space-between; margin-top: 8px; flex-shrink: 0; }
+.ssa-app .ssa-transfer-fact {
+    width: 32%;
+    height: 51px;
+    border-radius: 8.5px;
+    background-color: var(--card);
+    padding: 8px 13px 0 13px;
+}
+.ssa-app Label.ssa-transfer-fact__label { font-size: 11px; color: var(--muted); }
+.ssa-app Label.ssa-transfer-fact__value { font-size: 15px; color: var(--text); margin-top: 3px; white-space: nowrap; overflow: hidden; }
+.ssa-app Label.ssa-transfer-fact__value--ok { color: var(--ok); }
+
+/* ---- Δv budget ---- */
+.ssa-app .ssa-transfer-ring { width: 168px; height: 168px; align-self: center; flex-shrink: 0; margin: 2px 0 10px 0; justify-content: center; }
+.ssa-app .ssa-transfer-ring__centre { align-items: center; }
+.ssa-app Label.ssa-transfer-ring__value { font-size: 30px; color: var(--text); -unity-font-definition: var(--font-strong); }
+.ssa-app Label.ssa-transfer-ring__of { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.ssa-app .ssa-transfer-ring--short Label.ssa-transfer-ring__value { color: var(--alert); }
+.ssa-app .ssa-transfer-rows { border-bottom-width: 1px; border-bottom-color: var(--edge); padding-bottom: 6px; }
+.ssa-app .ssa-transfer-rows Label.ssa-info__key { color: var(--text); }
+.ssa-app .ssa-transfer-left { margin-top: 6px; margin-bottom: 8px; }
+.ssa-app .ssa-transfer-choice { margin-bottom: 6px; flex-shrink: 0; }
+.ssa-app .ssa-button.ssa-transfer-choice__line { height: auto; min-height: 31px; margin-right: 0; justify-content: flex-start; padding: 5px 12px; }
+.ssa-app .ssa-transfer-choice__line Label.ssa-button__label { white-space: normal; -unity-text-align: middle-left; font-size: 12px; }
+.ssa-app .ssa-transfer-choice__line--active { border-color: var(--gold); background-color: var(--active); }
+.ssa-app .ssa-transfer-choice__line--active Label.ssa-button__label { color: var(--gold-light); }
+.ssa-app Label.ssa-transfer-warning { color: var(--gold-light); font-size: 11px; margin-top: 4px; margin-bottom: 2px; }
+.ssa-app .ssa-transfer-warnings { flex-shrink: 0; }
+
+/* ---- Steps and stages (foldable) ---- */
+.ssa-app .ssa-transfer-step { margin-top: 5px; flex-shrink: 0; }
+.ssa-app .ssa-transfer-step--done { opacity: 0.5; }
+.ssa-app Label.ssa-transfer-step__kind { font-size: 12px; color: var(--text); white-space: normal; }
+.ssa-app Label.ssa-transfer-step__dv { font-size: 12px; color: var(--gold-light); margin-left: 8px; }
+.ssa-app Label.ssa-transfer-step__when { font-size: 11px; color: var(--muted); }
+.ssa-app Label.ssa-transfer-step__why { font-size: 11px; color: var(--dim); white-space: normal; }
+.ssa-app Label.ssa-transfer-stage { font-size: 12px; color: var(--muted); white-space: normal; margin-top: 3px; }
+.ssa-app Label.ssa-transfer-stage--hand { color: var(--gold-light); }
