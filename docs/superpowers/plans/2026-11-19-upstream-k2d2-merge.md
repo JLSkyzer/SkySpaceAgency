@@ -174,15 +174,27 @@ Rule (memory `ui-follow-the-mockups`): no new K2-D2-style interface. As in the 4
 - **Frames** (lesson 2026-11-18) and **refusals that name the failed check** (lesson 2026-11-04) apply to every ported pilot.
 - **Each pilot tested from every start state** (lesson 2026-10-30): boost-back from orbit (refused), suborbital in the air, already falling, on the pad (refused).
 
-## Decisions taken in this plan (the user can correct them)
+## Decisions (taken by the user on 2026-11-19; they replace the proposals above where they differ)
 
-1. **Boost-back lives in the Land tab** (Atmo profile, Propulsive, Precision) now; the Return tab of the roadmap comes later and reuses it.
-2. **Vacuum precision and Lift circularization: ours stay**, theirs are not ported (two designs of the same thing; ours is tested and more general).
-3. **Gravity Turn for Orbit launches only**; transfer and rendezvous launches stay Guided until it is tested in game.
+1. **Merge shape:** `-s ours`, then one commit per port, each compiled and tested.
+2. **Boost-back is NOT a SkySpaceAgency feature.** The user will build his own booster return later (roadmap R2). But the K2-D2 pull request must **not remove** IanMealworm's boost-back. Chosen mechanism (§4.4): IanMealworm's boost-back is kept **compiled and tested in `main`**, behind `ModIdentity.IsK2D2` (a `const bool`, false in SkySpaceAgency, true on `pr/k2d2`). In SkySpaceAgency its UI is hidden and its start path unreachable; `land.precision_landing` keeps our meaning (Atmo: parachute return; Propulsive precision in the air stays greyed). The other landing items are ported for SkySpaceAgency: air landing-burn timing, Redux impact prediction, waypoint follow-on-move, standing check, `max_rotation`, Precision toggle not turning itself off, SAS release.
+3. **Gravity Turn for Orbit launches only.**
 4. **Node circularize buttons keep the player's later nodes** (remove only nodes before the burn).
-5. **Window: adopt Redux's resize handle and upstream's drag manipulator**, keep saving size and position.
-6. **No atmospheric precision from orbit** (switched off upstream).
-7. **PR scope**: everything in `Assets/`, tests included; `docs/` excluded from the PR branch (French test lists, SkySpaceAgency-branded mockups and plans), see T35.
+5. **Window: take upstream's version** (Redux resize handle, stock UI scale, drag manipulator) and **keep our saving of size and position**.
+6. **PR excludes `docs/`.**
+7. **Version proposed to K2-D2: 1.5.0.**
+8. Unchanged from the proposals: our vacuum precision and our Lift circularization stay (theirs not ported); no atmospheric precision from orbit.
+9. SkySpaceAgency never becomes a GitHub fork. The fork `JLSkyzer/K2D2Redux` and the PR are for later: nothing is pushed upstream, no PR is opened by this plan.
+
+## 4.4 K2-D2-only features (boost-back)
+
+- **Why a compile-time flag in `main`, not code only on `pr/k2d2`:** with the boost-back only on the PR branch, `pr/k2d2` would carry a second, hand-maintained diff (their LandingPilot modes, UI, settings) that rots and conflicts at each regeneration. With the flag, `pr/k2d2` = `main` + the identity commit, the boost-back is compiled and its pure parts are tested on every SkySpaceAgency test run, and a SkySpaceAgency player never sees it (dead branches behind a `const false`).
+- **What is gated:** the Land tab elements `PrecisionLanding_atmo` extras (`boost_back_flip_atmo`, `entry_angle_of_attack_atmo`, `entry_flight_path_angle_atmo`, `precision_landing_gate_atmo`) are hidden; the start rule `Atmo + Propulsive + precision + suborbital in air → BoostBack` exists only when `ModIdentity.IsK2D2`; in SkySpaceAgency the Atmo + Propulsive precision stays greyed exactly as today. Settings keys `land.boost_back_flip`, `land.entry_*` are declared in both (harmless, verbatim names so K2-D2 1.4.x files load on `pr/k2d2`).
+- **Shared with SkySpaceAgency anyway:** `ImpactModel` (Gravity Turn predictor), `ReduxImpactPrediction` (log + sensor), `AtmoBurnPlanner`/`AtmoLandingBurn` (air landing timing). Boost-back-only files: `BoostBackBurn`, `AtmoEntryGuidance` (+ `EntryHeatLimit`), `AtmoAttitudeHold`, targeting helpers, put under `Pilots/Landing/BoostBack/`.
+- **On `pr/k2d2`:** the flag flips with the identity; the Atmo profile's precision then means boost-back when `land.mode` is Propulsive (the default, and the only mode a K2-D2 1.4.x file knows), the parachute return when Parachute. K2-D2 players keep boost-back as in 1.4.1.
+- Section 4.2's boost-back bullet and section 4.3's Land bullet describe the K2-D2 flavour only.
+
+Task order after these decisions: T33 (ModIdentity) moves before Phase E; T27–T31 become "boost-back behind `ModIdentity.IsK2D2`" (one task group, kept smaller: wiring, gated UI, start rule tests in both flavours).
 
 ## Review Focus
 
