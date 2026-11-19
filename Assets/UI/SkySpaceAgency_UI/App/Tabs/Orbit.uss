@@ -1,0 +1,36 @@
+/* Orbit tab of the new window (plan 2026-11-19-new-ui-tab-migration). Rules scoped under .ssa-app. */
+/* Sizes: docs/design/ui/orbit.svg (make_screens.py orbit()) x 0.85. */
+
+/* TARGET ORBIT: segmented at 224, fields at 300 and 388 (88 apart), switches from 500, 44 apart. */
+.ssa-app .ssa-orbit .ssa-segmented { margin-bottom: 14px; }
+.ssa-app .ssa-orbit__fields { margin-bottom: 12px; }
+.ssa-app .ssa-orbit__switches { margin-top: 12px; flex-shrink: 0; }
+.ssa-app .ssa-orbit__switches .ssa-switch { height: 37px; }
+.ssa-app .ssa-orbit .ssa-textfield { margin-bottom: 0; }
+.ssa-app .ssa-orbit .ssa-textfield:disabled { opacity: 1; }
+.ssa-app .ssa-orbit .ssa-field__input:disabled { opacity: 0.55; }
+
+/* ORBIT VIEW */
+.ssa-app .ssa-orbit__view { flex-grow: 1; min-height: 220px; }
+.ssa-app Label.ssa-orbit__marker-label { position: absolute; font-size: 11px; white-space: nowrap; }
+.ssa-app Label.ssa-orbit__shape { position: absolute; bottom: 0; font-size: 11px; white-space: nowrap; }
+.ssa-app Label.ssa-orbit__shape--current { left: 0; color: var(--cyan); }
+.ssa-app Label.ssa-orbit__shape--target { right: 0; color: var(--gold-light); -unity-text-align: middle-right; }
+.ssa-app Label.ssa-orbit__empty {
+    position: absolute;
+    left: 0; right: 0; top: 45%;
+    font-size: 12px;
+    color: var(--dim);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+/* CURRENT ORBIT: plan rows 30 apart, a rule above the total (mockup y 534). */
+.ssa-app .ssa-orbit__plan .ssa-info__row { min-height: 25px; }
+.ssa-app .ssa-orbit__plan Label.ssa-info__key { font-size: 12px; color: var(--text); }
+.ssa-app .ssa-orbit__total { border-top-width: 1px; border-top-color: var(--line); margin-top: 6px; padding-top: 6px; }
+.ssa-app .ssa-orbit__total Label.ssa-info__key { font-size: 12px; color: var(--muted); }
+.ssa-app Label.ssa-orbit__capture { margin-top: 0; margin-bottom: 4px; }
+.ssa-app .ssa-orbit .ssa-console { max-height: 120px; overflow: hidden; }
+/* "One node at a time" is locked on, but drawn as the mockup's other switches. */
+.ssa-app .ssa-orbit__locked:disabled { opacity: 1; }
