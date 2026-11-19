@@ -325,7 +325,9 @@ namespace K2D2.Lift
             status_bar.Reset();
             if (pilot.isRunning)
             {
-                status_bar.Warning($"Status : {pilot.status}");
+                status_bar.Warning(string.IsNullOrEmpty(pilot.start_note)
+                    ? $"Status : {pilot.status}"
+                    : $"Status : {pilot.status} ({pilot.start_note})");
 
                 if (pilot.current_subpilot != null)
                     pilot.current_subpilot.updateUI(panel, status_bar);

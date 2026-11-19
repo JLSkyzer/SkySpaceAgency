@@ -131,18 +131,23 @@ namespace K2D2.Lift
         public Setting<string> rendezvous_target = new("lift.rendezvous_target", "");
         public Setting<bool> rendezvous_dock = new("lift.rendezvous_dock", true);
 
-        // The ascent lead measured by the transfer ascents, per body (lift.ascent_lead.<body>.s and
-        // .deg); -1 until a first one (LiftGoalRules.AscentLead then uses its estimate).
+        // The ascent lead measured by the transfer ascents, per body and per ascent profile
+        // (lift.ascent_lead.<body>.s and .deg for Guided, lift.ascent_lead.<body>.gt.s and .gt.deg
+        // for Gravity Turn, so the two profiles never mix their leads); -1 until a first one
+        // (LiftGoalRules.AscentLead then uses its estimate).
         readonly System.Collections.Generic.Dictionary<string, (Setting<float> s, Setting<float> deg)> measured_leads =
             new System.Collections.Generic.Dictionary<string, (Setting<float>, Setting<float>)>();
 
-        public (Setting<float> s, Setting<float> deg) MeasuredLead(string body)
+        public static string AscentLeadPrefix(string body, AscentProfile profile) =>
+            $"lift.ascent_lead.{body ?? ""}." + (profile == AscentProfile.GravityTurn ? "gt." : "");
+
+        public (Setting<float> s, Setting<float> deg) MeasuredLead(string body, AscentProfile profile = AscentProfile.Guided)
         {
-            body = body ?? "";
-            if (!measured_leads.TryGetValue(body, out var pair))
+            string prefix = AscentLeadPrefix(body, profile);
+            if (!measured_leads.TryGetValue(prefix, out var pair))
             {
-                pair = (new Setting<float>($"lift.ascent_lead.{body}.s", -1f), new Setting<float>($"lift.ascent_lead.{body}.deg", -1f));
-                measured_leads[body] = pair;
+                pair = (new Setting<float>(prefix + "s", -1f), new Setting<float>(prefix + "deg", -1f));
+                measured_leads[prefix] = pair;
             }
             return pair;
         }

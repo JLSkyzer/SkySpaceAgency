@@ -39,12 +39,22 @@ namespace K2D2.Lift
         // can't swap the controller under the burn. Until the run starts, `ascent` is the selected
         // one (the tab's readouts).
         internal Ascent ascent_guided = null;
+        ReactiveAscent ascent_gravity_turn = null;
         AscentControllerBase run_ascent = null;
+
+        // The profile this run flies (frozen at Start): Gravity Turn for Orbit launches only.
+        internal AscentProfile run_profile = AscentProfile.Guided;
 
         internal AscentControllerBase ascent => run_ascent ?? SelectedAscent();
 
-        // Only Guided exists so far; the Gravity Turn controller is added with ReactiveAscent.
-        AscentControllerBase SelectedAscent() => ascent_guided;
+        // Before a run: the controller the tab's goal and profile would fly.
+        AscentControllerBase SelectedAscent() => ControllerFor(LiftGoalRules.ProfileFor(settings.goal.V, settings.ascent_profile.V));
+
+        AscentControllerBase ControllerFor(AscentProfile profile) =>
+            profile == AscentProfile.GravityTurn ? (AscentControllerBase)ascent_gravity_turn : ascent_guided;
+
+        // Said while the run lasts when it flies another profile than the one selected.
+        internal string start_note = null;
 
         Adjust adjust = null;
         Coasting coasting = null;   
@@ -68,6 +78,7 @@ namespace K2D2.Lift
             current_vessel = K2D2_Plugin.Instance.current_vessel;
        
             ascent_guided = new Ascent(settings, ascent_path);
+            ascent_gravity_turn = new ReactiveAscent(settings);
             adjust = new Adjust(settings, this);
             coasting = new Coasting(this, settings);
             final_circularize = new FinalCircularize(this, settings);
@@ -206,7 +217,17 @@ namespace K2D2.Lift
         {
             transfer = null;
             ascent_guided.transfer_plan = null;
-            run_ascent = SelectedAscent();
+            LiftGoal goal = settings.goal.V;
+            run_profile = LiftGoalRules.ProfileFor(goal, settings.ascent_profile.V);
+            run_ascent = ControllerFor(run_profile);
+            start_note = null;
+            if (run_profile != settings.ascent_profile.V)
+            {
+                start_note = LiftGoalRules.GravityTurnOrbitOnly;
+                logger.LogInfo($"[Lift] {LiftGoalRules.GravityTurnOrbitOnly} (goal {goal})");
+            }
+            else
+                logger.LogInfo($"[Lift] start: goal {goal}, ascent profile {run_profile}");
             settings.SetApOverride(-1);
             if (settings.goal.V == LiftGoal.PrepareTransfer || settings.goal.V == LiftGoal.Rendezvous)
                 status = LiftStatus.WaitLaunch;
@@ -261,12 +282,12 @@ namespace K2D2.Lift
                 $"[Lift] ascent lead measured: {dt:F1} s, downrange {downrangeDeg:F2}° on {p.BodyName} ") +
                 System.FormattableString.Invariant(
                 $"(the window used {p.LeadSeconds:F0} s, {p.DownrangeRad * 180 / System.Math.PI:F2}°, {(p.LeadMeasured ? "measured" : "estimate")})"));
-            var stored = settings.MeasuredLead(p.BodyName);
+            var stored = settings.MeasuredLead(p.BodyName, run_profile);
             if (LiftGoalRules.UpdatedLead(stored.s.V, stored.deg.V, dt, downrangeDeg, out double s, out double deg))
             {
                 stored.s.V = (float)s;
                 stored.deg.V = (float)deg;
-                logger.LogInfo(System.FormattableString.Invariant($"[Lift] ascent lead stored for {p.BodyName}: {s:F1} s, {deg:F2}° (clamped, smoothed)"));
+                logger.LogInfo(System.FormattableString.Invariant($"[Lift] ascent lead stored for {p.BodyName} ({run_profile}): {s:F1} s, {deg:F2}° (clamped, smoothed)"));
             }
         }
 

@@ -79,4 +79,31 @@ public class AscentProfileSettingsTests
             Assert.AreEqual(u.max, Convert.ToDouble(Field(s, "_max")), 1e-6, u.key + " max");
         }
     }
+
+    // User decision 2026-11-19: Gravity Turn for Orbit launches only; the other goals fly Guided.
+    [Test]
+    public void GravityTurn_FliesOrbitLaunchesOnly()
+    {
+        Assert.AreEqual(AscentProfile.GravityTurn, LiftGoalRules.ProfileFor(LiftGoal.Orbit, AscentProfile.GravityTurn));
+        Assert.AreEqual(AscentProfile.Guided, LiftGoalRules.ProfileFor(LiftGoal.Orbit, AscentProfile.Guided));
+        Assert.AreEqual(AscentProfile.Guided, LiftGoalRules.ProfileFor(LiftGoal.PrepareTransfer, AscentProfile.GravityTurn));
+        Assert.AreEqual(AscentProfile.Guided, LiftGoalRules.ProfileFor(LiftGoal.Rendezvous, AscentProfile.GravityTurn));
+    }
+
+    // Guided keeps the keys it always had; Gravity Turn stores its own, so the leads never mix.
+    [Test]
+    public void AscentLeads_ArePerProfile()
+    {
+        Assert.AreEqual("lift.ascent_lead.Kerbin.", LiftSettings.AscentLeadPrefix("Kerbin", AscentProfile.Guided));
+        Assert.AreEqual("lift.ascent_lead.Kerbin.gt.", LiftSettings.AscentLeadPrefix("Kerbin", AscentProfile.GravityTurn));
+
+        var settings = new LiftSettings();
+        var guided = settings.MeasuredLead("Kerbin");
+        var gt = settings.MeasuredLead("Kerbin", AscentProfile.GravityTurn);
+        Assert.AreEqual("lift.ascent_lead.Kerbin.s", guided.s.key);
+        Assert.AreEqual("lift.ascent_lead.Kerbin.deg", guided.deg.key);
+        Assert.AreEqual("lift.ascent_lead.Kerbin.gt.s", gt.s.key);
+        Assert.AreEqual("lift.ascent_lead.Kerbin.gt.deg", gt.deg.key);
+        Assert.AreSame(guided.s, settings.MeasuredLead("Kerbin", AscentProfile.Guided).s);
+    }
 }

@@ -217,6 +217,16 @@ namespace K2D2.Lift
             return false;
         }
 
+        // ---------------------------------------------------------------- ascent profile
+
+        // Gravity Turn (K2-D2 1.4.0) flies Orbit launches only for now (user decision 2026-11-19):
+        // the transfer and rendezvous goals need the launch-window azimuth and plane steering, which
+        // only the Guided ascent has, so they fly Guided whatever is selected.
+        public static AscentProfile ProfileFor(LiftGoal goal, AscentProfile selected) =>
+            goal == LiftGoal.Orbit ? selected : AscentProfile.Guided;
+
+        public const string GravityTurnOrbitOnly = "Gravity Turn flies Orbit launches only for now; using Guided";
+
         // ---------------------------------------------------------------- rendezvous goal (4.4)
 
         // Only the Orbit goal may leave the circularization to the player ("Circularize Once Ascent

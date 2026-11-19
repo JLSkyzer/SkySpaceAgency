@@ -103,7 +103,7 @@ namespace K2D2.Lift
             bool decisive = BodyRotation.IsDecisive(r, v, w);
             Vector3d omega = BodyRotation.AngularVelocity(w, sign);
 
-            var stored = settings.MeasuredLead(node.Name);
+            var stored = settings.MeasuredLead(node.Name, lift.run_profile);
             LiftGoalRules.AscentLead(stored.s.V, stored.deg.V, out double lead, out double downrange, out bool measured);
 
             // Pre-selects the target in the Rendezvous tab; an action on our vessel only.
