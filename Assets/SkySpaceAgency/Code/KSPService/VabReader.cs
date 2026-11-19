@@ -23,7 +23,7 @@ namespace K2D2.KSPService
             var game = GeneralTools.Game;
             if (game == null)
                 return false;
-            // Same access as K2D2_Plugin.ValidScene.
+            // Same access as K2D2_Plugin.CurrentGameState.
             var gameState = game.GlobalGameState?.GetGameState();
             return gameState != null && gameState.GameState == GameState.VehicleAssemblyBuilder;
         }

@@ -28,14 +28,16 @@ namespace K2D2
 
     internal class L
     {
+        // The logger only exists from OnPreInitialized on; anything logged earlier is dropped
+        // instead of throwing (K2-D2 1.4.1).
         public static void Log(string txt)
         {
-            K2D2_Plugin.logger.LogInfo(txt);
+            K2D2_Plugin.logger?.LogInfo(txt);
         }
 
         public static void Vector3(string label, Vector3 value)
         {
-            K2D2_Plugin.logger.LogInfo(label + " : " + StrTool.Vector3ToString(value));
+            K2D2_Plugin.logger?.LogInfo(label + " : " + StrTool.Vector3ToString(value));
         }
     }
 
@@ -79,7 +81,8 @@ namespace K2D2
 
         public static ILogger logger;
 
-        public KSPVessel current_vessel = new KSPVessel();
+        // NonSerialized: Unity warned at startup that these were skipped by serialization (K2-D2 1.4.1).
+        [System.NonSerialized] public KSPVessel current_vessel = new KSPVessel();
 
         static bool loaded = false;
 
@@ -185,7 +188,7 @@ namespace K2D2
 
             // Register OAB AppBar Button: the VAB tools window (export, import, parts dump). A separate
             // window that only opens in the VAB (VabToolsWindow closes itself elsewhere); the flight
-            // window above keeps its own scene gating (validScenes). It is created on first use and
+            // window above keeps its own scene gating (SceneTransition). It is created on first use and
             // borrows the main window's style sheets, so it needs no Addressables entry of its own.
             Appbar.RegisterOABAppButton(
                 SWMetadata.Name + " VAB tools",
@@ -212,6 +215,20 @@ namespace K2D2
         public override void OnCampaignLoaded()
         {
             EnsureWindow();
+        }
+
+        // Leaving the campaign (to the main menu, or before another one loads): the window closes
+        // and the pilots stop now, not when the next campaign's first frame is read.
+        public override void OnCampaignUnloading()
+        {
+            if (main_window != null)
+                main_window.IsWindowOpen = false;
+            window_hidden_by_scene = false;
+            if (in_flight)
+            {
+                in_flight = window_allowed = false;
+                ResetControllers(ResetCause.ModDisabled);
+            }
         }
 
         // Creates the main window once its UXML can be loaded. Returns false, without creating an
@@ -288,79 +305,77 @@ namespace K2D2
         }
 
 
-        private static GameState[] validScenes = { GameState.FlightView, GameState.Map3DView };
+        // Worked out once per frame in Update (SceneTransition); FixedUpdate and LateUpdate use the
+        // same answer. Pilots keep flying in photo mode; the window only shows in flight and map view.
+        static bool in_flight, window_allowed;
 
-        //private static GameState last_game_state ;
+        bool window_hidden_by_scene;
 
-        private static bool ValidScene()
+        static GameState? CurrentGameState()
         {
-            // Update/FixedUpdate/LateUpdate run before OnInitialized, while the game instance exists
-            // but its state machine is not set up yet: both used to throw NullReferenceException here.
-            if (!loaded || GeneralTools.Game == null) return false;
-
-            // Since Redux 26w42a a mod is installed but disabled in every campaign that does not
-            // enable its default feature (and in the main menu). Redux hides our AppBar button
-            // then, but Alt-O and the pilots run from Update, so they must check Enabled.
-            if (Instance == null || !Instance.Enabled)
-            {
-                ResetControllers(ResetCause.ModDisabled);
-                return false;
-            }
-
+            // Game and its state machine are not set up for the first frames after loading.
             // GameStateMachine has no GetState() method on Redux's current assemblies; the current
             // GameState comes from GetGameState().GameState instead.
-            var gameState = GeneralTools.Game.GlobalGameState?.GetGameState();
-            if (gameState == null) return false;
-            var state = gameState.GameState;
-            bool is_valid = validScenes.Contains(state);
-            if (!is_valid)
-            {
-                ResetControllers(ResetCause.SceneChange);
-            }
-            return is_valid;
+            var gameState = GeneralTools.Game?.GlobalGameState?.GetGameState();
+            return gameState?.GameState;
         }
 
         void Update()
         {
-            // main_ui?.Update();
+            // Unity calls Update before OnInitialized has finished; `loaded` is set at its end.
+            if (!loaded) return;
 
-            Debug.developerConsoleVisible = false;
-            // Update Models (even on non valid scenes)
-            current_vessel.Update();
-            // Engine state for the rails warp gate, and the watchdog (every frame, in flight).
-            if (loaded)
+            // Since Redux 26w42a a mod is installed but disabled in every campaign that does not
+            // enable its default feature (and in the main menu). Redux hides our AppBar button
+            // then, but Alt-O and the pilots run from here, so nothing runs while it is off.
+            var step = SceneTransition.Next(in_flight, Enabled, Enabled ? CurrentGameState() : null,
+                main_window != null && main_window.IsWindowOpen, window_hidden_by_scene);
+            in_flight = step.InFlight;
+            window_allowed = step.WindowAllowed;
+            window_hidden_by_scene = step.HiddenByScene;
+            if (step.Reset.HasValue)
+                ResetControllers(step.Reset.Value);
+            if (main_window != null)
+            {
+                if (step.CloseWindow)
+                    main_window.IsWindowOpen = false;
+                else if (step.OpenWindow)
+                    main_window.IsWindowOpen = true;
+            }
+
+            if (Enabled)
+            {
+                // Update Models (even on non valid scenes)
+                current_vessel.Update();
+                // Engine state for the rails warp gate, and the watchdog (every frame).
                 WarpGate.Tick();
 
-            /* TODO: Other mods interfacing
-            if (K2D2OtherModsInterface.instance == null)
-            {
-                var other_mods = new K2D2OtherModsInterface();
-                other_mods.CheckModsVersions();
-            }
-            */
-
-            if (ValidScene())
-            {
-                // Debug.developerConsoleVisible = false;
-                if (Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.O) && EnsureWindow())
-                    main_window.IsWindowOpen = !main_window.IsWindowOpen;
-
-                StagingPilot.Instance.Update();
-
-                if (!StagingPilot.Instance.is_staging)
+                /* TODO: Other mods interfacing
+                if (K2D2OtherModsInterface.instance == null)
                 {
-                    // Update Controllers only if staging is not in progress
-                    pilots_manager.UpdateControllers();
-                }   
-            }
-            else
-            {
-                if (main_window != null && main_window.IsWindowOpen)
-                    main_window.IsWindowOpen = false;
+                    var other_mods = new K2D2OtherModsInterface();
+                    other_mods.CheckModsVersions();
+                }
+                */
+
+                if (in_flight)
+                {
+                    if (window_allowed && Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.O) && EnsureWindow())
+                        main_window.IsWindowOpen = !main_window.IsWindowOpen;
+
+                    StagingPilot.Instance.Update();
+
+                    if (!StagingPilot.Instance.is_staging)
+                    {
+                        // Update Controllers only if staging is not in progress
+                        pilots_manager.UpdateControllers();
+                    }
+                }
             }
 
             // A burn under physics time warp that was not updated this frame (pilot stopped, scene
-            // change, staging pause) gives the warp back to 1x and the player's mode.
+            // change, staging pause, mod turned off) gives the warp back to 1x and the player's mode.
+            // Runs even while the mod is off, so a warp we started is always released.
             KSPService.PhysicsWarp.ReleaseIfAbandoned();
         }
 
@@ -386,11 +401,11 @@ namespace K2D2
 
         public bool settings_visible = false;
 
-        public PilotsManager pilots_manager = new PilotsManager();
+        [System.NonSerialized] public PilotsManager pilots_manager = new PilotsManager();
 
         void FixedUpdate()
         {
-            if (ValidScene())
+            if (in_flight)
             {
                 pilots_manager.FixedUpdateControllers();
             }
@@ -398,28 +413,16 @@ namespace K2D2
 
         private void LateUpdate()
         {
-            if (ValidScene())
+            if (in_flight)
             {
                 pilots_manager.LateUpdateControllers();
             }
         }
 
+        // Scene changes are not subscribed to: GameStateChangedMessage does not reach mods on this
+        // game build (LeoMarinDev measured it, K2-D2 1.4.1), so Update polls the game state instead.
         private void RegisterMessages()
         {
-            Game.Messages.Subscribe<GameStateChangedMessage>(msg =>
-            {
-                var message = (GameStateChangedMessage)msg;
-
-                // if (message.CurrentState == GameState.FlightView)
-                // {
-                //     ShapeDrawer.Instance.can_draw = true;
-                // }
-                // else if (message.PreviousState == GameState.FlightView)
-                // {
-                //     ShapeDrawer.Instance.can_draw = false;
-                // }
-            });
-
             Game.Messages.Subscribe<VesselChangedMessage>(msg =>
             {
                 var message = (VesselChangedMessage)msg;

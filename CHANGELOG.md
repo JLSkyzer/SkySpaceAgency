@@ -2,6 +2,10 @@
 
 ## Unreleased (SkySpaceAgency)
 
+### From K2-D2 1.4.0 / 1.4.1 (IanMealworm; window fixes by LeoMarinDev)
+
+- **Scenes and campaigns** (K2-D2 1.4.1; not yet flown in game): the pilots are stopped once when the flight scene is left, not on every frame after; **photo mode counts as flight**, so a landing or a burn keeps flying while the player takes a picture (the window hides, then comes back); leaving a campaign closes the window and stops the pilots; nothing of the mod runs in a campaign that has it off (the rails warp watchdog included), except giving back a physics warp one of our burns started. The game's developer console is no longer forced shut every frame. No more "skipped by serialization" warnings at startup.
+
 ### Changed
 
 - **Native rails warp during burns, now the default** (every closed-loop burn: Transfer, Orbit, Circularize, Node, Lift, Rendezvous away from the target; 2026-11-15, for Redux 26w46a; not yet flown in game). Redux 26w46a fixed the game's rails warp under thrust: the burn now follows the lit engines, is rebuilt when their thrust or direction changes, and stops when they stop (read in the game's code on 2026-11-15; players confirm native nodes warp correctly). Before, it was a fixed burn to the stage's burnout, which burned ~500 m/s per injection in our 2026-10-24 test.
