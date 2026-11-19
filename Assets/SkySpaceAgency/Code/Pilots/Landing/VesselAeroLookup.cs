@@ -308,7 +308,7 @@ namespace K2D2.Landing
         // density fixed - "what if I re-pointed my nose right now, everything else about this
         // instant unchanged." It does not answer "what would my drag/lift be at some future point
         // along a hypothetical trajectory with different speed/altitude" - that needs bridging
-        // this Unity-world-space math with AtmosphericPredictor's Zup/KeplerPropagator coordinate
+        // this Unity-world-space math with the former AtmosphericPredictor's (deleted in 2026-11) Zup/KeplerPropagator coordinate
         // system (see EvaluateVesselAeroPureRetrogradeAtState below for that).
         public static VesselAeroSum EvaluateVesselAeroAtAttitude(VesselComponent vessel, Vector3 hypotheticalControlForwardWorld)
         {

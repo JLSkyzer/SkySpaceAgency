@@ -14,7 +14,7 @@ namespace K2UI
     // constructor sets main_slider's lowValue/highValue explicitly (0/1, matching the old bag
     // defaults) instead of trusting Slider's own defaults, and _labelOnTop's field initializer is
     // `false` to match the old bag default. An AttachToPanelEvent hook (same idiom as
-    // ExFoldoutGroup.cs) reproduces the old Init()'s unconditional trailing
+    // the former ExFoldoutGroup.cs (deleted in 2026-11 like K2-D2 1.4.0)) reproduces the old Init()'s unconditional trailing
     // SliderValueChanged()/setLabels() calls, guaranteeing a consistent visual state even for a
     // bare tag.
     [UxmlElement]
@@ -209,7 +209,7 @@ namespace K2UI
             // Reproduces the old UxmlTraits.Init()'s unconditional trailing
             // SliderValueChanged()/setLabels() calls, guaranteeing a consistent visual state even
             // for a bare tag. Runs once attached, by which point any UXML attributes have already
-            // been applied - same idiom ExFoldoutGroup.cs uses.
+            // been applied - same idiom the former ExFoldoutGroup.cs (deleted in 2026-11 like K2-D2 1.4.0) uses.
             RegisterCallback<AttachToPanelEvent>(evt => { SliderValueChanged(); setLabels(); });
         }
 

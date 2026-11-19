@@ -553,7 +553,7 @@ namespace K2D2.KSPService
         public AltimeterDisplayMode GetAltimeterDisplayMode()
         {
             // CORRECTED: an earlier verification pass wrongly changed .GetValue() to .Value here. A
-            // live build against the real assemblies proved that wrong (see KSPVesselInformation.cs's
+            // live build against the real assemblies proved that wrong (see the former KSPVesselInformation.cs's (deleted in 2026-11)
             // GetManeuverNodeVector for the full explanation) - PropertyExternal<T> has no Value
             // member, only GetValue(). Reverted.
             return Game.ViewController.DataProvider.TelemetryDataProvider.AltimeterDisplayMode.GetValue();
@@ -605,7 +605,7 @@ namespace K2D2.KSPService
         public double GetDisplaySpeed()
         {
             // CORRECTED: reverted .Value back to .GetValue(), same reasoning as GetAltimeterDisplayMode
-            // above and KSPVesselInformation.cs's GetManeuverNodeVector.
+            // above and the former KSPVesselInformation.cs's (deleted in 2026-11) GetManeuverNodeVector.
             SpeedDisplayMode speedDisplayMode =
                 Game.ViewController.DataProvider.TelemetryDataProvider.SpeedDisplayMode.GetValue();
             return telemetryDataProvider.GetSpeedDisplayValue(speedDisplayMode);
