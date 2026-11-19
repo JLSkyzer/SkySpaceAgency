@@ -17,6 +17,14 @@ namespace SkySpaceAgency.AppUI
         public static Setting<float> Scale => _scale ??= new Setting<float>("app_ui_scale", UiScale.Default);
         public static Setting<string> Page => _page ??= new Setting<string>("app_main_page", "lift");
 
+        static Setting<bool> _classic, _compact;
+
+        /// <summary>Alt+Y and the app bar button open the classic window instead (until the new one is validated in game).</summary>
+        public static Setting<bool> ClassicUi => _classic ??= new Setting<bool>("app_classic_ui", false);
+
+        /// <summary>The compact flight bar while a pilot flies and the window is closed (settings mockup).</summary>
+        public static Setting<bool> CompactBar => _compact ??= new Setting<bool>("app_compact_bar", true);
+
         public const string PositionKey = "app_window_pos";
         public const string HeightKey = "app_window_height";
         public const string WidthKey = "app_window_width";
@@ -63,6 +71,7 @@ namespace SkySpaceAgency.AppUI
     public class AppWindow : MonoBehaviour
     {
         PanelRenderer _panel;
+        AppHudView _hud;
         AppWindowView _view;
         WindowSizeSaver _size;
         bool _open, _reclamp, _awaitLayout;
@@ -89,7 +98,7 @@ namespace SkySpaceAgency.AppUI
         }
 
         /// <summary>Builds the frame and the preview pages into the host. Also used by the EditMode harness.</summary>
-        public static AppWindowView BuildView(VisualElement host, AppDemo.Hooks hooks)
+        public static AppWindowView BuildView(VisualElement host, AppContext context)
         {
             var view = new AppWindowView(ModIdentity.Title, ModIdentity.Slogan);
             view.style.left = AppWindowGeometry.DefaultPosition.x;
@@ -98,7 +107,9 @@ namespace SkySpaceAgency.AppUI
             view.style.height = AppWindowGeometry.DefaultSize.y;
             view.style.minWidth = AppWindowGeometry.MinSize.x;
             view.style.minHeight = AppWindowGeometry.MinSize.y;
-            AppDemo.Build(view, hooks);
+            view.Tabs.SetBadge("Preview");
+            foreach (var tab in AppTabs.Create(context))
+                view.AddTab(tab);
             host?.Add(view);
             return view;
         }
@@ -114,13 +125,17 @@ namespace SkySpaceAgency.AppUI
             host.style.position = Position.Absolute;
             host.style.left = 0; host.style.top = 0; host.style.right = 0; host.style.bottom = 0;
 
-            var hooks = new AppDemo.Hooks
+            var context = new AppContext
             {
-                Scale = UiScale.Clamp(AppSettings.Scale.V),
-                SetScale = s => { AppSettings.Scale.V = s; ApplyScale(); },
+                Plugin = SkySpaceAgencyPlugin.Instance,
+                SetScale = s => { AppSettings.Scale.V = UiScale.Clamp(s); ApplyScale(); },
                 OpenClassicWindow = () => OpenClassicWindow?.Invoke(),
             };
-            _view = BuildView(host, hooks);
+            _view = BuildView(host, context);
+            _hud = new AppHudView();
+            _hud.style.display = DisplayStyle.None;
+            _hud.openWindow += () => IsWindowOpen = true;
+            host.Add(_hud);
             _view.Restore(AppSettings.Page.V);
             _view.Tabs.selected += code => AppSettings.Page.V = code;
             _view.Header.CloseButton.clicked += () => IsWindowOpen = false;
@@ -171,6 +186,10 @@ namespace SkySpaceAgency.AppUI
                 _open = value;
                 if (_view == null) return;
                 _view.style.display = value ? DisplayStyle.Flex : DisplayStyle.None;
+                // The app bar button follows, as for the classic window (only while the new one is the default).
+                if (_panel != null && !AppSettings.ClassicUi.V)
+                    GameObject.Find(SkySpaceAgencyPlugin.ToolbarFlightButtonID)
+                        ?.GetComponent<KSP.UI.Binding.UIValue_WriteBool_Toggle>()?.SetValue(value);
                 if (value) { _awaitLayout = true; _reclamp = true; }
             }
         }
@@ -188,7 +207,49 @@ namespace SkySpaceAgency.AppUI
         }
 
         // Both: UITK for KSP2 may rewrite the panel scale before or after our LateUpdate in a frame.
-        void Update() => ApplyScale();
+        void Update()
+        {
+            ApplyScale();
+            if (_view == null) return;
+            if (_open)
+            {
+                try { _view.Tick(); }
+                catch (Exception e) { LogTickError(e); }
+            }
+            UpdateHud();
+        }
+
+        string _lastTickError;
+
+        void LogTickError(Exception e)
+        {
+            string msg = e.GetType().Name + ": " + e.Message;
+            if (msg == _lastTickError) return;   // once per distinct error, not every frame
+            _lastTickError = msg;
+            L.Log($"AppWindow: tab '{_view.Tabs.Current}' update failed: {e}");
+        }
+
+        // The compact flight bar: shown while a pilot flies and the full window is closed (setting
+        // app_compact_bar, Settings > Interface).
+        void UpdateHud()
+        {
+            HudState state = null;
+            if (!_open && AppSettings.CompactBar.V && _allowed)
+                foreach (var t in _view.TabList)
+                    if (t.IsRunning && (state = SafeHud(t)) != null)
+                        break;
+            _hud.Show(state);
+        }
+
+        static HudState SafeHud(AppTab t)
+        {
+            try { return t.Hud; } catch (Exception) { return null; }
+        }
+
+        bool _allowed = true;
+
+        /// <summary>Flight and map view only, like the window (set by the plugin every frame).</summary>
+        public bool Allowed { get => _allowed; set => _allowed = value; }
 
         void LateUpdate()
         {

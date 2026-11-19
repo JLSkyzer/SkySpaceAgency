@@ -235,12 +235,12 @@ namespace SkySpaceAgency.UI
             // toggle's original apparent intent.
             staging_toggle?.Bind(StagingSettings.auto_staging);
 
-            // Opens the new wide window (preview of the new interface, docs/design/ui).
+            // Back to the new window (the default since the tab migration): turns the Classic UI setting off.
             var new_ui_button = title_bar.Q<Button>("new-ui-button");
             if (new_ui_button == null)
                 L.Log("MainWindow.OnUiReload: title_bar.Q<Button>(\"new-ui-button\") returned null.");
             else
-                new_ui_button.clicked += () => SkySpaceAgencyPlugin.Instance?.ToggleAppWindow();
+                new_ui_button.clicked += () => SkySpaceAgencyPlugin.Instance?.SwitchUi(false);
 
             _rootElement.Query<IntegerField>().ForEach(field => field.DisableGameInputOnFocus());
             _rootElement.Query<FloatField>().ForEach(field => field.DisableGameInputOnFocus());

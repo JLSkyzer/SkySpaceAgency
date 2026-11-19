@@ -102,6 +102,30 @@ namespace SkySpaceAgency.AppUI
             RegisterCallback<GeometryChangedEvent>(e => UpdateNarrow(e.newRect.width));
         }
 
+        readonly List<AppTab> _tabs = new();
+
+        public IReadOnlyList<AppTab> TabList => _tabs;
+        public AppTab CurrentTab => _tabs.Find(t => t.Code == Tabs.Current);
+        public AppTab TabFor(string code) => _tabs.Find(t => t.Code == code);
+
+        /// <summary>Builds the tab's page and adds it with its tab button.</summary>
+        public void AddTab(AppTab tab)
+        {
+            var page = tab.Build();
+            _tabs.Add(tab);
+            AddPage(tab.Code, tab.Label, page, tab.RightAligned);
+        }
+
+        public const string RunningClass = "ssa-tab--running";
+
+        /// <summary>Every frame while open: the shown tab updates, every tab's button lights while its pilot flies.</summary>
+        public void Tick()
+        {
+            CurrentTab?.Tick();
+            foreach (var t in _tabs)
+                Tabs.TabElement(t.Code)?.EnableInClassList(RunningClass, t.IsRunning);
+        }
+
         public IEnumerable<string> PageCodes => _pageByCode.Keys;
         public VisualElement PageFor(string code) => _pageByCode.TryGetValue(code, out var p) ? p : null;
 

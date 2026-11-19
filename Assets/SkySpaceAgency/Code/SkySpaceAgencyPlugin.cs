@@ -212,11 +212,7 @@ namespace SkySpaceAgency
                 SWMetadata.Name,
                 ToolbarFlightButtonID,
                 AssetsLoader.LoadIcon("icon.png"),
-                isOpen =>
-                {
-                    if (EnsureWindow())
-                        main_window.IsWindowOpen = isOpen;
-                }
+                isOpen => SetDefaultWindowOpen(isOpen)
             );
 
             // Register OAB AppBar Button: the VAB tools window (export, import, parts dump). A separate
@@ -333,6 +329,42 @@ namespace SkySpaceAgency
                 main_window.IsWindowOpen = true;
         }
 
+        /// <summary>
+        /// The window Alt+Y and the app bar button open: the new one, or the classic one while the
+        /// "Classic UI" setting is on (kept until the new window is validated in game).
+        /// </summary>
+        bool UseClassicUi => SkySpaceAgency.AppUI.AppSettings.ClassicUi.V;
+
+        void ToggleDefaultWindow()
+        {
+            if (UseClassicUi)
+            {
+                if (EnsureWindow()) main_window.IsWindowOpen = !main_window.IsWindowOpen;
+            }
+            else if (EnsureAppWindow())
+                app_window.IsWindowOpen = !app_window.IsWindowOpen;
+        }
+
+        void SetDefaultWindowOpen(bool open)
+        {
+            if (UseClassicUi)
+            {
+                if (EnsureWindow()) main_window.IsWindowOpen = open;
+            }
+            else if (EnsureAppWindow())
+                app_window.IsWindowOpen = open;
+        }
+
+        /// <summary>Switches between the two windows (the Settings switch and the classic window's button).</summary>
+        internal void SwitchUi(bool classic)
+        {
+            bool open = (main_window != null && main_window.IsWindowOpen) || (app_window != null && app_window.IsWindowOpen);
+            SkySpaceAgency.AppUI.AppSettings.ClassicUi.V = classic;
+            if (main_window != null && !classic) main_window.IsWindowOpen = false;
+            if (app_window != null && classic) app_window.IsWindowOpen = false;
+            if (open && window_allowed) SetDefaultWindowOpen(true);
+        }
+
         /// <summary>The classic window's "New UI (preview)" button: opens or closes the new window (flight only).</summary>
         internal void ToggleAppWindow()
         {
@@ -377,7 +409,7 @@ namespace SkySpaceAgency
         // same answer. Pilots keep flying in photo mode; the window only shows in flight and map view.
         static bool in_flight, window_allowed;
 
-        bool window_hidden_by_scene;
+        bool window_hidden_by_scene, app_hidden_by_scene;
 
         static GameState? CurrentGameState()
         {
@@ -396,7 +428,9 @@ namespace SkySpaceAgency
             // Since Redux 26w42a a mod is installed but disabled in every campaign that does not
             // enable its default feature (and in the main menu). Redux hides our AppBar button
             // then, but the window shortcut and the pilots run from here, so nothing runs while it is off.
-            var step = SceneTransition.Next(in_flight, Enabled, Enabled ? CurrentGameState() : null,
+            bool was_in_flight = in_flight;
+            var game_state = Enabled ? CurrentGameState() : null;
+            var step = SceneTransition.Next(in_flight, Enabled, game_state,
                 main_window != null && main_window.IsWindowOpen, window_hidden_by_scene);
             in_flight = step.InFlight;
             window_allowed = step.WindowAllowed;
@@ -410,9 +444,19 @@ namespace SkySpaceAgency
                 else if (step.OpenWindow)
                     main_window.IsWindowOpen = true;
             }
-            // The new window is only for flight and map view, like the classic one; it is not reopened by itself.
-            if (app_window != null && app_window.IsWindowOpen && (step.CloseWindow || !window_allowed))
-                app_window.IsWindowOpen = false;
+            // The new window follows the same rule as the classic one (hidden in photo mode and brought
+            // back, closed outside flight and map view): the same pure decision, for its own state.
+            if (app_window != null)
+            {
+                var app_step = SceneTransition.Next(was_in_flight, Enabled, game_state,
+                    app_window.IsWindowOpen, app_hidden_by_scene);
+                app_hidden_by_scene = app_step.HiddenByScene;
+                if (app_step.CloseWindow)
+                    app_window.IsWindowOpen = false;
+                else if (app_step.OpenWindow)
+                    app_window.IsWindowOpen = true;
+                app_window.Allowed = window_allowed;
+            }
 
             if (Enabled)
             {
@@ -431,8 +475,8 @@ namespace SkySpaceAgency
 
                 if (in_flight)
                 {
-                    if (window_allowed && WindowShortcutDown() && EnsureWindow())
-                        main_window.IsWindowOpen = !main_window.IsWindowOpen;
+                    if (window_allowed && WindowShortcutDown())
+                        ToggleDefaultWindow();
 
                     StagingPilot.Instance.Update();
 

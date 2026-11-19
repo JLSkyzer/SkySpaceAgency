@@ -194,6 +194,13 @@ namespace SkySpaceAgency.AppUI
 
         public float Value { get => Input.value; set => Input.value = value; }
 
+        /// <summary>Moves the knob, the fill and the value text without raising `changed`.</summary>
+        public void SetValueWithoutNotify(float v)
+        {
+            Input.SetValueWithoutNotify(v);
+            Refresh();
+        }
+
         /// <summary>The filled part of the track, from 0 to 1.</summary>
         public float Fraction => Fill(Input.value, Input.lowValue, Input.highValue);
 
