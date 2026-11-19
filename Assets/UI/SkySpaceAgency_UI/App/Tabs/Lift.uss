@@ -1,0 +1,18 @@
+/* Lift tab of the new window (plan 2026-11-19-new-ui-tab-migration). Rules scoped under .ssa-app.
+   Sizes: docs/design/ui/lift.svg x 0.85. */
+
+/* The goal's target, dock switch, hint and plan readout, under the segmented goal. */
+.ssa-app .ssa-lift-target { margin-top: 10px; flex-shrink: 0; }
+
+/* A group of sliders of one profile (Guided, Gravity Turn, roll, fine tuning). */
+.ssa-app .ssa-lift-group { flex-shrink: 0; margin-bottom: 4px; }
+
+/* Space above the profile drop-down, as between the fields and the sliders of the mockup. */
+.ssa-app .ssa-lift-gap { margin-top: 4px; }
+
+/* The switches block: the mockup puts 12 px between the last slider and the first switch. */
+.ssa-app .ssa-lift-switches { margin-top: 12px; flex-shrink: 0; }
+
+/* The ascent profile fills its card; the Gravity Turn note sits at the top left of the plot. */
+.ssa-app .ssa-lift-profile { flex-grow: 1; min-height: 220px; }
+.ssa-app Label.ssa-lift-profile__message { white-space: normal; max-width: 60%; }
