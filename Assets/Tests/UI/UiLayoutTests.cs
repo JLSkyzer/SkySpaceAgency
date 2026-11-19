@@ -26,7 +26,7 @@ public class UiLayoutTests
     {
         using var w = UiLayoutHarness.Open(UiLayoutHarness.Scenarios[0], UiLayoutHarness.WindowHeight);
         var handle = w.Shell.Q(className: "window-resize-handle");
-        Assert.IsNotNull(handle, "WindowResizeHandle missing from K2D2_Window.uxml");
+        Assert.IsNotNull(handle, "WindowResizeHandle missing from SkySpaceAgency_Window.uxml");
         Assert.AreEqual("UitkForKsp2.Controls.WindowResizeHandle", handle.GetType().FullName);
         Assert.AreEqual("MainFrame", handle.GetType().GetProperty("TargetName")?.GetValue(handle));
     }

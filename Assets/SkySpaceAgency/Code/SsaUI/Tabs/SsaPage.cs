@@ -177,7 +177,7 @@ namespace SsaUI.Tabs
             if (parent == null)
                 return;
 
-            // Named so K2D2.uss can pick it up with the same pixel-art bevel treatment as
+            // Named so SkySpaceAgency.uss can pick it up with the same pixel-art bevel treatment as
             // Debug Mode/Reset All Settings/Start-Pause (see #reset_advanced there).
             Button reset_bt = new Button() { text = "Reset" };
             reset_bt.name = "reset_advanced";

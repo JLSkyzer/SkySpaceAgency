@@ -6,11 +6,11 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine.UIElements;
 
-// The window as the game builds it: K2D2_Window.uxml is the only Addressables entry, so each tab is a
+// The window as the game builds it: SkySpaceAgency_Window.uxml is the only Addressables entry, so each tab is a
 // template of it. TabbedPage makes one button per TabPage, and SsaPage.Init finds its page by code.
 public class WindowLayoutTests
 {
-    const string WindowPath = "Assets/UI/K2D2_UI/K2D2_Window.uxml";
+    const string WindowPath = SkySpaceAgency.ModIdentity.MainWindowAddress;
 
     static VisualElement CloneWindow()
     {

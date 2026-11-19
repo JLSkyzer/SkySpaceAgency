@@ -13,7 +13,7 @@ namespace SkySpaceAgency.UI
 {
     /// <summary>
     /// The VAB tools window (title ModIdentity.VabWindowTitle): export, import, parts dump, open folder, status line.
-    /// Built in code, so it needs no Addressables entry of its own (only K2D2_Window.uxml is one):
+    /// Built in code, so it needs no Addressables entry of its own (only SkySpaceAgency_Window.uxml is one):
     /// it borrows that asset's style sheets and AppShell's USS class names. VAB only: it closes
     /// itself in any other scene. The flight window keeps its own scene gating.
     /// </summary>
@@ -59,7 +59,7 @@ namespace SkySpaceAgency.UI
             bool styled = false;
             if (styleSource != null)
             {
-                // Unity API (VisualTreeAsset.stylesheets): K2D2.uss, KerbalUI.uss, SsaUI*.uss.
+                // Unity API (VisualTreeAsset.stylesheets): SkySpaceAgency.uss, KerbalUI.uss, SsaUI*.uss.
                 foreach (StyleSheet sheet in styleSource.stylesheets)
                 {
                     if (sheet == null)

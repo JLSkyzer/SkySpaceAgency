@@ -32,6 +32,13 @@ namespace SkySpaceAgency
         public const string ToolbarOabButtonId = ToolbarButtonPrefix + "OAB";
         public const string ToolbarKscButtonId = ToolbarButtonPrefix + "KSC";
 
+        // UI assets. The main window's uxml is the mod's only Addressables entry; its address is its
+        // project path, so it must differ from K2-D2's (Assets/UI/K2D2_UI/K2D2_Window.uxml): two
+        // catalogs with one address give each mod whichever window was loaded first.
+        public const string UiFolder = "Assets/UI/" + ModId + "_UI/";
+        public const string MainWindowUxml = ModId + "_Window.uxml";
+        public const string MainWindowAddress = UiFolder + MainWindowUxml;
+
         // Default shortcut of the main window in flight (rebindable in Redux's mod settings). K2-D2
         // uses Alt+O; Alt+Y is free in flight and on the map (Alt+S, Alt+W... are trim keys, Alt+K
         // is KERNEL, Alt+P is FlightPlanRedux: docs/superpowers/notes/2026-11-19-coexistence-with-k2d2.md).

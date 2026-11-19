@@ -46,9 +46,9 @@
    at a corner - it just happens to land exactly where the reference's own seam sits.
 
    NOTE: this class-based rule set has NO visible effect on the actual Node tab Start/Pause
-   buttons - K2D2.uss has its own #run, #pause ID-selector overrides (from an earlier styling
+   buttons - SkySpaceAgency.uss has its own #run, #pause ID-selector overrides (from an earlier styling
    pass) that win the specificity fight against ANY class selector here regardless of load order,
-   so the real bevel colors for those two buttons live in K2D2.uss, not here. This block is kept
+   so the real bevel colors for those two buttons live in SkySpaceAgency.uss, not here. This block is kept
    as the default look for any future .big button that ISN'T ID-overridden there. */
 .toggle-button.big {
     justify-content: center;

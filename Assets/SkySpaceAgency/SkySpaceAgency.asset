@@ -15,7 +15,7 @@ MonoBehaviour:
   id: SkySpaceAgency
   name: SkySpaceAgency
   author: JLSkyzer (based on K2-D2 by IanMealworm and Christophe Floutier)
-  description: 'SkySpaceAgency is an autopilot suite for KSP2 Redux: maneuver node execution, ascent guidance, automated landing, docking, and attitude hold, all from one panel (Alt-O or AppBar). Based on K2-D2 by Christophe Floutier and its Redux port by IanMealworm.'
+  description: 'SkySpaceAgency is an autopilot suite for KSP2 Redux: maneuver node execution, ascent guidance, automated landing, docking, and attitude hold, all from one panel (Alt+Y or AppBar). Based on K2-D2 by Christophe Floutier and its Redux port by IanMealworm.'
   version: 1.3.0
   versionCheck: 
   minKsp2Version: '*'
@@ -34,3 +34,10 @@ MonoBehaviour:
     min: 2.0.0
     max: '*'
   incompatibilities: []
+  ownFeature:
+    id: 
+    recommended: 0
+    requires: []
+    conflicts: []
+    provides: []
+  features: []

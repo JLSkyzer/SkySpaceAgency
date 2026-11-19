@@ -266,7 +266,7 @@ namespace SkySpaceAgency
         {
             if (main_window != null) return true;
 
-            var myFirstWindowUxml = AssetsLoader.LoadUxml("K2D2_Window.uxml");
+            var myFirstWindowUxml = AssetsLoader.LoadUxml(ModIdentity.MainWindowUxml);
             if (myFirstWindowUxml == null)
             {
                 logger.LogWarning($"[Plugin] Main window not created yet (mod enabled: {Enabled}).");
@@ -310,7 +310,7 @@ namespace SkySpaceAgency
         {
             if (vab_window != null) return true;
 
-            var styleSource = AssetsLoader.LoadUxml("K2D2_Window.uxml");
+            var styleSource = AssetsLoader.LoadUxml(ModIdentity.MainWindowUxml);
             if (styleSource == null)
             {
                 logger.LogWarning($"[Plugin] VAB tools window not created yet (mod enabled: {Enabled}).");

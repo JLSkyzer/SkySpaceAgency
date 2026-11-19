@@ -1,13 +1,13 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
-    <ui:Template name="NodeEx" src="project://database/Assets/UI/K2D2_UI/node.uxml?fileID=9197481963319205126&amp;guid=f15f79d82752d7446bce3054802d8872&amp;type=3#node" />
-    <ui:Template name="Orbit" src="project://database/Assets/UI/K2D2_UI/Orbit.uxml?fileID=9197481963319205126&amp;guid=00a8411fc1ebfc14282f709057ede52a&amp;type=3#Orbit" />
-    <ui:Template name="Transfer" src="project://database/Assets/UI/K2D2_UI/Transfer.uxml?fileID=9197481963319205126&amp;guid=c1ff6218797ad586ef19951abc28f612&amp;type=3#Transfer" />
-    <ui:Template name="Lift" src="project://database/Assets/UI/K2D2_UI/Lift.uxml?fileID=9197481963319205126&amp;guid=aee8281d46c73a74087b6974fd1bcded&amp;type=3#Lift" />
-    <ui:Template name="Landing" src="project://database/Assets/UI/K2D2_UI/Landing.uxml?fileID=9197481963319205126&amp;guid=96cfe8a25c13a104d9596b015d87af6e&amp;type=3#Landing" />
-    <ui:Template name="Dock" src="project://database/Assets/UI/K2D2_UI/Dock.uxml?fileID=9197481963319205126&amp;guid=9dde88f98d182054bb92a217fa7bd7f1&amp;type=3#Dock" />
-    <ui:Template name="attitude" src="project://database/Assets/UI/K2D2_UI/attitude.uxml?fileID=9197481963319205126&amp;guid=99e7f8b6d0f77db45bc9d6146e3e6ada&amp;type=3#attitude" />
-    <ui:Template name="About" src="project://database/Assets/UI/K2D2_UI/about.uxml?fileID=9197481963319205126&amp;guid=16d4c53a22570084499af3b95b5a9aa6&amp;type=3#about" />
-    <Style src="project://database/Assets/UI/K2D2_UI/K2D2.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#K2D2" />
+    <ui:Template name="NodeEx" src="project://database/Assets/UI/SkySpaceAgency_UI/node.uxml?fileID=9197481963319205126&amp;guid=f15f79d82752d7446bce3054802d8872&amp;type=3#node" />
+    <ui:Template name="Orbit" src="project://database/Assets/UI/SkySpaceAgency_UI/Orbit.uxml?fileID=9197481963319205126&amp;guid=00a8411fc1ebfc14282f709057ede52a&amp;type=3#Orbit" />
+    <ui:Template name="Transfer" src="project://database/Assets/UI/SkySpaceAgency_UI/Transfer.uxml?fileID=9197481963319205126&amp;guid=c1ff6218797ad586ef19951abc28f612&amp;type=3#Transfer" />
+    <ui:Template name="Lift" src="project://database/Assets/UI/SkySpaceAgency_UI/Lift.uxml?fileID=9197481963319205126&amp;guid=aee8281d46c73a74087b6974fd1bcded&amp;type=3#Lift" />
+    <ui:Template name="Landing" src="project://database/Assets/UI/SkySpaceAgency_UI/Landing.uxml?fileID=9197481963319205126&amp;guid=96cfe8a25c13a104d9596b015d87af6e&amp;type=3#Landing" />
+    <ui:Template name="Dock" src="project://database/Assets/UI/SkySpaceAgency_UI/Dock.uxml?fileID=9197481963319205126&amp;guid=9dde88f98d182054bb92a217fa7bd7f1&amp;type=3#Dock" />
+    <ui:Template name="attitude" src="project://database/Assets/UI/SkySpaceAgency_UI/attitude.uxml?fileID=9197481963319205126&amp;guid=99e7f8b6d0f77db45bc9d6146e3e6ada&amp;type=3#attitude" />
+    <ui:Template name="About" src="project://database/Assets/UI/SkySpaceAgency_UI/about.uxml?fileID=9197481963319205126&amp;guid=16d4c53a22570084499af3b95b5a9aa6&amp;type=3#about" />
+    <Style src="project://database/Assets/UI/SkySpaceAgency_UI/SkySpaceAgency.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#SkySpaceAgency" />
     <Style src="project://database/Packages/uitkforksp2.controls/Assets/Theme/KerbalUI.uss?fileID=7433441132597879392&amp;guid=48c501354e05fdc41b817de07ca2a1b8&amp;type=3#KerbalUI" />
     <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaUI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#SsaUI" />
     <Style src="project://database/Assets/Runtime/SsaUI/USS/ToggleButton.uss?fileID=7433441132597879392&amp;guid=1b6a73cd9e0a617469e5d501d696c7be&amp;type=3#ToggleButton" />
@@ -38,7 +38,7 @@
         <!-- Settings/auto-staging controls, moved from the top toolbar to a footer row below the
              tab content. Auto-staging is now a labeled checkbox (a small LED-style square that
              tints green when checked, from the same "white square + CSS tint" pattern as the tab
-             underline) instead of an icon-only button - see K2D2.uss for #staging-toggle's
+             underline) instead of an icon-only button - see SkySpaceAgency.uss for #staging-toggle's
              row-reverse layout note (ToggleButton.cs always adds its Label first in the C#
              constructor, so row-reverse is what puts this icon on the left of the label instead
              of after it). -->

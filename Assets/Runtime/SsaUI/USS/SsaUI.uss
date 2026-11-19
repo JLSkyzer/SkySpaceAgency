@@ -91,7 +91,7 @@
    saturated 1px border box on all four sides made each one read as its own oversized modern
    card instead of a compact retro readout. Font size comes down to 13px and the border is
    dimmed to a faint outline instead of a bright purple box; padding/margins are tightened to
-   match. This is global (SsaUI.uss, not K2D2.uss) since every Foldout in the mod - Node's Turn/
+   match. This is global (SsaUI.uss, not SkySpaceAgency.uss) since every Foldout in the mod - Node's Turn/
    Warp/Burn/Experimental and Node Info/Advanced today, other tabs' foldouts later - shares this
    base class. */
 /* Dropped the bordered box around each Foldout entirely (was rgba(76, 80, 188, 0.35) on all four

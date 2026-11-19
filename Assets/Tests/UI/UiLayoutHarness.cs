@@ -12,7 +12,7 @@ using Object = UnityEngine.Object;
 // Lays out the mod window without the game, to catch layout bugs in EditMode tests and to render each
 // tab to a PNG.
 //
-// The window is K2D2_Window.uxml, cloned into a runtime panel (a PanelSettings with a RenderTexture
+// The window is SkySpaceAgency_Window.uxml, cloned into a runtime panel (a PanelSettings with a RenderTexture
 // target) with the UITK for KSP2 theme of the SDK package (KerbalUI.tss, the same KerbalUI.uss the
 // game ships). The panel is internal to Unity: PanelSettings.panel gives it, and its public
 // ValidateLayout / Repaint / Render run the style, layout and render passes. Layout works under
@@ -23,10 +23,10 @@ using Object = UnityEngine.Object;
 // the in-game screenshots. Elements that the pages build from C# at run time are not there.
 public static class UiLayoutHarness
 {
-    public const string WindowPath = "Assets/UI/K2D2_UI/K2D2_Window.uxml";
+    public const string WindowPath = SkySpaceAgency.ModIdentity.MainWindowAddress;
     public const string ThemePath = "Packages/ksp2redux.sdk/Controls/Assets/Theme/KerbalUI.tss";
 
-    // K2D2_Window.uxml: the AppShell is 350 x 500 px by default. Redux's resize handle and the saved
+    // SkySpaceAgency_Window.uxml: the AppShell is 350 x 500 px by default. Redux's resize handle and the saved
     // size can change both in game; the harness keeps the default width and sets the height (500 and
     // 900 px, a tall window).
     public const float WindowWidth = 350;

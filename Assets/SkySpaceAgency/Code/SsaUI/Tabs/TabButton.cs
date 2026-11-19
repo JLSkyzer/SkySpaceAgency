@@ -12,7 +12,7 @@ namespace SsaUI.Tabs
     // application always sets it now, regardless of custom control type - so
     // TabbedPage.ShowContent()'s page.Show(page.name == code), SsaPage.Init()'s
     // panels.Q<TabPage>(code), and setButton() below all keep working unchanged. TabPage is never
-    // actually instantiated from a UXML tag in this project though (K2D2_Window.uxml's tab content
+    // actually instantiated from a UXML tag in this project though (SkySpaceAgency_Window.uxml's tab content
     // is <ui:Instance> template references, not literal <SsaUI.Tabs.TabPage> tags) - only ever via
     // `new TabPage()` - so none of this was actually exercised via Init() before either way.
     [UxmlElement]

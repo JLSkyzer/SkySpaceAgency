@@ -135,7 +135,7 @@ namespace SkySpaceAgency.UI
             // use, rather than trusting it and letting a bad lookup throw an NRE that Unity would
             // otherwise swallow silently (see the OnEnable doc comment above). If the window fails to
             // wire up, whichever element name gets logged here as missing is the one to check against
-            // K2D2_Window.uxml.
+            // SkySpaceAgency_Window.uxml.
 
             // Get the close button from the window
             var closeButton = _rootElement.Q<Button>("close-button");
@@ -174,7 +174,7 @@ namespace SkySpaceAgency.UI
             if (tab_page == null)
             {
                 L.Log("MainWindow.OnUiReload: Q<TabbedPage>() returned null - the custom <k2-ui-tabs--tabbed-page> " +
-                      "(or however it's tagged in K2D2_Window.uxml) element wasn't found or didn't instantiate " +
+                      "(or however it's tagged in SkySpaceAgency_Window.uxml) element wasn't found or didn't instantiate " +
                       "as a TabbedPage. Stopping here, the rest of the window's controls will not be wired up.");
                 return;
             }
@@ -241,7 +241,7 @@ namespace SkySpaceAgency.UI
 
             _rootElement.AddManipulator(new DragManipulator(false, "main_window_pos"));
 
-            // Resizing is Redux's own WindowResizeHandle, set up from K2D2_Window.uxml. It keeps
+            // Resizing is Redux's own WindowResizeHandle, set up from SkySpaceAgency_Window.uxml. It keeps
             // nothing between sessions: the size is saved here. Minimum as in the uxml.
             var main_frame = _rootElement.Q("MainFrame") ?? _rootElement;
             _sizeSaver = new WindowSizeSaver(main_frame, "main_window_size", "main_window_width", new Vector2(300, 250));

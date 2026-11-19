@@ -6,7 +6,7 @@ namespace SkySpaceAgency.UI
 {
     /// <summary>
     /// Saves the window size the player picks with Redux's resize handle (WindowResizeHandle in
-    /// K2D2_Window.uxml), and applies it again when the window is created. The handle only resizes;
+    /// SkySpaceAgency_Window.uxml), and applies it again when the window is created. The handle only resizes;
     /// it keeps nothing between sessions.
     ///
     /// The height keeps its old key (`main_window_size`, written by our former height-only resize

@@ -17,7 +17,7 @@ namespace SsaUI.Tabs
     /// </summary>
     // UxmlFactory/UxmlTraits -> [UxmlElement]/[UxmlAttribute] (see Group.cs's class comment for
     // why). SelectedTabName's own field default ("") already matches the old bag default, and
-    // K2D2_Window.uxml's only <SsaUI.Tabs.TabbedPage> tag sets selected-tab-Name="controls"
+    // SkySpaceAgency_Window.uxml's only <SsaUI.Tabs.TabbedPage> tag sets selected-tab-Name="controls"
     // explicitly anyway, so no extra behavior-preserving fix is needed here. Arbitrary
     // VisualElement children (the old uxmlChildElementsDescription override) need no equivalent -
     // that was only ever an editor-time authoring hint, not a runtime gate.

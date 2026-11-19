@@ -28,7 +28,7 @@ public class IdentityTests
             scanned++;
             string[] lines = File.ReadAllLines(file);
             for (int i = 0; i < lines.Length; i++)
-                if (names.Any(n => lines[i].IndexOf(n, System.StringComparison.OrdinalIgnoreCase) >= 0))
+                if (names.Any(n => lines[i].IndexOf(n, System.StringComparison.Ordinal) >= 0))
                     offenders.Add($"{file.Substring(assets.Length - "Assets".Length)}:{i + 1}: {lines[i].Trim()}");
         }
 

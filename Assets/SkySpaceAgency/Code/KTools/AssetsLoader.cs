@@ -48,7 +48,7 @@ namespace KTools
         // .Result, since .Result on a handle that hasn't finished yet can silently return null instead of
         // actually blocking for the asset.
         //
-        // For this to resolve, K2D2_Window.uxml needs to be marked Addressable in the Unity Editor
+        // For this to resolve, SkySpaceAgency_Window.uxml needs to be marked Addressable in the Unity Editor
         // (select it, check "Addressable" in the Inspector, leave the auto-filled address as its project
         // path so it matches the address string built below). Its dependency closure - the nested tab
         // templates (Dock.uxml, Landing.uxml, etc via <ui:Template>), stylesheets, and fonts - do NOT need
@@ -56,7 +56,7 @@ namespace KTools
         // AssetBundle build already did.
         public static VisualTreeAsset LoadUxml(string path)
         {
-            var address = $"Assets/UI/K2D2_UI/{path}";
+            var address = ModIdentity.UiFolder + path;
             // KerbalMonoBehaviour.Assets is protected, so this goes through SkySpaceAgencyPlugin's public
             // LoadAddressableAsset<T>() wrapper rather than SkySpaceAgencyPlugin.Instance.Assets directly
             // (confirmed via CS0122 build error - see the wrapper's own comment in SkySpaceAgencyPlugin.cs).

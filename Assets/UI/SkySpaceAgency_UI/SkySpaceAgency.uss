@@ -45,7 +45,7 @@ DropdownField.unity-popup-field {
    point it at NotoSansMonoCJK; it now names JetBrains Mono too, because merely referencing the
    CJK face pulled its ~16 MB source font into the Addressables bundle (fix from LeoMarinDev's
    PR #2 on IanMealworm/K2D2Redux). This override is kept so the font stays pinned here.
-   Same tie-specificity/load-order issue as the progress bar (SsaUI.uss loads after K2D2.uss),
+   Same tie-specificity/load-order issue as the progress bar (SsaUI.uss loads after SkySpaceAgency.uss),
    so !important - this is scoped to just this one class, not a blanket override, so it won't
    touch .console/.oab-button__label's own intentional fonts. */
 .k2-status-line {
@@ -417,7 +417,7 @@ Label {
    later-loaded stylesheet does so via an ID selector anchored on the actual target element
    (#debug, #run, #pause, #Main_Icon, and - closest precedent - ".k2-progress-bar #frame" /
    "#progress", which pairs a class-selector ancestor with an ID on the element actually being
-   styled). This tab-bar block was the only override in K2D2.uss using bare class selectors with
+   styled). This tab-bar block was the only override in SkySpaceAgency.uss using bare class selectors with
    no ID anchor anywhere in the chain, and empirically it's the only one that silently failed to
    apply. TabPage.setButton() (SsaUI/Tabs/TabButton.cs) copies each TabPage's UXML "name" onto its
    TabButton, so every tab button already has a unique, stable id matching its tab page's name
@@ -580,7 +580,7 @@ Label {
 /* Auto-staging toggle (window footer toolbar) - restyled from an icon-only mini button into a
    labeled checkbox: a small square LED (tab_underline.png, the same white-square + CSS-tint
    asset the tab selection indicator uses) that tints green when checked, to the left of an
-   "Auto-staging" label. See K2D2_Window.uxml's comment for why row-reverse is needed to get the
+   "Auto-staging" label. See SkySpaceAgency_Window.uxml's comment for why row-reverse is needed to get the
    icon on the left of the label. */
 #staging-toggle {
     flex-direction: row-reverse;
@@ -666,7 +666,7 @@ Label {
     border-bottom-color: rgb(150, 205, 250);
 }
 
-/* Clears room for the bottom-right resize handle (WindowResizeHandle in K2D2_Window.uxml) so
+/* Clears room for the bottom-right resize handle (WindowResizeHandle in SkySpaceAgency_Window.uxml) so
    it doesn't sit directly on top of the toolbar's rightmost button. Both are absolutely
    positioned at right:0/bottom:0 of the same containing box (the AppShell content area - the
    toolbar row is its last in-flow child, so its bottom-right corner IS that box's bottom-right

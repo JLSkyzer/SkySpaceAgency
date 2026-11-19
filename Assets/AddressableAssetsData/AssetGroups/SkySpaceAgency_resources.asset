@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: SkySpaceAgency_resources
   m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
   m_GroupName: SkySpaceAgency_resources
-  m_GUID: 791be43363cd60e4ba38681287a00367
+  m_GUID: af5432a7051fab34cb6998a11fee6d84
   m_SerializeEntries: []
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 92e98ca16270a6a468657ea82c466890, type: 2}
