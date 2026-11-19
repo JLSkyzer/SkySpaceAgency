@@ -107,7 +107,7 @@ namespace K2D2.KSPService
             var legs = FindLegs(vessel);
             if (legs.Count == 0)
             {
-                logger.LogInfo($"[Landing] gear: {reason}: no legs on this vessel, nothing to deploy");
+                logger.LogInfo($"[Landing] gear: {reason}: no legs on this vessel, nothing to deploy; {GearGroupParts(vessel)}");
                 return;
             }
 
@@ -124,7 +124,21 @@ namespace K2D2.KSPService
                 path = $"Gear action group set to true (was {group})";
             }
             recheck_ut = GeneralTools.Current_UT + RecheckDelay;
-            logger.LogInfo($"[Landing] gear: {reason}: {path}; before: {before}");
+            logger.LogInfo($"[Landing] gear: {reason}: {path}; before: {before}; {GearGroupParts(vessel)}");
+        }
+
+        // The game's own count of parts on the Gear action group (what K2-D2 1.4.0 tests before
+        // firing Gear), next to our leg detection, to compare the two in the log.
+        static string GearGroupParts(VesselComponent vessel)
+        {
+            try
+            {
+                return $"Gear group has {vessel.GetActionGroupPartCount(KSPActionGroup.Gear)} part(s)";
+            }
+            catch (System.Exception e)
+            {
+                return $"Gear group part count unreadable ({e.GetType().Name})";
+            }
         }
 
         // Every frame: the re-check RecheckDelay after Deploy, then one more log line

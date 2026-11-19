@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using K2D2.KSPService;
 using KSP.Sim;
 using KSP.Sim.DeltaV;
@@ -176,7 +177,7 @@ namespace K2D2.Landing
                     else
                     {
                         current_executor.setController(warp_to);
-                        warp_to.Start_Retrograde(startBurn_UT, true);
+                        warp_to.Start_Retrograde(startBurn_UT, true, settings.max_rotation.V);
                         warp_to.max_warp_index = 2;
                     }
                     break;
@@ -259,6 +260,7 @@ namespace K2D2.Landing
                         current_vessel.SetThrottle(0);
 
                     setMode(Mode.Off);
+                    ReleaseSasTarget();
                     // A stopped run has no lower stage to drop any more.
                     staged_drops_left = 0;
                     stage_drop.Reset();
@@ -292,6 +294,7 @@ namespace K2D2.Landing
                     // parachute descent.
                     gear.Reset();
                     net_start_ut = double.NaN;
+                    standing.Reset();
                     if (parachute_mode && !precision_run)
                         setMode(Mode.Parachute);
                     else if (precision_run)
@@ -935,10 +938,9 @@ namespace K2D2.Landing
 
         // End of a landing, whichever the mode: no thrust, SAS holding attitude, autopilot off.
         // Nothing relights the engines afterwards, even on a bounce or a slide.
-        void FinishLanding(bool landed_or_splashed)
+        void FinishLanding(string how)
         {
-            logger.LogInfo($"[Landing] touchdown in {mode}: " +
-                (landed_or_splashed ? "LandedOrSplashed" : "altitude/fall-speed net") +
+            logger.LogInfo($"[Landing] touchdown in {mode}: {how}" +
                 $", altitude {altitude:n1} m, fall speed {current_falling_speed:n2} m/s");
             current_vessel.SetThrottle(0);
             LogStagedFinish();
@@ -962,6 +964,48 @@ namespace K2D2.Landing
         // altitude/fall-speed net in Update; NaN while the condition does not hold.
         double net_start_ut = double.NaN;
         const double NetHoldSeconds = 1.0;
+
+        // Touchdown always noticed, even when the height reading is tens of metres off near the
+        // ground (K2-D2 1.4.0, IanMealworm): see Braking/StandingCheck.cs. Brake and TouchDown only.
+        readonly StandingCheck standing = new StandingCheck();
+
+        bool UpdateStanding(double now)
+        {
+            bool powered = mode == Mode.Brake || mode == Mode.TouchDown;
+            double g = current_vessel.VesselComponent.graviticAcceleration.magnitude;
+            double accel = burn_dV.active_dv > 0 ? burn_dV.active_dv : burn_dV.full_dv;
+            double thrust = current_vessel.GetThrottle() * accel;
+            if (!standing.Update(now, powered, SurfaceVelocity.vector.magnitude, thrust, g))
+                return false;
+            logger.LogInfo($"[Landing] standing still with the engines throttled down - on the ground " +
+                $"(the height reading said {altitude.ToString("n0", CultureInfo.InvariantCulture)} m, g {g.ToString("n2", CultureInfo.InvariantCulture)})");
+            return true;
+        }
+
+        // The burns and the guided descent leave SAS turning toward their last target; after a
+        // stop it holds wherever the vessel points instead (K2-D2 1.4.0, IanMealworm). Other SAS
+        // modes the landing set (retrograde for the final descent) are left as they are.
+        void ReleaseSasTarget()
+        {
+            try
+            {
+                var autopilot = current_vessel?.Autopilot;
+                if (autopilot?.SAS == null || autopilot.AutopilotMode != AutopilotMode.StabilityAssist)
+                    return;
+                var telemetry = SASTool.getTelemetry();
+                if (telemetry == null)
+                    return;
+                var frame = telemetry.HorizonUp.coordinateSystem;
+                Rotation facing = Rotation.Reframed(current_vessel.GetRotation(), frame);
+                autopilot.SAS.lockedMode = false;
+                autopilot.SAS.SetTargetOrientation(new Vector(frame, facing.localRotation * UnityEngine.Vector3.up), false);
+                logger.LogInfo("[Landing] stop: SAS target released to the current attitude");
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning($"[Landing] stop: SAS release failed: {e.Message}");
+            }
+        }
 
         Vector SurfaceVelocity;
         public override void Update()
@@ -1035,9 +1079,11 @@ namespace K2D2.Landing
             else if (double.IsNaN(net_start_ut))
                 net_start_ut = net_now;
             bool net_held = net_condition && net_now - net_start_ut >= NetHoldSeconds;
-            if (landed || net_held)
+            bool standing_still = UpdateStanding(net_now);
+            if (landed || net_held || standing_still)
             {
-                FinishLanding(landed);
+                FinishLanding(landed ? "LandedOrSplashed" : net_held ? "altitude/fall-speed net"
+                    : "standing still with the engines throttled down");
                 return;
             }
             // Landing with a chosen stage: drop the lower stage when dry or at the drop height.

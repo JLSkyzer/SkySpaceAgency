@@ -207,9 +207,7 @@ namespace K2D2.Landing
             BindDropHeight(panel.Q<TextField>("drop_stage_at_km_atmo"), pilot.settings_atmo);
             BindDropHeight(panel.Q<TextField>("drop_stage_at_km_vac"), pilot.settings_vac);
 
-            // Precision Landing orbit gate - see UpdateOrbitGate's own comment. Reverts the toggle
-            // the instant someone tries to turn it on from too high an orbit, rather than letting
-            // it sit on and only get refused once Circularize.cs actually runs. Vacuum-only, same
+            // Precision Landing orbit gate - see UpdateOrbitGate's own comment. Vacuum-only, same
             // as the toggle itself.
             orbit_gate_label = panel.Q<Label>("precision_landing_orbit_gate_vac");
             precision_plan_label = panel.Q<Label>("precision_plan_vac");
@@ -218,17 +216,6 @@ namespace K2D2.Landing
             reentry_calibration = panel.Q<VisualElement>("reentry_calibration_atmo");
             reentry_suggestion = panel.Q<Label>("reentry_suggestion_atmo");
             panel.Q<Button>("reentry_apply_atmo").clicked += () => pilot.ApplySuggestedDragScale();
-            pilot.settings_vac.precision_landing.listeners += v =>
-            {
-                if (!v) return;
-                if (!PeriapsisTooHigh(out double periapsisAlt_m))
-                    return;
-
-                pilot.logger.LogInfo($"[LandingUI] Precision Landing refused - periapsis too high " +
-                    $"({periapsisAlt_m:n0} m, max {Precision.PrecisionStart.MaxPeriapsisAltitude:n0} m).");
-                pilot.settings_vac.precision_landing.V = false;
-            };
-
             return true;
         }
 
@@ -778,18 +765,15 @@ namespace K2D2.Landing
         // the precision_landing toggle listener (onInit above) would only ever be visible for a
         // single frame. This runs every tick instead, keeping a small persistent label under the
         // toggle in sync with the same periapsis check (and message) as the start check.
+        // Since K2-D2 1.4.0 (IanMealworm) the toggle is left on: the label says why a start would
+        // be refused, and the start refuses with the same message (PrecisionStart.Plan). Only
+        // before a start: once running, the orbit is expected to move.
         void UpdateOrbitGate()
         {
-            bool too_high = PeriapsisTooHigh(out _);
+            bool too_high = !pilot.isRunning && pilot.settings_vac.precision_landing.V && PeriapsisTooHigh(out _);
             orbit_gate_label.Show(too_high);
-            if (!too_high)
-                return;
-            orbit_gate_label.text = Precision.PrecisionStart.PeriapsisTooHighMessage;
-
-            // Only before a start: once running, the orbit is expected to move and must not cancel
-            // the landing's precision mode.
-            if (!pilot.isRunning && pilot.settings_vac.precision_landing.V)
-                pilot.settings_vac.precision_landing.V = false;
+            if (too_high)
+                orbit_gate_label.text = Precision.PrecisionStart.PeriapsisTooHighMessage;
         }
 
         // The last precision plan (budget, predicted miss), its warnings, or the final distance.
