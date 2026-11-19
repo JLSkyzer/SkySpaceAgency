@@ -367,3 +367,37 @@ Relevé des collisions : `docs/superpowers/notes/2026-11-19-coexistence-with-k2d
    SkySpaceAgency ne coupe pas un burn de K2-D2 (aucune ligne
    `[Warp] the game started a burn under rails warp that we did not ask for` pendant que K2-D2 vole).
 7. Refaire 1 à 5 avec K2-D2 1.5.0 (branche de la PR) quand elle existera.
+
+## 26. Nouvelle interface, étape 1 : les fondations (2026-11-19, aperçu)
+
+Plan `docs/superpowers/plans/2026-11-19-new-ui-foundations.md`. Captures de référence (éditeur) :
+`docs/design/ui/foundations/`. Rien ne vole depuis la nouvelle fenêtre : seul l'affichage est à vérifier.
+
+1. **Rien ne change sans clic.** La fenêtre classique, ses onglets et Alt+Y marchent comme avant. Seul nouveau : le
+   bouton « New UI (preview) » en bas de la fenêtre classique, entre « Auto-staging » et « i », qui ne déborde pas.
+2. **Ouverture.** Le bouton ouvre la nouvelle fenêtre (un second clic la ferme), en vol et en vue carte seulement.
+   Log : `AppWindow: built, scale 100 % on the game's …`. Sinon chercher `New window not created yet` ou
+   `Failed to load UXML from Addressables at 'Assets/UI/SkySpaceAgency_UI/App/SkySpaceAgency_App.uxml'`.
+3. **Aspect.** Comparer à `docs/design/ui/lift.png` et à `docs/design/ui/foundations/lift_mockup_size.png` : fond bleu
+   nuit en dégradé, police Noto Sans (pas la police à chasse fixe de la fenêtre classique), onglet LIFT doré souligné,
+   badge PREVIEW, frise des phases, bouton « Running… » doré. Le relief de vol (courbe cyan pointillée, trajectoire
+   dorée, fusée) est dessiné. Noter tout carré blanc, texte manquant ou police différente (la police vient du paquet
+   du SDK : à vérifier dans le jeu).
+4. **Déplacement.** Glisser par l'en-tête déplace la fenêtre ; glisser dans le corps (curseurs, champs) ne la déplace
+   pas. Un clic droit ne la déplace pas.
+5. **Redimensionnement.** La poignée en bas à droite agrandit et réduit en largeur et en hauteur, jamais sous 760 x 480 ;
+   la vue centrale suit la taille ; sous 1100 px de large, la vue passe sous les deux colonnes et les onglets se
+   resserrent. Log `WindowSizeSaver: window size saved WxH`.
+6. **Mémoire.** Fermer, rouvrir, puis relancer le jeu : position, taille et onglet reviennent.
+7. **Échelle.** Onglet SETTINGS, « Interface scale » : 75 à 150 % par pas de 5 %, effet immédiat sur la nouvelle
+   fenêtre seulement (log `AppWindow: panel scale X (game Y x ours Z %)`). Changer ensuite l'échelle d'UI du jeu, puis
+   la résolution : la nouvelle fenêtre suit (produit des deux) et reste à l'écran ; la fenêtre classique ne suit que
+   l'échelle du jeu.
+8. **Réduire.** Le bouton « – » ne garde que l'en-tête ; un second clic rend la hauteur d'avant, et la taille réduite
+   n'est pas enregistrée.
+9. **Scènes.** Quitter le vol (VAB, KSC, menu) ferme la nouvelle fenêtre ; elle ne se rouvre pas toute seule. F2 la
+   masque avec le reste de l'interface.
+10. **Champs.** Taper dans un champ de l'onglet LIFT (« Target altitude ») ne déclenche aucune commande du jeu.
+11. Onglet « Orbit » (ou un autre onglet de vol) : le message « moves to this window in step 2 », et « Classic window »
+    ouvre la fenêtre classique.
+
