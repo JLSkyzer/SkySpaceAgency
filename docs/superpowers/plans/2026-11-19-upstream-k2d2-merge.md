@@ -430,11 +430,39 @@ From `main` after T34: `git switch -c pr/k2d2`. One commit "Switch to the K2-D2 
 - [ ] `project.info` name `K2D2Redux`; README in their structure with our features added and a contributors line; CHANGELOG: a `K2-D2 v1.5.0` section summarizing our changes in their style, older sections kept; NOTICE and LICENSE credits intact (Christophe Floutier, IanMealworm, LeoMarinDev, JLSkyzer).
 - [ ] Drop `docs/` from the branch (decision 7), unless the user decides otherwise.
 - [ ] Checks: `git grep -i skyspaceagency` returns only the contributors/credits lines; tests green; `Deploy to Zip File` gives `K2D2.zip` with `mod_id` `K2D2` and `K2D2.dll`; the identity test of T33 runs against `K2D2`.
-- [ ] Later updates: merge `main` into `pr/k2d2` (conflicts only in identity files; re-run `ToK2D2`), never rebase a pushed branch.
+- [ ] ~~Later updates: merge `main` into `pr/k2d2`~~ — no longer possible after Phase H (see there).
 
-#### Task 36: Fork and pull request (needs the user)
-- [ ] The user creates the fork `JLSkyzer/K2D2Redux` (`gh repo fork IanMealworm/K2D2Redux --clone=false`): not done by this plan. Our history contains theirs up to `8273fb8`, so the fork accepts the branch as is.
-- [ ] Add remote `k2d2fork`, push `pr/k2d2`; draft the PR description (what changes for K2-D2 players: Dock tab replaced by Rendezvous with docking, new tabs Orbit and Transfer, VAB tools, settings compatibility, what was not tested in game, LF line endings on files that were CRLF). **Opening the PR is publishing: ask the user first.**
+#### Task 36: Fork and pull request (needs the user, not done by this plan)
+- [ ] The user creates the fork `JLSkyzer/K2D2Redux` later. Our history contains theirs up to `8273fb8`, so the fork accepts `pr/k2d2` as is.
+- [ ] Then: add remote `k2d2fork`, push `pr/k2d2`, draft the PR description (Dock tab replaced by Rendezvous with docking, new tabs Orbit and Transfer, VAB tools, settings compatibility, what was not tested in game, LF line endings). **Opening the PR is publishing: ask the user first.**
+
+### Phase H — SkySpaceAgency leaves the K2D2 names, and coexists with K2-D2 (user decisions, 2026-11-19)
+
+The user cancelled the earlier choice "keep the `K2D2` namespaces and classes to recover IanMealworm's fixes", and requires that a player can install SkySpaceAgency **and** K2-D2 (1.4.1 today, 1.5.0 from our PR) together. Our UI will be redone entirely: from their UI only the window items (handle, UI scale, drag) are ported, nothing is polished.
+
+**Order:** Phases A–F with today's `K2D2` names → `pr/k2d2` cut from that point (K2D2 names, like their repo) → only then, on `main`, the rename, in its own commits.
+
+#### Task 37: Collision inventory (two mods loaded together)
+Read from the IL of the installed 26w46a `Ksp2Redux.dll` / `UitkForKsp2.dll` and the code of both mods, never assumed. Write each item in `docs/superpowers/notes/2026-11-19-coexistence-with-k2d2.md` with its source and verdict:
+- shortcut Alt-O (and the game's own bindings: pick a free default for SSA, make it a setting if simple; K2-D2 keeps Alt-O);
+- AppBar button ids, window ids (`WindowId`), Harmony ids and duplicate patches;
+- same full type names in two assemblies (namespace `K2D2`): UI Toolkit custom controls (`K2UI`, `[UxmlElement]` factories resolved by type name), `Type.GetType` lookups, reflection on our own types;
+- Addressables: addresses (`K2D2_Window.uxml`, uss, images), labels, bundle names (`k2d2_ui.bundle`), catalogs;
+- settings files, `plans/`, `vab/` folders (each mod writes next to its own DLL: separate);
+- types written in save files, ECS registration, static singletons (`K2D2_Plugin.Instance`), log sources, `mod_id` and campaign features.
+Anything only a flight can confirm goes into the in-game checklist.
+
+#### Task 38: Rename on `main`
+- Namespaces `K2D2*` → `SkySpaceAgency*`; classes `K2D2_Plugin`, `K2D2Window`, `K2D2PilotsMgr`, `K2D2Settings`, `K2D2OtherModsInterface` → `Ssa*`/`SkySpaceAgency*`; `K2UI` controls → `SsaUI`; `Assets/UI/K2D2_UI` → `Assets/UI/SkySpaceAgency_UI`, `K2D2_Window.uxml`/`K2D2.uss` renamed; Addressables addresses follow (via the Addressables API in the identity editor script, never by editing YAML by hand); Harmony id, logger names, toolbar/window ids via `ModIdentity`.
+- **Players' data kept:** settings keys are strings (unchanged); file names `skyspaceagency_*.json`, `plans/plan_<GUID>.json` (JSON without type names: check), VAB files (format strings unchanged). If any of our types is written in a save (a part module, a serialized type name), keep a resolver for the old name (as KSP1PartMod's `SavedTypeResolver`) or a migration; T37 says which.
+- Shortcut: new default (T37), setting `shortcut` if simple.
+- Tests: all green; a test that no source file under `Assets/SkySpaceAgency` declares `namespace K2D2`; the coexistence checks that are pure (ids, addresses distinct from K2-D2's lists, taken literally from `upstream/main` and `pr/k2d2`).
+
+#### Task 39: Documents
+- Parent `CLAUDE.md`: the line "Les namespaces et classes C# gardent `K2D2`" becomes the new fact, dated 2026-11-19; `tasks/skyspaceagency/lessons.md` and `todo.md`.
+- In-game checklist: section "les deux mods installés ensemble" (French).
+
+**Consequence (written here on purpose):** after Phase H, K2-D2's future fixes are **ported by hand**, not merged: `git merge upstream/main` would conflict on every renamed file. `pr/k2d2` no longer regenerates from `main` by one identity commit. **The next PR** to K2-D2: start from `upstream/main` (or from `pr/k2d2` if it was merged), and port SkySpaceAgency's later changes by hand, file by file, renaming `SkySpaceAgency`/`Ssa` back to `K2D2` (a scripted `sed` over namespaces and class names, then the `IdentitySwitch.ToK2D2` editor script for assets); list the SSA commits since the previous PR in the description. The `ModIdentity.IsK2D2` gate stays useful there: the boost-back code ships in both trees, active only in the K2-D2 flavour.
 
 ---
 
