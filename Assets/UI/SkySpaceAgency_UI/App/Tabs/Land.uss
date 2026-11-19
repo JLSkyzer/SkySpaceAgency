@@ -1,0 +1,68 @@
+/* Land tab of the new window (plan 2026-11-19-new-ui-tab-migration). Rules scoped under .ssa-app.
+   Sizes: docs/design/ui/land.svg pixels x 0.85. */
+
+/* ---- Landing plan ---- */
+.ssa-app .ssa-land-plan { flex-shrink: 0; }
+.ssa-app .ssa-land-plan > .ssa-segmented { margin-bottom: 10px; }
+.ssa-app .ssa-land-target { flex-shrink: 0; margin-top: 4px; }
+.ssa-app .ssa-land-target__box {
+    flex-direction: row;
+    align-items: center;
+    height: 54px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: var(--gold);
+    background-color: var(--night);
+    padding: 0 10px 0 12px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+.ssa-app .ssa-land-target__icon { width: 31px; height: 31px; margin-right: 12px; flex-shrink: 0; }
+.ssa-app .ssa-land-target__text { flex-grow: 1; flex-shrink: 1; }
+.ssa-app Label.ssa-land-target__name { font-size: 14px; color: var(--text); }
+.ssa-app Label.ssa-land-target__arrow { font-size: 14px; color: var(--muted); margin-left: 6px; }
+.ssa-app .ssa-land-target__list { margin-top: -2px; margin-bottom: 8px; }
+.ssa-app Label.ssa-land-target__line { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.ssa-app .ssa-land-target__buttons .ssa-button.ssa-button--small { height: 31px; }
+.ssa-app .ssa-button.ssa-land-button--on { border-color: var(--gold); border-width: 1px; }
+.ssa-app .ssa-land-target__fields { flex-direction: row; margin-bottom: 8px; flex-shrink: 0; }
+
+.ssa-app Label.ssa-paragraph.ssa-land-plan-note { color: #c8dcf0; }
+.ssa-app Label.ssa-paragraph.ssa-land-alert { color: var(--alert); }
+.ssa-app .ssa-land-calibration { flex-shrink: 0; }
+
+.ssa-app .ssa-land-guard { flex-direction: row; align-items: center; height: 37px; flex-shrink: 0; }
+.ssa-app Label.ssa-land-guard__value { font-size: 11px; color: var(--ok); -unity-text-align: middle-right; }
+
+.ssa-app .ssa-land-group { flex-shrink: 0; }
+.ssa-app Label.ssa-section-title.ssa-land-subtitle { margin-top: 12px; margin-bottom: 4px; }
+.ssa-app .ssa-land-field--invalid .ssa-field__input > .unity-base-text-field__input { color: var(--alert); }
+
+/* ---- Descent profile ---- */
+.ssa-app .ssa-land-view { flex-grow: 1; }
+.ssa-app .ssa-land-profile { flex-grow: 1; min-height: 220px; }
+.ssa-app Label.ssa-land-profile__empty {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 40%;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+/* ---- Safety ---- */
+.ssa-app .ssa-land-heatblock { flex-shrink: 0; margin-bottom: 8px; }
+.ssa-app Label.ssa-land-hottest { font-size: 12px; color: var(--text); margin-bottom: 8px; }
+.ssa-app Label.ssa-land-heatnote { font-size: 11px; color: var(--muted); margin-top: 18px; }
+.ssa-app .ssa-land-heat { height: 14px; flex-shrink: 0; }
+.ssa-app .ssa-land-heat__track { height: 14px; border-radius: 7px; background-color: var(--active); overflow: hidden; }
+.ssa-app .ssa-land-heat__fill { height: 14px; border-radius: 7px; -unity-background-scale-mode: stretch-to-fill; }
+.ssa-app .ssa-land-heat__mark { position: absolute; top: -5px; width: 2px; height: 24px; align-items: center; }
+.ssa-app .ssa-land-heat__tick { width: 2px; height: 24px; background-color: #ff9a7a; }
+.ssa-app .ssa-land-heat__mark--ceiling .ssa-land-heat__tick { background-color: #ff5a5a; }
+.ssa-app Label.ssa-land-heat__label { position: absolute; top: 26px; width: 70px; left: -35px; font-size: 9px; color: #ff9a7a; -unity-text-align: upper-center; }
+.ssa-app .ssa-land-heat__mark--ceiling Label.ssa-land-heat__label { color: #ff7a7a; }
+.ssa-app .ssa-land-tiles { margin-top: 4px; }
+.ssa-app .ssa-land-tiles .ssa-tile { height: 78px; }

@@ -46,7 +46,9 @@ namespace SkySpaceAgency.Landing
         // (touch_down_max_angle.V, steering_max_angle.V, etc.). Only LandingUI.cs's binding
         // (SetupFullUI/SetupBasicUI below) needs to reach into `atmo`/`vac` directly instead of
         // through these properties, since one-time UI binding must not follow the current profile.
-        class TouchDownSettings
+        // internal (with AtmoSettings/VacSettings below) for the new window's Land tab
+        // (AppUI/Tabs/LandTab.cs), which binds the same two instances.
+        internal class TouchDownSettings
         {
             public ClampSetting<float> touch_down_max_angle;
 
@@ -71,6 +73,8 @@ namespace SkySpaceAgency.Landing
 
         TouchDownSettings atmo;
         TouchDownSettings vac;
+        internal TouchDownSettings AtmoSettings => atmo;
+        internal TouchDownSettings VacSettings => vac;
 
         public ClampSetting<float> touch_down_max_angle =>
             LandingProfile.IsAtmospheric ? atmo.touch_down_max_angle : vac.touch_down_max_angle;
