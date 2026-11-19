@@ -9,7 +9,7 @@ namespace K2D2.KSPService
 {
     public class BurndV : BaseController
     {
-        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.SettingsFile");
+        public ILogger logger = SpaceWarp2.API.Logging.LogManager.GetLogger("SkySpaceAgency.BurndV");
 
         KSPVessel current_vessel;
 
@@ -38,6 +38,14 @@ namespace K2D2.KSPService
         public float active_dv;       // m/s², 0 when nothing is active
         public float active_isp;      // s, combined; 0 when unknown
         public double mass;           // t
+
+        // K2-D2 1.4.0's names for the same thing (Node uses them): only the engines lit now, by
+        // our definition of active (IsActive), not upstream's IsOperational.
+        public float active_full_dv => active_dv;
+        public bool has_active_engine => active_dv > 0;
+
+        // A crash: the vessel whose engines already threw once (logged once per vessel).
+        object nre_logged_for;
 
         readonly List<double> active_thrusts = new List<double>();
         readonly List<double> active_isps = new List<double>();
@@ -119,14 +127,36 @@ namespace K2D2.KSPService
             for (int i = 0; i < engineInfos.Count; i++)
             {
                 DeltaVEngineInfo engineInfo = engineInfos[i];
+                if (engineInfo?.Engine == null || engineInfo.PartInfo?.PartRef == null)
+                    continue;
 
-                Vector3 vector = ((engineInfo.Engine != null) ? engineInfo.Engine.ThrustDirRelativePartWorldSpace : (1f * Vector3.back));
+                // The delta-v list can still hold an engine for a frame after it is destroyed (in a
+                // crash, say), and the game's thrust getters then throw on its missing data. That
+                // engine has no thrust to count either way (K2-D2 1.4.0).
+                Vector3 vector, actual;
+                float full;
+                bool active;
+                try
+                {
+                    vector = engineInfo.Engine.ThrustDirRelativePartWorldSpace;
+                    full = compute_full_thrust(engineInfo);
+                    actual = vector * engineInfo.Engine.FinalThrustValue;
+                    active = IsActive(engineInfo);
+                }
+                catch (System.NullReferenceException)
+                {
+                    var vessel = current_vessel.VesselComponent;
+                    if (!ReferenceEquals(nre_logged_for, vessel))
+                    {
+                        nre_logged_for = vessel;
+                        logger.LogWarning($"[BurndV] an engine of {vessel?.Name} could not be read (destroyed?): skipped");
+                    }
+                    continue;
+                }
 
-                float full = compute_full_thrust(engineInfo);
-                actual_thrust += vector * engineInfo.Engine.FinalThrustValue;
+                actual_thrust += actual;
                 full_thrust += vector * full;
-
-                if (IsActive(engineInfo))
+                if (active)
                 {
                     active_vector += vector * full;
                     active_thrusts.Add(full);

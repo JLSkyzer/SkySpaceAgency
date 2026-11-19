@@ -74,6 +74,7 @@ namespace K2D2.Node
             mode = Mode.Waiting;
             remaining_dv = 0;
             last_remaining_dv = -1;
+            no_thrust = false;
 
             if (current_vessel == null) return;
 
@@ -198,15 +199,17 @@ namespace K2D2.Node
                 return;
             }
 
-            remaining_full_burn_time = (float)(remaining_dv / burn_dV.full_dv);
-            if (remaining_full_burn_time >= 1)
-            {
-                needed_throttle = 1;
-                return;
-            }
-
-            needed_throttle = remaining_full_burn_time * BurnManeuverSettings.burn_adjust.V;
+            // Active engines only (K2-D2 1.4.0): with none, full throttle so the burn goes ahead as
+            // soon as one is staged or switched on.
+            var step = BurnThrottle.Compute(remaining_dv, burn_dV.active_dv, BurnManeuverSettings.burn_adjust.V);
+            if (step.NoThrust && !no_thrust)
+                logger.LogWarning("[BurnManeuver] no active engine: full throttle until one is staged or switched on");
+            no_thrust = step.NoThrust;
+            remaining_full_burn_time = step.FullBurnTime;
+            needed_throttle = step.Throttle;
         }
+
+        bool no_thrust;
 
         public override void updateUI(VisualElement root_el, FullStatus st)
         {
@@ -217,13 +220,16 @@ namespace K2D2.Node
                     st.Console(status_line);
                     break;
                 case Mode.Burning:
-                    st.Warning("Burning!");
+                    st.Warning(no_thrust ? "No active engine - stage or switch one on" : "Burning!");
                     if (maneuver.BurnRequiredDV >= 0)
                         st.Progress(remaining_dv / maneuver.BurnRequiredDV, $"{remaining_dv:n1} m/s");
 
                     // dV remaining and time remaining on one line so they read side by side
                     // instead of stacked as two separate console lines.
-                    st.Console($"{status_line}    |    {StrTool.DurationToString(remaining_full_burn_time)}");
+                    if (no_thrust)
+                        st.Console(status_line);
+                    else
+                        st.Console($"{status_line}    |    {StrTool.DurationToString(remaining_full_burn_time)}");
                     break;
             }
 

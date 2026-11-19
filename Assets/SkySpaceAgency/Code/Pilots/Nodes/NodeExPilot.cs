@@ -60,7 +60,21 @@ namespace K2D2.Node
             burn = new BurnManeuver();
             circularize = new CircularizeBurn();
             target_burn = new TargetOrbitBurn();
+            engines = new BurndV();
         }
+
+        BurndV engines;
+
+        // Without a lit engine the burn would only sit at full throttle doing nothing, so a node
+        // run does not start without one (staging during a burn is still fine). Active is our
+        // definition (BurndV.IsActive: ignited, not shut down), from K2-D2 1.4.0.
+        bool HasActiveEngine()
+        {
+            engines.Compute_Thrust();
+            return engines.has_active_engine;
+        }
+
+        public const string NoActiveEngineMessage = "No active engine - stage or switch one on.";
 
         public void OnActiveVesselChanged(MessageCenterMessage msg)
         {
@@ -220,6 +234,12 @@ namespace K2D2.Node
                 if (!canStart())
                 {
                     st.Warning("That node's already in the past - replot it.");
+                    return;
+                }
+
+                if (!HasActiveEngine())
+                {
+                    st.Warning(NoActiveEngineMessage);
                     return;
                 }
 
@@ -641,6 +661,16 @@ namespace K2D2.Node
                 }
                 else
                 {
+                    checkManeuver();
+                    // Refused: the status line already says why (see UpdateUI).
+                    if (next_maneuver_node != null && !HasActiveEngine())
+                    {
+                        logger.LogInfo("[NodeExPilot] start refused: no active engine");
+                        base.isRunning = true;
+                        base.isRunning = false;
+                        return;
+                    }
+
                     // reset controller to desactivate other controllers.
                     K2D2_Plugin.ResetControllers();
                     TimeWarpTools.SetIsPaused(false);
@@ -655,7 +685,11 @@ namespace K2D2.Node
                 }
 
                 // send call backs
-                base.isRunning = value; 
+                base.isRunning = value;
+                // A start that found no node to fly stops again here (setMode stopped it), so the
+                // Start button flips back instead of staying on "Stop" (K2-D2 1.4.0).
+                if (value && mode == Mode.Off)
+                    base.isRunning = false;
             }
         }
 
@@ -708,7 +742,7 @@ namespace K2D2.Node
                     }
                     else if (mode == Mode.Burn)
                     {
-                        if (Game.UniverseModel.UniverseTime < next_maneuver_node.Time)
+                        if (execute_node != null && Game.UniverseModel.UniverseTime < execute_node.Time)
                         {
                             status = $"Waiting to Burn: {current_executor.status_line}";
                         }
@@ -719,8 +753,7 @@ namespace K2D2.Node
                         }
                     }
                 }
-                else status = "Done";
-                // else status = "Unknown";
+                else status = !canStart() ? "Node In The Past" : HasActiveEngine() ? "Ready" : "No Active Engine";
             }
             return status;
         }
