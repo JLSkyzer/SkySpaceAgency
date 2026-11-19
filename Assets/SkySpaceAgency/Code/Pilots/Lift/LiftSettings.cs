@@ -49,7 +49,7 @@ namespace K2D2.Lift
 
         public Setting<int> destination_Ap_km = new("lift.destination_Ap_km", 100);
 
-        public ClampSetting<float> max_throttle = new ("lift.max_throttle", 1, 0, 1);
+        public ClampSetting<float> max_throttle = new ("lift.max_throttle", 1, 0.05f, 1);
         public ClampSetting<float> end_ascent_pc = new ("lift.end_ascent_pc", 0.1f, 0, 1);
 
         public float end_ascent_error

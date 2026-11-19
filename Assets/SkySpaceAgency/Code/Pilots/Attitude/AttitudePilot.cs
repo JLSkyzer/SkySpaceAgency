@@ -82,6 +82,8 @@ namespace K2D2.Controller
             autopilot.Enabled = true;
 
             var telemetry = SASTool.getTelemetry();
+            if (telemetry == null)
+                return;
 
             var up = telemetry.HorizonUp;
 

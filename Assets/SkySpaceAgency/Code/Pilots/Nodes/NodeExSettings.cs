@@ -7,7 +7,6 @@ namespace K2D2.Node
 {
     public class NodeExSettings
     {
-        public Setting<bool> show_node_infos = new Setting<bool>("node_ex.show_node_infos", true);
         public Setting<bool> auto_warp = new Setting<bool>("node_ex.auto_warp", true);
 
         public Setting<bool> pause_on_end = new Setting<bool>("node_ex.pause_on_end", false);

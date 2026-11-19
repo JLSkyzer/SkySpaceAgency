@@ -122,7 +122,9 @@ namespace K2D2.Lift
             run_button.listeners +=  v =>
             {
                 pilot.isRunning = v;
-                run_button.label = v ? "Stop" : "Start";
+                // Follows where the pilot ended up, in case it refused or stopped straight away.
+                run_button.Value = pilot.isRunning;
+                run_button.label = run_button.Value ? "Stop" : "Start";
             };
 
             // The old "settings" page's controls now live inside the ADVANCED foldout on "page"

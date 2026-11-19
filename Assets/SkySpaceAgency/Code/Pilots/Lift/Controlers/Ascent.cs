@@ -208,6 +208,8 @@ namespace K2D2.Lift
             autopilot.Enabled = true;
 
             var telemetry = SASTool.getTelemetry();
+            if (telemetry == null)
+                return;
             var up = telemetry.HorizonUp;
 
             // TRANSFER GOAL: the solver's azimuth plus the plane-steering correction, and no pad
