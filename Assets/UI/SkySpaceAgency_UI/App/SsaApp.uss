@@ -1,0 +1,411 @@
+/* The new SkySpaceAgency window (docs/design/ui, plan docs/superpowers/plans/2026-11-19-new-ui-foundations.md).
+   Every colour, size and font of the new UI is here. Sizes are the mockups' pixels (drawn for a 1600 x 900 window)
+   times 0.85; the interface scale setting scales the whole panel on top of that (AppUI/UiScale.cs).
+   Variables live on .ssa-app, not :root, so nothing here reaches the classic window.
+   Gradients (window, sky, gold) cannot be written in USS: AppUI/SsaPalette.cs builds them as textures. */
+
+.ssa-app {
+    --night: #0a1230;
+    --card: #0e1840;
+    --line: #1f2f66;
+    --edge: #24366e;
+    --chip: #17245a;
+    --active: #1d2c66;
+    --tabbar: #0c1538;
+    --text: #f4f7ff;
+    --muted: #8ea3d6;
+    --dim: #5c6ea6;
+    --gold: #e8a93a;
+    --gold-light: #ffe29a;
+    --gold-ink: #1a1205;
+    --cyan: #7fe7ff;
+    --ok: #d6f53c;
+    --alert: #ff7a5a;
+    --node: #4fa8ff;
+    --font: url("project://database/Packages/ksp2redux.sdk/Controls/Assets/Theme/Fonts/NotoSans/NotoSans-Regular%20SDF.asset?fileID=11400000&guid=13518dd9ae3a52c4abe48648d2401d8b&type=2#NotoSans-Regular SDF");
+    --font-strong: url("project://database/Packages/ksp2redux.sdk/Controls/Assets/Theme/Fonts/NotoSans/NotoSans-SemiBold%20SDF.asset?fileID=11400000&guid=39b10ce5dcbae2448ba06bb2f960e478&type=2#NotoSans-SemiBold SDF");
+
+    position: absolute;
+    flex-direction: column;
+    background-color: #0d1636;
+    border-width: 2px;
+    border-color: var(--edge);
+    border-radius: 15px;
+    padding: 5px 17px 16px 17px;
+    color: var(--text);
+    font-size: 12px;
+    -unity-font-definition: var(--font);
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.ssa-app Label {
+    color: var(--text);
+    font-size: 12px;
+    -unity-font-definition: var(--font);
+    -unity-font-style: normal;
+    padding: 0;
+    margin: 0;
+}
+
+.ssa-strong, .ssa-app Label.ssa-strong {
+    -unity-font-definition: var(--font-strong);
+}
+
+.ssa-muted, .ssa-app Label.ssa-muted { color: var(--muted); }
+.ssa-dim, .ssa-app Label.ssa-dim { color: var(--dim); }
+.ssa-row { flex-direction: row; align-items: center; }
+.ssa-grow { flex-grow: 1; flex-shrink: 1; }
+
+/* ---- Header ---- */
+.ssa-header {
+    flex-direction: row;
+    align-items: center;
+    height: 62px;
+    flex-shrink: 0;
+}
+.ssa-logo { width: 44px; height: 44px; flex-shrink: 0; }
+.ssa-brand { margin-left: 11px; margin-right: 24px; flex-shrink: 0; }
+.ssa-app Label.ssa-brand__title { font-size: 20px; letter-spacing: 1.7px; -unity-font-definition: var(--font-strong); }
+.ssa-app Label.ssa-brand__slogan { font-size: 12px; color: var(--muted); letter-spacing: 0.85px; margin-top: 1px; }
+.ssa-chips { flex-direction: row; align-items: center; flex-grow: 1; flex-shrink: 1; overflow: hidden; margin-left: 140px; }
+.ssa-chip {
+    flex-direction: row;
+    align-items: center;
+    height: 31px;
+    border-radius: 15.5px;
+    background-color: var(--chip);
+    padding: 0 17px;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+.ssa-app Label.ssa-chip__label { font-size: 13px; color: var(--muted); }
+.ssa-app Label.ssa-chip__value { font-size: 13px; color: var(--text); margin-left: 4px; }
+.ssa-dot { width: 10px; height: 10px; border-radius: 5px; background-color: var(--ok); margin-right: 8px; flex-shrink: 0; }
+.ssa-dot--alert { background-color: var(--alert); }
+.ssa-dot--info { background-color: var(--node); }
+.ssa-dot--neutral { background-color: var(--dim); }
+.ssa-icon-button {
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    background-color: var(--chip);
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+.ssa-icon-button:hover { background-color: var(--active); }
+
+/* ---- Tab bar ---- */
+.ssa-tabbar {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    border-radius: 10px;
+    background-color: var(--tabbar);
+    padding: 0 7px;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+.ssa-tab {
+    width: 128px;
+    height: 34px;
+    border-radius: 8px;
+    justify-content: center;
+    align-items: center;
+    margin-right: 8px;
+    flex-shrink: 1;
+}
+.ssa-tab:hover { background-color: #131f4c; }
+.ssa-tab--active, .ssa-tab--active:hover { background-color: var(--active); }
+.ssa-app Label.ssa-tab__label { font-size: 14px; letter-spacing: 0.85px; color: var(--muted); -unity-font-definition: var(--font-strong); }
+.ssa-tab--active Label.ssa-tab__label { color: var(--gold-light); }
+.ssa-tab--right Label.ssa-tab__label { color: var(--dim); -unity-font-definition: var(--font); }
+.ssa-tab--right.ssa-tab--active Label.ssa-tab__label { color: var(--gold-light); -unity-font-definition: var(--font-strong); }
+.ssa-tab--disabled Label.ssa-tab__label { color: #3a4878; }
+.ssa-tab__underline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    border-radius: 1.5px;
+    display: none;
+}
+.ssa-tab--active .ssa-tab__underline { display: flex; }
+.ssa-tabbar__spacer { flex-grow: 1; }
+.ssa-app--narrow .ssa-badge { display: none; }
+.ssa-badge {
+    height: 24px;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: #7a5ab0;
+    background-color: #2a2140;
+    padding: 0 14px;
+    justify-content: center;
+    margin-right: 50px;
+}
+.ssa-app Label.ssa-badge__label { font-size: 11px; color: #c9b2ff; letter-spacing: 1.7px; -unity-font-definition: var(--font-strong); }
+
+/* Narrow window: the vessel chip only, compact tabs. */
+.ssa-app--narrow .ssa-chips { margin-left: 16px; }
+.ssa-app--narrow .ssa-chip--extra { display: none; }
+.ssa-app--narrow .ssa-tab { width: auto; padding: 0 8px; margin-right: 4px; flex-shrink: 0; }
+.ssa-app--narrow Label.ssa-tab__label { font-size: 12px; letter-spacing: 0; }
+
+/* ---- Pages and columns ---- */
+.ssa-pages { flex-grow: 1; flex-shrink: 1; margin-top: 14px; }
+.ssa-page { flex-grow: 1; flex-shrink: 1; }
+.ssa-page__scroll { flex-grow: 1; flex-shrink: 1; padding: 0; margin: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
+.ssa-page__scroll > .unity-scroll-view__content-and-vertical-scroll-container,
+.ssa-page__scroll .unity-scroll-view__content-viewport,
+.ssa-page__scroll .unity-scroll-view__content-container { padding: 0; margin: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
+.ssa-page__scroll > .unity-scroll-view__content-viewport > .unity-scroll-view__content-container { flex-grow: 1; }
+.ssa-columns { flex-direction: row; flex-grow: 1; flex-shrink: 1; min-height: 300px; }
+.ssa-col { flex-shrink: 1; }
+.ssa-col--plan { width: 340px; min-width: 280px; }
+.ssa-col--view { flex-grow: 1; min-width: 300px; margin: 0 14px; }
+.ssa-col--side { width: 326px; min-width: 270px; }
+/* Narrow window: the view moves to its own row, under the plan and the telemetry (AppPage moves it last). */
+.ssa-app--narrow .ssa-columns { flex-wrap: wrap; }
+.ssa-app--narrow .ssa-col--plan { width: 48%; flex-grow: 1; margin-right: 14px; }
+.ssa-app--narrow .ssa-col--side { width: 48%; flex-grow: 1; }
+.ssa-app--narrow .ssa-col--view { width: 100%; min-height: 340px; margin: 14px 0 0 0; }
+
+/* ---- Card ---- */
+.ssa-card {
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: var(--line);
+    background-color: var(--card);
+    padding: 14px 20px 12px 20px;
+    flex-grow: 1;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+.ssa-card__head { flex-direction: row; align-items: center; height: 18px; margin-bottom: 7px; flex-shrink: 0; }
+.ssa-app Label.ssa-card__title { font-size: 12px; color: var(--muted); letter-spacing: 1.7px; flex-grow: 1; }
+.ssa-app Label.ssa-card__note { font-size: 11px; color: var(--dim); }
+.ssa-card__body { flex-grow: 1; }
+.ssa-app Label.ssa-section-title { font-size: 11px; color: var(--muted); letter-spacing: 1.7px; margin-top: 10px; margin-bottom: 8px; }
+
+/* ---- Segmented control ---- */
+.ssa-segmented {
+    flex-direction: row;
+    height: 34px;
+    border-radius: 8.5px;
+    background-color: var(--night);
+    padding: 3px;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+}
+.ssa-segmented__item { flex-grow: 1; flex-basis: 0; border-radius: 7px; justify-content: center; align-items: center; }
+.ssa-segmented__item--active { background-color: var(--active); }
+.ssa-app Label.ssa-segmented__label { font-size: 13px; color: var(--muted); }
+.ssa-segmented__item--active Label.ssa-segmented__label { color: var(--gold-light); }
+
+/* ---- Field with a unit ---- */
+.ssa-fields { flex-direction: row; margin-bottom: 8px; }
+.ssa-field { flex-grow: 1; flex-basis: 0; margin-right: 14px; }
+.ssa-field--last { margin-right: 0; }
+.ssa-app Label.ssa-field__label { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.ssa-field__box { height: 37px; }
+.ssa-app .ssa-field__input { margin: 0; padding: 0; flex-grow: 1; height: 37px; }
+.ssa-app .ssa-field__input > .unity-base-text-field__input,
+.ssa-app .ssa-field__input > .unity-base-field__input {
+    height: 37px;
+    margin: 0;
+    padding: 0 40px 0 13px;
+    border-width: 1px;
+    border-radius: 8.5px;
+    border-color: var(--edge);
+    background-color: var(--night);
+    background-image: none;
+    color: var(--text);
+    font-size: 17px;
+    -unity-font-definition: var(--font);
+}
+.ssa-app .ssa-field__input > .unity-base-text-field__input:focus { border-color: var(--gold); }
+.ssa-app Label.ssa-field__unit { position: absolute; right: 15px; top: 11px; font-size: 12px; color: var(--dim); }
+
+/* ---- Slider ---- */
+.ssa-slider { margin-top: 4px; flex-shrink: 0; }
+.ssa-slider__head { flex-direction: row; justify-content: space-between; margin-bottom: 3px; }
+.ssa-app Label.ssa-slider__label { font-size: 12px; color: var(--muted); }
+.ssa-app Label.ssa-slider__value { font-size: 12px; color: var(--text); }
+.ssa-app .ssa-slider__input { margin: 0; padding: 0; height: 17px; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
+.ssa-app .ssa-slider__input > .unity-base-slider__input { height: 17px; margin: 0; padding: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
+.ssa-app .ssa-slider__input .unity-base-slider__drag-container { height: 17px; margin: 0; padding: 0; border-width: 0; }
+.ssa-app .ssa-slider .ssa-slider__input > .unity-base-field__input > .unity-base-slider__drag-container > .unity-base-slider__tracker {
+    height: 5px;
+    margin-top: -2.5px;
+    top: 50%;
+    border-width: 0;
+    border-radius: 2.5px;
+    background-color: var(--active);
+    background-image: none;
+}
+.ssa-slider__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2.5px; background-color: var(--cyan); }
+.ssa-app .ssa-slider .ssa-slider__input > .unity-base-field__input > .unity-base-slider__drag-container > .unity-base-slider__dragger {
+    width: 17px;
+    height: 17px;
+    margin-top: -8.5px;
+    top: 50%;
+    border-width: 2.5px;
+    border-radius: 8.5px;
+    border-color: var(--cyan);
+    background-color: var(--text);
+    background-image: none;
+}
+.ssa-app .ssa-slider__input .unity-base-slider__dragger-border { display: none; }
+
+/* ---- Switch ---- */
+.ssa-switch { flex-direction: row; align-items: center; height: 37px; flex-shrink: 0; }
+.ssa-app Label.ssa-switch__label { font-size: 13px; flex-grow: 1; }
+.ssa-switch__track { width: 51px; height: 24px; border-radius: 12px; background-color: var(--active); flex-shrink: 0; }
+.ssa-switch__knob { position: absolute; top: 2.5px; left: 2px; width: 19px; height: 19px; border-radius: 9.5px; background-color: var(--dim); }
+.ssa-switch--on .ssa-switch__track { background-color: var(--ok); }
+.ssa-switch--on .ssa-switch__knob { left: 30px; background-color: var(--night); }
+.ssa-switch:disabled { opacity: 0.5; }
+
+/* ---- Tiles ---- */
+.ssa-tiles { flex-direction: row; flex-wrap: wrap; justify-content: space-between; }
+.ssa-tile {
+    width: 48%;
+    height: 78px;
+    border-radius: 10px;
+    background-color: var(--night);
+    padding: 10px 14px 0 14px;
+    margin-bottom: 10px;
+}
+.ssa-app Label.ssa-tile__label { font-size: 11px; color: var(--muted); }
+.ssa-tile__line { flex-direction: row; align-items: flex-end; margin-top: 6px; }
+.ssa-app Label.ssa-tile__value { font-size: 27px; color: var(--text); -unity-font-definition: var(--font-strong); }
+.ssa-app Label.ssa-tile__unit { font-size: 11px; color: var(--dim); margin-left: 12px; margin-bottom: 6px; }
+.ssa-tile--gold Label.ssa-tile__value { color: var(--gold-light); }
+.ssa-tile--data Label.ssa-tile__value { color: var(--cyan); }
+.ssa-tile--ok Label.ssa-tile__value { color: var(--ok); }
+.ssa-tile--alert Label.ssa-tile__value { color: var(--alert); }
+
+/* ---- Stage bars ---- */
+.ssa-stage { margin-bottom: 9px; flex-shrink: 0; }
+.ssa-stage__head { flex-direction: row; justify-content: space-between; margin-bottom: 4px; }
+.ssa-app Label.ssa-stage__label { font-size: 11px; }
+.ssa-app Label.ssa-stage__value { font-size: 11px; color: var(--muted); }
+.ssa-stage__bar { height: 8.5px; border-radius: 4.25px; background-color: var(--active); }
+.ssa-stage__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4.25px; background-color: var(--cyan); }
+.ssa-stage--gold .ssa-stage__fill { background-color: var(--gold); }
+
+/* ---- Status pill ---- */
+.ssa-pill {
+    flex-direction: row;
+    align-items: center;
+    min-height: 37px;
+    border-radius: 8.5px;
+    border-width: 1px;
+    padding: 6px 14px 6px 14px;
+    margin-top: 8px;
+    flex-shrink: 0;
+}
+.ssa-app Label.ssa-pill__text { font-size: 12px; white-space: normal; flex-grow: 1; flex-shrink: 1; flex-basis: 0; }
+.ssa-pill--ok { background-color: #132a1e; border-color: #3d6b2a; }
+.ssa-pill--ok Label.ssa-pill__text { color: var(--ok); }
+.ssa-pill--alert { background-color: #2a1216; border-color: #7a3030; }
+.ssa-pill--alert Label.ssa-pill__text { color: var(--alert); }
+.ssa-pill--alert .ssa-dot { background-color: var(--alert); }
+.ssa-pill--info { background-color: #1a2350; border-color: #2c4a9a; }
+.ssa-pill--info Label.ssa-pill__text { color: var(--node); }
+.ssa-pill--info .ssa-dot { background-color: var(--node); }
+.ssa-pill--neutral { background-color: var(--night); border-color: var(--edge); }
+.ssa-pill--neutral Label.ssa-pill__text { color: var(--muted); }
+.ssa-pill--neutral .ssa-dot { background-color: var(--dim); }
+
+/* ---- Phase timeline ---- */
+.ssa-timeline {
+    height: 68px;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: var(--line);
+    background-color: var(--card);
+    margin-top: 14px;
+    padding: 0 68px;
+    flex-shrink: 0;
+}
+.ssa-timeline__lane { flex-grow: 1; }
+.ssa-timeline__track { position: absolute; left: 0; right: 0; top: 24px; height: 3px; background-color: var(--active); }
+.ssa-timeline__progress { position: absolute; left: 0; top: 24px; height: 3px; }
+.ssa-timeline__dot {
+    position: absolute;
+    top: 15.5px;
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    translate: -50% 0;
+    background-color: var(--active);
+}
+.ssa-timeline__dot--done { background-color: var(--gold); }
+.ssa-timeline__dot--current {
+    top: 13px;
+    width: 25px;
+    height: 25px;
+    border-radius: 12.5px;
+    border-width: 3px;
+    border-color: var(--gold-light);
+    background-color: var(--night);
+    align-items: center;
+    justify-content: center;
+}
+.ssa-timeline__core { width: 9px; height: 9px; border-radius: 4.5px; background-color: var(--gold-light); }
+.ssa-timeline__step { position: absolute; top: 44px; translate: -50% 0; }
+.ssa-app Label.ssa-timeline__label { font-size: 12px; color: var(--muted); -unity-text-align: upper-center; white-space: nowrap; }
+.ssa-timeline__step--done Label.ssa-timeline__label { color: var(--gold-light); }
+.ssa-timeline__step--current Label.ssa-timeline__label { color: var(--text); -unity-font-definition: var(--font-strong); }
+
+/* ---- Action bar ---- */
+.ssa-actionbar { flex-direction: row; align-items: center; height: 44px; margin-top: 16px; flex-shrink: 0; }
+.ssa-app Label.ssa-actionbar__note { font-size: 12px; color: var(--muted); flex-grow: 1; flex-shrink: 1; margin-left: 7px; }
+.ssa-button {
+    min-width: 128px;
+    padding: 0 18px;
+    height: 44px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: var(--edge);
+    background-color: var(--chip);
+    justify-content: center;
+    align-items: center;
+    margin-left: 14px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+.ssa-button:hover { border-color: var(--muted); }
+.ssa-app Label.ssa-button__label { font-size: 14.5px; -unity-font-definition: var(--font-strong); }
+.ssa-button--main { border-width: 0; background-color: var(--gold); }
+.ssa-button--main:hover { border-width: 0; }
+.ssa-button--main Label.ssa-button__label { color: var(--gold-ink); }
+.ssa-button--abort { background-color: #3a1a1a; border-color: #7a3030; }
+.ssa-button--abort Label.ssa-button__label { color: #ff9a7a; }
+.ssa-button:disabled { opacity: 0.45; }
+
+/* ---- Plot (the Lift view) ---- */
+.ssa-plot { flex-grow: 1; }
+.ssa-app Label.ssa-plot__tick { position: absolute; font-size: 10px; color: var(--dim); -unity-text-align: middle-right; width: 30px; }
+.ssa-app Label.ssa-plot__note { position: absolute; font-size: 11px; }
+
+/* ---- Settings rows ---- */
+.ssa-setting { flex-direction: row; align-items: center; min-height: 52px; flex-shrink: 0; }
+.ssa-app Label.ssa-setting__label { font-size: 13px; width: 45%; flex-shrink: 0; }
+.ssa-setting__control { flex-grow: 1; }
+.ssa-app Label.ssa-setting__text { font-size: 13px; white-space: normal; flex-shrink: 1; }
+.ssa-app Label.ssa-paragraph { font-size: 12px; color: var(--muted); white-space: normal; margin-top: 8px; margin-bottom: 6px; }
+.ssa-app Label.ssa-about__name { font-size: 19px; -unity-text-align: upper-center; -unity-font-definition: var(--font-strong); margin-top: 10px; }
+.ssa-app Label.ssa-about__line { font-size: 11px; color: var(--muted); -unity-text-align: upper-center; white-space: normal; margin-top: 3px; }
+.ssa-app Label.ssa-about__licence { font-size: 12px; color: var(--gold-light); -unity-text-align: upper-center; margin-top: 18px; }
+
+/* ---- Settings categories ---- */
+.ssa-category { height: 39px; border-radius: 8.5px; justify-content: center; padding-left: 17px; margin: 0 0 8px 0; }
+.ssa-category--active { background-color: var(--active); border-left-width: 3.5px; border-left-color: var(--gold); }
+.ssa-app Label.ssa-category__label { font-size: 13.5px; color: var(--muted); }
+.ssa-category--active Label.ssa-category__label { color: var(--gold-light); -unity-font-definition: var(--font-strong); }
+
+/* ---- Minimised: header only ---- */
+.ssa-app--minimised .ssa-tabbar,
+.ssa-app--minimised .ssa-pages { display: none; }
+.ssa-app--minimised .window-resize-handle { display: none; }
