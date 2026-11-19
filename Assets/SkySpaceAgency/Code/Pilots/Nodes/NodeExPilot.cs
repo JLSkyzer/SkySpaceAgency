@@ -218,10 +218,15 @@ namespace SkySpaceAgency.Node
         public void UpdateUI()
         {
             if (!ui.isVisible) return;
+            UpdateStatus(page.panel, ui.status_bar);
+        }
 
-            ui.status_bar.Reset();
+        // The status line, console and progress bar of this pilot, written into st: the classic
+        // page's (UpdateUI) or the new window's NODES tab (AppPilotStatus), with root its panel.
+        public void UpdateStatus(UnityEngine.UIElements.VisualElement root, SkySpaceAgency.UI.FullStatus st)
+        {
+            st.Reset();
 
-            var st = ui.status_bar;
             if (!isRunning)
             {
                 // K2's own face (see k2_avatar in node.uxml) now sits right next to this line, so
@@ -273,7 +278,7 @@ namespace SkySpaceAgency.Node
             else if (mode == Mode.NextStep)
                 st.Status("Planning the next step of the Orbit plan...");
             else
-                current_executor.updateUI(page.panel, st);
+                current_executor.updateUI(root, st);
         }
 
         // Set when a circularize run is refused or stops on an error (see StartCircularize) so

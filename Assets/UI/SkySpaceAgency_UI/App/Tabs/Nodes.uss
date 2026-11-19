@@ -1,0 +1,60 @@
+/* Nodes tab of the new window (plan 2026-11-19-new-ui-tab-migration). Rules scoped under .ssa-app.
+   Sizes: docs/design/ui/nodes.svg pixels x 0.85. */
+
+/* ---- Maneuver node list ---- */
+.ssa-app .ssa-nodes-list { margin-bottom: 8px; flex-shrink: 0; }
+.ssa-app .ssa-nodes-item {
+    flex-direction: row;
+    align-items: center;
+    height: 54px;
+    border-radius: 8.5px;
+    border-width: 1px;
+    border-color: var(--line);
+    background-color: var(--night);
+    padding: 0 14px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+.ssa-app .ssa-nodes-item--next { border-color: var(--node); background-color: #13245a; }
+.ssa-app .ssa-nodes-item__ring {
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    border-width: 3px;
+    border-color: var(--node);
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+.ssa-app .ssa-nodes-item__text { flex-grow: 1; flex-shrink: 1; }
+.ssa-app Label.ssa-nodes-item__title { font-size: 13px; color: var(--text); }
+.ssa-app Label.ssa-nodes-item__dv { font-size: 11px; color: var(--gold-light); margin-top: 3px; }
+.ssa-app Label.ssa-nodes-item__time { font-size: 12px; color: var(--muted); flex-shrink: 0; margin-left: 8px; }
+.ssa-app Label.ssa-nodes-item__time--past { color: var(--alert); }
+.ssa-app Label.ssa-nodes-empty { margin-top: 0; }
+.ssa-app Label.ssa-nodes-label { margin-top: 6px; }
+
+/* ---- Burn view (navball) ---- */
+.ssa-app .ssa-nodes-burn { flex-grow: 1; min-height: 180px; }
+.ssa-app Label.ssa-nodes-burn__note {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 6px;
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    color: var(--dim);
+}
+.ssa-app Label.ssa-nodes-burn__note--ok { color: var(--ok); }
+.ssa-app Label.ssa-nodes-burn__note--info { color: var(--gold-light); }
+.ssa-app Label.ssa-nodes-burn__note--neutral { color: var(--dim); }
+
+/* ---- Hold attitude card (the classic Attitude tab, one row under the view) ---- */
+.ssa-app .ssa-nodes-attitude { flex-grow: 0; flex-shrink: 0; margin-top: 14px; padding-bottom: 14px; }
+.ssa-app .ssa-nodes-hold { margin-bottom: 0; align-items: flex-end; }
+.ssa-app .ssa-button.ssa-nodes-hold__button { min-width: 102px; height: 37px; margin-left: 0; border-radius: 8.5px; }
+.ssa-app Label.ssa-card__note.ssa-nodes-hold-note--on { color: var(--ok); }
+
+/* ---- Δv applied bar ---- */
+.ssa-app .ssa-nodes-applied { height: 12px; border-radius: 6px; background-color: var(--active); flex-shrink: 0; }
+.ssa-app .ssa-nodes-applied__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; -unity-background-scale-mode: stretch-to-fill; }
+.ssa-app Label.ssa-nodes-applied__note { font-size: 11px; margin-top: 8px; }
