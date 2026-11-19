@@ -41,6 +41,9 @@
                 <!-- Precision landing toggle: enabled in Parachute mode only (LandingSettings.setupBasicUI);
                      in Propulsive mode it is disabled and kept off, with the note below. -->
                 <K2UI.K2Toggle label="Precision Landing" name="precision_landing_atmo" tooltip="Parachute mode: deorbit with the engines, jettison the service module and land under the parachutes near the target" />
+                <!-- Boost-back (K2-D2 flavour only, ModIdentity.IsK2D2; never shown in this mod): why a
+                     boost-back cannot start (Redux's prediction settings, suborbital only). -->
+                <ui:Label tabindex="-1" text="" display-tooltip-when-elided="true" name="precision_landing_gate_atmo" style="display: none; color: rgb(224, 200, 132); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
                 <ui:VisualElement name="target_settings_atmo" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
                     <ui:DropdownField label="Waypoint :" index="-1" choices="" name="waypoint_drop_atmo" tooltip="KSC, the point picked on the map, and the waypoints on the current body (list refreshes automatically)" />
                     <ui:Button text="Pick on map" display-tooltip-when-elided="true" name="pick_target_atmo" tooltip="Click the body in the map view to set the landing target" />
@@ -149,6 +152,16 @@
                 <!-- ATMO PANEL - reduced: just Warp/Brake/Touch Down's general-purpose tunables.
                      No PRECISION LANDING section at all - see landing_mode_group_atmo above. -->
                 <ui:VisualElement name="atmo_settings_panel" style="display: none;">
+                    <!-- Boost-back settings (K2-D2 flavour only, ModIdentity.IsK2D2; never shown in this mod).
+                         Upstream names; entry_flight_path_angle_atmo stays hidden in both flavours
+                         (from-orbit entry, not ported). -->
+                    <ui:VisualElement name="PrecisionLanding_atmo" style="display: none;">
+                        <ui:Label text="// BOOST-BACK" class="k2-section-header" />
+                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="10" max="30" name="entry_angle_of_attack_atmo" format="N0" label="Entry Angle of Attack (°)" tooltip="How far the vessel is held off retrograde during reentry to make lift for steering. More gives more steering, but exposes more of the vessel to reentry heat." />
+                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="10" max="60" name="entry_flight_path_angle_atmo" format="N0" label="Entry Steepness (°)" style="display: none;" />
+                        <ui:Label text="Boost-back Flip" tooltip="How a boost-back landing turns the stage round before its burn. Powered: the engines light at once and their gimbals help it turn. Unpowered: turn first, then burn." />
+                        <K2UI.InlineEnum name="boost_back_flip_atmo" labels="Powered;Unpowered" />
+                    </ui:VisualElement>
                     <ui:VisualElement name="Warp_atmo">
                         <ui:Label text="// WARP" class="k2-section-header" />
                         <K2UI.K2Toggle label="Auto Warp" name="auto_warp_atmo" tooltip="Warp time before burn" />

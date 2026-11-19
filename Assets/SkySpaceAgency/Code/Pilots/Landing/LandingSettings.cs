@@ -4,6 +4,16 @@ using K2UI;
 
 namespace K2D2.Landing
 {
+    // How the boost-back turns the vessel round before its burn (see BoostBackBurn). K2-D2 1.4.0
+    // (IanMealworm); the boost-back flies in the K2-D2 flavour only (BoostBackStart).
+    public enum FlipStyle
+    {
+        // Engines lit from the start, so their gimbals help turn (like Super Heavy).
+        Powered,
+        // Turn first, then burn (like Falcon 9).
+        Unpowered,
+    }
+
     // How to land on an atmospheric body (LandingSettings.mode, atmo profile only).
     public enum LandingMethod
     {
@@ -73,6 +83,16 @@ namespace K2D2.Landing
         // never lowers it. Both profiles; bound in LandingUI (a text field, so it can be empty).
         public Setting<string> drop_stage_at_km;
 
+        // Boost-back (K2-D2 1.4.0, keys, defaults and ranges verbatim so a K2-D2 1.4.x file loads
+        // unchanged). Declared on both profiles and in both flavours, as upstream; read only by the
+        // boost-back, which flies in the K2-D2 flavour only (BoostBackStart). entry_angle_of_attack:
+        // how far the vessel is held off retrograde in the entry guidance (AtmoEntryGuidance);
+        // entry_flight_path_angle: the from-orbit entry steepness (not ported: kept for the files);
+        // boost_back_flip: see FlipStyle.
+        public ClampSetting<float> entry_angle_of_attack;
+        public ClampSetting<float> entry_flight_path_angle;
+        public EnumSetting<FlipStyle> boost_back_flip;
+
         public LandingSettings(SettingsFile file, bool atmospheric)
         {
             auto_warp = new("land.auto_warp", true, file);
@@ -90,6 +110,9 @@ namespace K2D2.Landing
 
             deploy_legs_early = new("land.deploy_legs_early", false, file);
             drop_stage_at_km = new("land.drop_stage_at_km", "", file);
+            entry_angle_of_attack = new("land.entry_angle_of_attack", 10, 0, 30, file);
+            entry_flight_path_angle = new("land.entry_flight_path_angle", 10, 0, 60, file);
+            boost_back_flip = new("land.boost_back_flip", FlipStyle.Powered, file);
             if (atmospheric)
             {
                 mode = new("land.mode", LandingMethod.Propulsive, file);
@@ -154,16 +177,17 @@ namespace K2D2.Landing
             // TARGET - the precision toggle is enabled in Parachute mode only (the parachute
             // precision return); in Propulsive mode it is disabled and kept off. LandingUI also
             // forces it off every tick in Propulsive mode, in case a saved file turns it back on.
+            // K2-D2 flavour only (ModIdentity.IsK2D2): Propulsive precision is the boost-back.
             var precision_toggle = root.Q<K2Toggle>("precision_landing_atmo").Bind(precision_landing);
             mode.listen(m =>
             {
-                precision_toggle.SetEnabled(m == LandingMethod.Parachute);
-                if (m != LandingMethod.Parachute && precision_landing.V)
+                precision_toggle.SetEnabled(PrecisionAllowed(m));
+                if (!PrecisionAllowed(m) && precision_landing.V)
                     precision_landing.V = false;
             });
             precision_landing.listeners += v =>
             {
-                if (v && mode.V != LandingMethod.Parachute) precision_landing.V = false;
+                if (v && !PrecisionAllowed(mode.V)) precision_landing.V = false;
             };
             var target_settings = root.Q<VisualElement>("target_settings_atmo");
             target_settings.Q<FloatField>("target_latitude_atmo").Bind(target_latitude);
@@ -192,7 +216,18 @@ namespace K2D2.Landing
 
             // PRECISION RETURN
             root.Q<K2Slider>("reentry_drag_scale_atmo").Bind(reentry_drag_scale);
+
+            // BOOST-BACK (K2-D2 flavour only: the panel PrecisionLanding_atmo is shown by LandingUI
+            // when ModIdentity.IsK2D2, never in this mod). Upstream element names.
+            root.Q<K2Slider>("entry_angle_of_attack_atmo").Bind(entry_angle_of_attack);
+            root.Q<K2Slider>("entry_flight_path_angle_atmo").Bind(entry_flight_path_angle);
+            root.Q<InlineEnum>("boost_back_flip_atmo").Bind(boost_back_flip);
         }
+
+        // Atmo profile: precision means the parachute return in Parachute mode; in Propulsive mode
+        // it is the boost-back, in the K2-D2 flavour only (BoostBackStart).
+        public static bool PrecisionAllowed(LandingMethod method) =>
+            method == LandingMethod.Parachute || ModIdentity.IsK2D2;
 
         public float compute_limit_speed(float altitude)
         {

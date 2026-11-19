@@ -10,7 +10,7 @@ namespace K2D2.Landing
     // Node tab's closed-loop circularization and the Landing tab. The deorbit search that lived
     // here (FindBestDeorbitBurn, PredictImpactLongitude and its empirical 1.307 rotation factor)
     // was replaced by the pure precision planner in Precision/ on 2026-10-21.
-    public static class LandingTargeting
+    public static partial class LandingTargeting
     {
         // ------------------------------------------------------------------------------------
         // Shared helpers
