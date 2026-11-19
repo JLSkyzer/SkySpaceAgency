@@ -280,19 +280,7 @@ namespace K2D2.KSPService
 
             Game.SpaceSimulation.Maneuvers.AddNodeToVessel(nodeData);
 
-            yield return new WaitForFixedUpdate();
-
-            MapCore mapCore = null;
-            Game.Map.TryGetMapCore(out mapCore);
-            if (mapCore)
-            {
-                mapCore.map3D.ManeuverManager.GetNodeDataForVessels();
-                mapCore.map3D.ManeuverManager.UpdatePositionForGizmo(nodeData.NodeID);
-                // mapCore.map3D.ManeuverManager.UpdateAll();
-                // mapCore.map3D.ManeuverManager.RemoveAll();
-            }
-
-
+            yield return UpdateMapGizmoWhenReady_Co(nodeData);
         }
 
         /// <summary>
@@ -345,7 +333,7 @@ namespace K2D2.KSPService
             // is validated in game.
             Game.SpaceSimulation.Maneuvers.AddNodeToVessel(nodeData);
 
-            K2D2_Plugin.Instance.StartCoroutine(UpdateMapGizmo_Co(nodeData));
+            K2D2_Plugin.Instance.StartCoroutine(UpdateMapGizmoWhenReady_Co(nodeData));
 
             return nodeData;
         }
@@ -375,6 +363,28 @@ namespace K2D2.KSPService
             // RemoveNodes() would throw "Collection was modified" since RemoveNodes enumerates the
             // same list it's removing entries from. Pass a copy so it enumerates a snapshot instead.
             maneuvers_component.RemoveNodes(new List<ManeuverNodeData>(nodes));
+        }
+
+        /// <summary>
+        /// Removes the nodes a burn ending at burnEndUT replaces (NodeTargets.NodesToRemove) and keeps
+        /// the later ones, which are the player's plan for afterwards. Returns (removed, kept).
+        /// </summary>
+        public (int removed, int kept) RemoveNodesBefore(double burnEndUT)
+        {
+            var maneuvers_component = _vesselComponent?.SimulationObject?.FindComponent<ManeuverPlanComponent>();
+            List<ManeuverNodeData> nodes = maneuvers_component?.GetNodes();
+            if (nodes == null || nodes.Count == 0)
+                return (0, 0);
+
+            // A copy, as in RemoveAllNodes: RemoveNodes enumerates the live list.
+            var doomed = NodeTargets.NodesToRemove(new List<ManeuverNodeData>(nodes), n => n.Time, burnEndUT);
+            int kept = nodes.Count - doomed.Count;
+            if (doomed.Count == 0)
+                return (0, kept);
+            foreach (var node in doomed)
+                NodeTargets.Remove(node.NodeID);
+            maneuvers_component.RemoveNodes(doomed);
+            return (doomed.Count, kept);
         }
 
         /// <summary>
@@ -601,13 +611,44 @@ namespace K2D2.KSPService
 
         static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
-        // Map3DManeuvers.GetNodeDataForVessels throws a NullReferenceException inside the game in
-        // some states (seen after every node creation, 2026-10-16). The node itself is fine; only
-        // the map refresh fails, so it is caught and reported once per session.
+        // How long to wait for the player to open Map3DView before giving up on a node's gizmo
+        // (K2-D2 1.4.0). Bounded so a node the player never looks at on the map does not leave a
+        // coroutine polling forever.
+        const float MapGizmoReadyTimeoutSeconds = 120f;
+
+        // True while UpdateMapGizmoWhenReady_Co waits for the player to open Map3DView. Set around
+        // every wait: the map's 3D scene is rebuilt each time the player returns to it.
+        public bool waiting_for_map_view { get; private set; } = false;
+
+        // Map3DManeuvers.GetNodeDataForVessels throws a NullReferenceException inside the game while
+        // the map is not open (Game.Map.TryGetMapCore can return a MapCore before map3D is ready;
+        // seen after every node creation, 2026-10-16). The node itself is fine; only its gizmo is
+        // not positioned. So the gizmo update waits for Map3DView (0.5 s poll, 120 s at most), and
+        // anything still thrown is reported once per session.
         static bool _mapGizmoWarned;
 
-        private IEnumerator UpdateMapGizmo_Co(ManeuverNodeData nodeData)
+        private IEnumerator UpdateMapGizmoWhenReady_Co(ManeuverNodeData nodeData)
         {
+            // GetGameState() returns a struct: read with plain dots once Game is known non-null.
+            float waited = 0f;
+            while (true)
+            {
+                if (Game == null || waited >= MapGizmoReadyTimeoutSeconds)
+                {
+                    waiting_for_map_view = false;
+                    yield break;
+                }
+
+                if (Game.GlobalGameState.GetGameState().GameState == GameState.Map3DView)
+                    break;
+
+                waiting_for_map_view = true;
+                waited += 0.5f;
+                yield return new WaitForSeconds(0.5f);
+            }
+
+            waiting_for_map_view = false;
+
             yield return new WaitForFixedUpdate();
 
             try

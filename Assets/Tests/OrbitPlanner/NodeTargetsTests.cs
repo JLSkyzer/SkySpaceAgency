@@ -91,4 +91,31 @@ public class NodeTargetsTests
         Assert.IsTrue(entry.IsEdited(new Vector3d(1, 2, 300), 5001.5), "time changed");
         Assert.IsTrue(entry.IsEdited(new Vector3d(1, 2, 300), 4998), "time changed");
     }
+
+    [Test]
+    public void NodesToRemove_KeepsOnlyTheNodesAfterTheBurn()
+    {
+        var times = new[] { 900.0, 1000.0, 1000.001, 5000.0 };
+
+        var doomed = NodeTargets.NodesToRemove(times, t => t, 1000);
+
+        CollectionAssert.AreEqual(new[] { 900.0, 1000.0 }, doomed, "at or before the end of the burn go");
+    }
+
+    [Test]
+    public void NodesToRemove_AllLater_NoneRemoved()
+    {
+        CollectionAssert.IsEmpty(NodeTargets.NodesToRemove(new[] { 2000.0, 3000.0 }, t => t, 1000));
+        CollectionAssert.IsEmpty(NodeTargets.NodesToRemove(new double[0], t => t, 1000), "empty plan");
+        CollectionAssert.IsEmpty(NodeTargets.NodesToRemove<double>(null, t => t, 1000), "no plan");
+    }
+
+    [Test]
+    public void NodesToRemove_NodeWithoutAValidTime_Removed()
+    {
+        var doomed = NodeTargets.NodesToRemove(new[] { double.NaN, 2000.0 }, t => t, 1000);
+
+        Assert.AreEqual(1, doomed.Count);
+        Assert.IsTrue(double.IsNaN(doomed[0]));
+    }
 }

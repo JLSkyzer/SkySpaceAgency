@@ -131,10 +131,13 @@ namespace K2D2.Node
                 return;
             }
 
-            // Accepted: this run owns the plan. No node is created, the old ones would only
-            // mislead (the map, SAS Maneuver mode).
+            // Accepted. No node is created; the nodes up to the end of this burn would only mislead
+            // (the map, SAS Maneuver mode) and go. Later ones are the player's plan for afterwards
+            // and stay (K2-D2 1.4.0; user decision 2026-11-19).
             maneuver_creator.Update();
-            maneuver_creator.RemoveAllNodes();
+            var (removed, kept) = maneuver_creator.RemoveNodesBefore(apsis_UT + burn_time / 2);
+            if (removed > 0 || kept > 0)
+                logger.LogInfo($"[Circularize] nodes: removed {removed} up to the end of the burn, kept {kept} after it");
 
             logger.LogInfo($"[Circularize] {Apsis} accepted: ap {(apoapsisRadius - body.radius) / 1000:n1} km " +
                 $"pe {(periapsisRadius - body.radius) / 1000:n1} km, apsis in {apsis_UT - now:n1} s, " +

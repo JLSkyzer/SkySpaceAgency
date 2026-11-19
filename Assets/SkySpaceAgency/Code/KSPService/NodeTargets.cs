@@ -48,6 +48,25 @@ namespace K2D2.KSPService
 
         public static void Clear() => targets.Clear();
 
+        /// <summary>
+        /// The nodes a burn that ends at burnEndUT replaces: every node at or before that time (and a
+        /// node with no valid time). Nodes after it are the player's plan for later and stay
+        /// (K2-D2 1.4.0 no longer deletes them on circularize; user decision 2026-11-19).
+        /// </summary>
+        public static List<T> NodesToRemove<T>(IEnumerable<T> nodes, Func<T, double> time, double burnEndUT)
+        {
+            var doomed = new List<T>();
+            if (nodes == null)
+                return doomed;
+            foreach (var node in nodes)
+            {
+                double t = time(node);
+                if (!(t > burnEndUT))   // NaN too
+                    doomed.Add(node);
+            }
+            return doomed;
+        }
+
         /// <summary>Drops every entry whose node is not among liveNodeIds (removed by hand, for example).</summary>
         public static void Prune(IEnumerable<Guid> liveNodeIds)
         {
