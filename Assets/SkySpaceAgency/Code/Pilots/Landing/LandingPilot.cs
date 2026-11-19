@@ -69,6 +69,7 @@ namespace K2D2.Landing
             jettison = new Jettison(this);
             stage_drop = new LandingStageDrop(this);
             CreateAirTiming();
+            CreateBoostBack();
             _page = new LandingUI(this);
 
             Instance = this;
@@ -114,7 +115,12 @@ namespace K2D2.Landing
             // the retrograde burn before the atmosphere, then the atmospheric coast with the heat
             // guard. Left by explicit transitions, never nextMode().
             PreBrake,
-            AeroCoast
+            AeroCoast,
+            // Boost-back (LandingPilotBoostBack.cs), K2-D2 flavour only: never entered in this mod
+            // (BoostBackStart). The burn, then the entry guidance; left by explicit transitions
+            // (to AtmoReentry, then Brake), never nextMode().
+            BoostBack,
+            AtmoReentry
         }
 
         public Mode mode = Mode.Off;
@@ -198,7 +204,7 @@ namespace K2D2.Landing
                         gear.Deploy(current_vessel.VesselComponent, $"entering {mode}");
                     // A vessel that coasted down inside the air brakes with the drag-aware burn
                     // (LandingPilotAirTiming.cs); otherwise Touch Down's controller, as before.
-                    if (mode != Mode.Brake || !StartAirBrake())
+                    if (mode != Mode.Brake || !(StartBoostBackBrake() || StartAirBrake()))
                         current_executor.setController(brake);
                     if (precision_run)
                     {
@@ -227,6 +233,14 @@ namespace K2D2.Landing
                     break;
                 case Mode.AeroCoast:
                     StartAeroCoast();
+                    break;
+                case Mode.BoostBack:
+                    current_executor.setController(boost_back);
+                    boost_back.Start();
+                    break;
+                case Mode.AtmoReentry:
+                    current_executor.setController(atmo_guidance);
+                    atmo_guidance.Start();
                     break;
             }
 
@@ -268,7 +282,8 @@ namespace K2D2.Landing
 
             // TouchDown and Parachute are both final phases: the run ends on contact. The reentry
             // coast and jettison leave by explicit transitions (LandingPilotReentry.cs).
-            if (mode == Mode.TouchDown || mode == Mode.Parachute || ReentryMode(mode) || mode == Mode.PreBrake || mode == Mode.AeroCoast)
+            if (mode == Mode.TouchDown || mode == Mode.Parachute || ReentryMode(mode) || mode == Mode.PreBrake || mode == Mode.AeroCoast
+                || BoostBackMode(mode))
                 return;
 
             var next = this.mode + 1;
@@ -288,6 +303,10 @@ namespace K2D2.Landing
                     // stop
                     if (current_vessel != null)
                         current_vessel.SetThrottle(0);
+                    // A boost-back lets go of its attitude hold (K2-D2 flavour only).
+                    if (boost_back_run)
+                        ReleaseAtmo();
+                    boost_back_run = false;
 
                     setMode(Mode.Off);
                     ReleaseSasTarget();
@@ -327,7 +346,9 @@ namespace K2D2.Landing
                     gear.Reset();
                     net_start_ut = double.NaN;
                     standing.Reset();
-                    if (parachute_mode && !precision_run)
+                    if (boost_back_run)
+                        setMode(Mode.BoostBack);
+                    else if (parachute_mode && !precision_run)
                         setMode(Mode.Parachute);
                     else if (precision_run)
                         setMode(precision_calibrating ? Mode.Calibrate : reentry_run ? Mode.PlaneChange : Mode.OrbitPrep);
@@ -831,6 +852,7 @@ namespace K2D2.Landing
             precision_run = false;
             precision_calibrating = false;
             reentry_run = false;
+            boost_back_run = false;
             ResetDescent();
             if (parachute_mode)
             {
@@ -842,6 +864,10 @@ namespace K2D2.Landing
 
             burn_dV.Compute_Thrust();
             LogEngines();
+            // Boost-back (K2-D2 flavour only; null in this mod): its own start rule.
+            bool? boost_back_start = CheckCanStartBoostBack();
+            if (boost_back_start.HasValue)
+                return boost_back_start.Value;
             // Landing with a chosen stage: the stage list, the landing stage and the drops.
             if (!PrepareStagedRun(out double landing_accel))
                 return false;
@@ -1094,7 +1120,7 @@ namespace K2D2.Landing
                     // A parachute landing has no Touch Down phase to fall back to.
                     // Nor does the drag-aware burn, which hands over to Touch Down itself (at 50 m):
                     // its thrust can make the unpowered prediction miss the ground.
-                    if (mode != Mode.Parachute && !ReentryMode(mode) && !(mode == Mode.Brake && air_brake)
+                    if (mode != Mode.Parachute && !ReentryMode(mode) && !(mode == Mode.Brake && air_brake) && !BoostBackMode(mode)
                         && altitude < settings.start_touchdown_altitude.V)
                         setMode(Mode.TouchDown);
                 }
@@ -1144,6 +1170,8 @@ namespace K2D2.Landing
                 else
                     UpdatePrecisionReadout();
             }
+            if (BoostBackMode(mode))
+                UpdateBoostBack();
             if (mode == Mode.AeroCoast)
             {
                 UpdateAeroCoast();
@@ -1269,6 +1297,11 @@ namespace K2D2.Landing
                 if (mode == Mode.AeroCoast)
                 {
                     current_executor.setController(null);
+                    return;
+                }
+                if (BoostBackMode(mode))
+                {
+                    OnBoostBackPhaseEnd();
                     return;
                 }
                 if (PrecisionPhaseMode(mode))

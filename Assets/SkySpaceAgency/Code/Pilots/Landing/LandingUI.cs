@@ -91,6 +91,10 @@ namespace K2D2.Landing
         // Atmo: the note under the precision toggle, and the calibration suggestion after a
         // precision return with its Apply button.
         Label atmo_precision_note;
+        // Boost-back, K2-D2 flavour only (ModIdentity.IsK2D2; never shown in this mod): the note
+        // saying why it cannot start, and its ADVANCED settings.
+        Label atmo_gate_label;
+        VisualElement boost_back_settings;
         VisualElement reentry_calibration;
         Label reentry_suggestion;
 
@@ -217,6 +221,8 @@ namespace K2D2.Landing
             precision_plan_label = panel.Q<Label>("precision_plan_vac");
             precision_plan_label_atmo = panel.Q<Label>("precision_plan_atmo");
             atmo_precision_note = panel.Q<Label>("atmo_precision_note");
+            atmo_gate_label = panel.Q<Label>("precision_landing_gate_atmo");
+            boost_back_settings = panel.Q<VisualElement>("PrecisionLanding_atmo");
             reentry_calibration = panel.Q<VisualElement>("reentry_calibration_atmo");
             reentry_suggestion = panel.Q<Label>("reentry_suggestion_atmo");
             panel.Q<Button>("reentry_apply_atmo").clicked += () => pilot.ApplySuggestedDragScale();
@@ -833,17 +839,44 @@ namespace K2D2.Landing
         // return, the suggested reentry drag scale (applied only by the Apply button).
         void UpdateReentrySuggestion()
         {
-            bool parachute = pilot.settings_atmo.mode.V == LandingMethod.Parachute;
-            atmo_precision_note.Show(!parachute);
+            atmo_precision_note.Show(!LandingSettings.PrecisionAllowed(pilot.settings_atmo.mode.V));
             bool suggestion = !double.IsNaN(pilot.suggested_drag_scale) && !pilot.isRunning;
             reentry_calibration.Show(suggestion);
             if (suggestion)
                 reentry_suggestion.text = Precision.DragCalibration.SuggestionMessage(pilot.suggested_drag_scale, pilot.settings_atmo.reentry_drag_scale.V);
         }
 
+        // Boost-back (K2-D2 flavour only, ModIdentity.IsK2D2): its settings in ADVANCED and the
+        // note under the precision toggle, in Propulsive mode. Never shown in this mod.
+        void UpdateBoostBackGate()
+        {
+            bool boost_back = ModIdentity.IsK2D2 && pilot.settings_atmo.mode.V == LandingMethod.Propulsive;
+            boost_back_settings.Show(boost_back && pilot.settings_atmo.precision_landing.V);
+            string note = boost_back ? BoostBackGateNote() : null;
+            atmo_gate_label.Show(note != null);
+            if (note != null)
+                atmo_gate_label.text = note;
+        }
+
+        // Redux's prediction settings must be right (checked every tick, so changing them in
+        // Redux's menu takes effect at once); otherwise, in orbit, says up front why Start will
+        // refuse. Null when there is nothing to say.
+        string BoostBackGateNote()
+        {
+            string problem = ReduxImpactPrediction.AtmoSettingsProblem();
+            if (problem != null)
+                return problem;
+            bool in_orbit = !pilot.isRunning && pilot.settings_atmo.precision_landing.V && pilot.LandsFromOrbit();
+            return in_orbit ? BoostBackStart.FromOrbitMessage : null;
+        }
+
         // A planned descent's own phases (LandingPilotDescent.cs), else the precision ones.
         string PhaseText(LandingPilot.Mode mode)
         {
+            if (mode == LandingPilot.Mode.BoostBack)
+                return "Boost-back burn";
+            if (mode == LandingPilot.Mode.AtmoReentry)
+                return "Entry guidance";
             if (pilot.deorbit_run)
             {
                 switch (mode)
@@ -956,8 +989,9 @@ namespace K2D2.Landing
             if (!base.onUpdateUI())
                 return false;
 
-            // Atmospheric precision landing is for Parachute mode only: keep the toggle off otherwise.
-            if (pilot.settings_atmo.precision_landing.V && pilot.settings_atmo.mode.V != LandingMethod.Parachute)
+            // Atmospheric precision landing is for Parachute mode only: keep the toggle off otherwise
+            // (K2-D2 flavour: Propulsive precision is the boost-back, LandingSettings.PrecisionAllowed).
+            if (pilot.settings_atmo.precision_landing.V && !LandingSettings.PrecisionAllowed(pilot.settings_atmo.mode.V))
                 pilot.settings_atmo.precision_landing.V = false;
 
             updateCollisionStatus();
@@ -968,6 +1002,7 @@ namespace K2D2.Landing
             UpdateOrbitGate();
             UpdatePrecisionPlanLabel();
             UpdateReentrySuggestion();
+            UpdateBoostBackGate();
             UpdateProfilePanels();
             UpdateStageChoices();
 
@@ -1002,6 +1037,8 @@ namespace K2D2.Landing
                     case LandingPilot.Mode.Jettison:
                     case LandingPilot.Mode.PreBrake:
                     case LandingPilot.Mode.AeroCoast:
+                    case LandingPilot.Mode.BoostBack:
+                    case LandingPilot.Mode.AtmoReentry:
                         status_bar.Status(PhaseText(pilot.mode));
                         break;
                     case LandingPilot.Mode.Pause:
