@@ -1,0 +1,80 @@
+/* Rendezvous tab of the new window (plan 2026-11-19-new-ui-tab-migration). Rules scoped under .ssa-app.
+   Sizes: docs/design/ui/rendezvous.svg (make_screens.py) x 0.85. */
+
+/* ---- TARGET list: one row per vessel, the chosen one gold ---- */
+.ssa-app .ssa-rendezvous-targets { flex-shrink: 0; margin-bottom: 4px; }
+.ssa-app .ssa-rendezvous-targets__scroll { max-height: 176px; flex-shrink: 0; padding: 0; margin: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
+.ssa-app .ssa-rendezvous-targets__scroll > .unity-scroll-view__content-and-vertical-scroll-container,
+.ssa-app .ssa-rendezvous-targets__scroll .unity-scroll-view__content-viewport,
+.ssa-app .ssa-rendezvous-targets__scroll .unity-scroll-view__content-container { padding: 0; margin: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
+.ssa-app .ssa-rendezvous-targets__scroll .unity-scroller--vertical { width: 6px; margin-left: 4px; }
+.ssa-app .ssa-rendezvous-target {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 46px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: var(--edge);
+    background-color: var(--night);
+    padding: 0 14px 0 17px;
+    margin-bottom: 8.5px;
+}
+.ssa-app .ssa-rendezvous-target:hover { border-color: var(--muted); }
+.ssa-app .ssa-rendezvous-target--selected,
+.ssa-app .ssa-rendezvous-target--selected:hover { background-color: #1a2350; border-color: var(--gold); }
+.ssa-app Label.ssa-rendezvous-target__name { font-size: 13.5px; color: var(--muted); flex-shrink: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ssa-app .ssa-rendezvous-target--selected Label.ssa-rendezvous-target__name { color: var(--text); -unity-font-definition: var(--font-strong); }
+.ssa-app Label.ssa-rendezvous-target__detail { font-size: 12px; color: var(--muted); flex-shrink: 0; margin-left: 8px; }
+.ssa-app Label.ssa-rendezvous-body { font-size: 10.5px; color: var(--dim); letter-spacing: 1.5px; margin: 2px 0 5px 2px; flex-shrink: 0; }
+
+.ssa-app .ssa-rendezvous-mode { margin-top: 4px; margin-bottom: 4px; flex-shrink: 0; }
+.ssa-app .ssa-rendezvous-mode .ssa-segmented__item:disabled { opacity: 0.4; }
+
+/* ---- Docking ports: two lines and "Change" ---- */
+.ssa-app Label.ssa-rendezvous-label { font-size: 12px; color: var(--muted); margin-top: 10px; margin-bottom: 6px; }
+.ssa-app .ssa-rendezvous-ports {
+    flex-direction: row;
+    align-items: center;
+    min-height: 51px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: var(--edge);
+    background-color: var(--night);
+    padding: 6px 14px 6px 17px;
+}
+.ssa-app .ssa-rendezvous-ports__names { flex-grow: 1; flex-shrink: 1; flex-basis: 0; }
+.ssa-app Label.ssa-rendezvous-ports__line { font-size: 12px; white-space: normal; }
+.ssa-app Label.ssa-rendezvous-ports__change { font-size: 12px; color: var(--gold-light); -unity-font-definition: var(--font-strong); margin-left: 8px; flex-shrink: 0; }
+.ssa-app Label.ssa-rendezvous-ports__change:hover { color: var(--gold); }
+.ssa-app Label.ssa-rendezvous-ports__change:disabled { opacity: 0.4; }
+.ssa-app .ssa-rendezvous-ports__picker { margin-top: 8px; flex-shrink: 0; }
+.ssa-app .ssa-rendezvous-ports__picker .ssa-dropdown { margin-bottom: 6px; }
+
+/* ---- Plan steps and stages (the classic tab's PLAN and STAGES groups) ---- */
+.ssa-app .ssa-rendezvous-step { margin-top: 6px; flex-shrink: 0; }
+.ssa-app .ssa-rendezvous-step--done { opacity: 0.5; }
+.ssa-app .ssa-rendezvous-step__line { flex-direction: row; }
+.ssa-app Label.ssa-rendezvous-step__kind { font-size: 12px; flex-grow: 1; flex-shrink: 1; flex-basis: 0; white-space: normal; }
+.ssa-app Label.ssa-rendezvous-step__dv { font-size: 12px; color: var(--cyan); flex-shrink: 0; }
+.ssa-app Label.ssa-rendezvous-step__when { font-size: 11px; color: var(--muted); }
+.ssa-app Label.ssa-rendezvous-step__why { font-size: 11px; color: var(--dim); white-space: normal; }
+.ssa-app Label.ssa-rendezvous-stage { font-size: 12px; color: var(--muted); white-space: normal; margin-top: 3px; }
+.ssa-app Label.ssa-rendezvous-totals--alert { color: var(--alert); }
+
+/* ---- APPROACH view ---- */
+.ssa-app .ssa-rendezvous-approach { min-height: 220px; }
+.ssa-app Label.ssa-rendezvous-approach__centred { translate: -50% 0; -unity-text-align: upper-center; }
+
+/* ---- CHECKS ---- */
+.ssa-app .ssa-rendezvous-checks { flex-shrink: 0; }
+.ssa-app .ssa-rendezvous-check { flex-direction: row; align-items: center; min-height: 25.5px; flex-shrink: 0; }
+.ssa-app .ssa-rendezvous-check__dot { width: 10px; height: 10px; border-radius: 5px; margin-right: 10px; flex-shrink: 0; background-color: var(--dim); }
+.ssa-app .ssa-rendezvous-check__dot--ok { background-color: var(--ok); }
+.ssa-app .ssa-rendezvous-check__dot--alert { background-color: var(--alert); }
+.ssa-app .ssa-rendezvous-check__dot--info { background-color: var(--node); }
+.ssa-app Label.ssa-rendezvous-check__text { font-size: 12px; white-space: normal; flex-grow: 1; flex-shrink: 1; flex-basis: 0; }
+
+.ssa-app Label.ssa-rendezvous-offer { color: var(--gold-light); }
