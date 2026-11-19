@@ -293,3 +293,77 @@ Note : sur le système de test du mod (copie du système de série), aucun survo
 9. **Transfer + rendezvous.** Case cochée, station autour de Moho : le tableau de l'onglet Rendezvous montre l'étape
    « Flyby » si l'assistance a été retenue ; sinon le plan direct.
 10. **Option décochée.** Refaire le plan Kerbin → Duna : le plan et les lignes du log sont ceux d'avant 4.6.
+
+## 24. Reprises de K2-D2 1.4.0 / 1.4.1 (2026-11-19)
+
+Plan : `docs/superpowers/plans/2026-11-19-upstream-k2d2-merge.md`. Rien de cette section n'a été essayé en jeu. Lire
+`Player.log`.
+
+1. **Mode photo.** Pendant un atterrissage ou un burn, passer en mode photo : le pilote continue, la fenêtre se cache puis
+   revient. Quitter vers le menu principal : les pilotes s'arrêtent.
+2. **Node sans moteur allumé.** Start refusé avec « No active engine - stage or switch one on. », ligne
+   `[NodeExPilot] start refused: no active engine`. Si les moteurs s'éteignent pendant le burn :
+   `[BurnManeuver] no active engine: full throttle…`.
+3. **Crash avec moteurs.** Au plus une ligne `[BurndV] an engine of … could not be read (destroyed?): skipped` par
+   vaisseau, aucune exception.
+4. **Auto-staging avec un SRB vide resté attaché.** Une seule ligne
+   `[Staging] a lit engine is out of propellant: next stage (n spent engine(s)…)` par vrai largage, jamais une cascade
+   (parachutes compris).
+5. **Circularize garde les nœuds suivants.** Créer un nœud après l'apoapside, puis Circularize :
+   `[Circularize] nodes: removed a up to the end of the burn, kept b after it`, le nœud suivant est toujours là.
+6. **Gizmo du nœud.** Un nœud créé en vue de vol a son gizmo quand on ouvre la carte, sans ligne
+   `[ManeuverCreator] map gizmo update failed`.
+7. **Lift Orbit, « Circularize Once Ascent Complete » décoché.** Fin après l'Adjust :
+   `[Lift] ascent complete without auto-circularize (pause on|off)`, pause si le réglage est coché. Avec le goal Prepare
+   transfer ou Rendezvous, la case est cachée et la circularisation a lieu.
+8. **Coasting.** Warp d'un cran plus bas qu'avant, sans dépasser le haut de l'atmosphère ; avec Coasting Warp décoché,
+   la croisière a lieu sans warp et atteint l'apoapside visée. Après un programme de roulis, le maintien prograde ne
+   lutte plus contre un SAS verrouillé.
+9. **Attitude.** Les valeurs d'élévation et de cap d'avant sont gardées (lues une fois depuis `warp.*`).
+10. **Land : Max rotation.** Le virage avant le freinage respecte le curseur (défaut 10° ; avant, 30° toujours).
+11. **Land : posé détecté.** `[Landing] standing still with the engines throttled down`, puis
+    `touchdown in …: standing still …` à l'arrêt ; jamais pendant un vol stationnaire.
+12. **Land : Stop.** `[Landing] stop: SAS target released to the current attitude`.
+13. **Land : Precision (vide) depuis une orbite trop haute.** La case reste cochée, le texte dessous dit pourquoi, Start
+    refuse avec la même raison.
+14. **Land : jambes.** `[Landing] gear: … Gear group has N part(s)`, comparé à notre compte de jambes.
+15. **Land : hauteurs.** `[Landing] altitude: in <phase>: approx …, grounded …` sur le pas de tir et juste avant le posé.
+16. **Land : waypoint déplacé.** Choisir un de ses waypoints, le déplacer dans la fenêtre Waypoints de Redux :
+    `[Landing] target: waypoint '…' moved from … the target follows`. Si la ligne n'apparaît jamais, le champ `Id` des
+    enregistrements de Redux n'existe pas en 26w46a.
+17. **Prédiction d'impact de Redux.** `[Landing] redux impact: …` (distance entre leur point et le nôtre), et une fois
+    par atterrissage `[Landing] spin: <corps>: … -> agrees/DISAGREES/not compared`. Noter les écarts.
+18. **Récupération d'étages.** `[StageRecovery] at landing start: …`, puis les changements de phase.
+19. **Freinage dans l'air** (profil Atmo, Propulsive, sans précision) : depuis un saut suborbital ou un booster qui
+    retombe vers 5–15 km, allumage plus tard que le départ « vide », un seul burn, relais près de 50 m :
+    `[Landing] air timing: …`, `[LandingBurn] braking at …`, `[LandingBurn] handover to Touch Down at … m`.
+20. **Gravity Turn** (Lift, goal Orbit, profil Gravity Turn) : `[Lift] start: goal Orbit, ascent profile GravityTurn`,
+    `[GravityTurn] Planning at …`, `Auto plan …`, une ligne `[GravityTurn] +Ns …` toutes les 5 s, `Ascent done at …`,
+    puis Coasting, Adjust, Circularize normaux. Surveiller un vol à plat vers 66 km à gaz minimum (vu sur la fusée de
+    test). Avec Prepare transfer ou Rendezvous : `Gravity Turn flies Orbit launches only for now; using Guided`.
+21. **Fenêtre.** Elle suit l'échelle d'UI du jeu (fenêtre VAB aussi) ; la poignée de Redux redimensionne en largeur et
+    en hauteur ; la taille et la position reviennent après redémarrage (`WindowSizeSaver: window size saved WxH`) ; un
+    clic droit tourne la caméra sans bouger la fenêtre ; un simple clic ne l'envoie plus dans le coin au lancement
+    suivant ; le titre affiche le nom du mod (sinon chercher `has no Title property`).
+
+## 25. SkySpaceAgency et K2-D2 installés ensemble (2026-11-19)
+
+Relevé des collisions : `docs/superpowers/notes/2026-11-19-coexistence-with-k2d2.md`. Installer K2-D2 1.4.1 (dossier
+`mods/K2D2`) **et** SkySpaceAgency, activer les deux dans la même campagne.
+
+1. Les deux fenêtres s'ouvrent, chacune avec son contenu. Aucune ligne
+   `[Features] More than one enabled feature provides 'Assets/UI/…'`, ni
+   `another AssetBundle with the same files is already loaded`, ni `Failed to load UXML`.
+2. **Raccourcis.** `[Plugin] window shortcut: LeftAlt+Y` au démarrage. Alt+Y ouvre seulement SkySpaceAgency, Alt+O
+   seulement K2-D2 ; Alt+Y ne trime pas, ne warpe pas, ne déclenche pas le RCS. Le raccourci apparaît dans les réglages
+   de mods de Redux et se change ; `SkySpaceAgency-config.json` apparaît dans le dossier du mod.
+3. **FlightPlan.** Le bouton Execute de FlightPlanRedux pilote K2-D2 (lignes de K2-D2), pas nous (aucune ligne
+   `[NodeEx]` de SkySpaceAgency).
+4. **Un seul activé.** Chaque mod activé seul dans une campagne, l'autre installé mais désactivé : celui qui est
+   désactivé n'a pas de bouton et ne fait rien ; l'autre marche.
+5. **Réglages séparés.** `mods/SkySpaceAgency/skyspaceagency_*.json` et les `k2d2_*.json` de K2-D2 ne changent que
+   quand leur propre mod change un réglage.
+6. **Deux pilotes à la fois** sur le même vaisseau : ils se battent (attendu, non corrigé). Le chien de garde de warp de
+   SkySpaceAgency ne coupe pas un burn de K2-D2 (aucune ligne
+   `[Warp] the game started a burn under rails warp that we did not ask for` pendant que K2-D2 vole).
+7. Refaire 1 à 5 avec K2-D2 1.5.0 (branche de la PR) quand elle existera.
