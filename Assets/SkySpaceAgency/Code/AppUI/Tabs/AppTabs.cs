@@ -5,7 +5,7 @@ namespace SkySpaceAgency.AppUI
     /// <summary>The tabs of the new window, in the mockups' order (SETTINGS last, on the right).</summary>
     public static class AppTabs
     {
-        public static List<AppTab> Create(AppContext context) => new List<AppTab>
+        public static List<AppTab> Create(AppTabContext context) => new List<AppTab>
         {
             new LiftTab(context),
             new OrbitTab(context),

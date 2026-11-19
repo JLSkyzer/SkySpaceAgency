@@ -72,6 +72,7 @@ namespace SkySpaceAgency.AppUI
     {
         PanelRenderer _panel;
         AppHudView _hud;
+        AppTabContext _context;
         AppWindowView _view;
         WindowSizeSaver _size;
         bool _open, _reclamp, _awaitLayout;
@@ -98,7 +99,7 @@ namespace SkySpaceAgency.AppUI
         }
 
         /// <summary>Builds the frame and the preview pages into the host. Also used by the EditMode harness.</summary>
-        public static AppWindowView BuildView(VisualElement host, AppContext context)
+        public static AppWindowView BuildView(VisualElement host, AppTabContext context)
         {
             var view = new AppWindowView(ModIdentity.Title, ModIdentity.Slogan);
             view.style.left = AppWindowGeometry.DefaultPosition.x;
@@ -107,7 +108,6 @@ namespace SkySpaceAgency.AppUI
             view.style.height = AppWindowGeometry.DefaultSize.y;
             view.style.minWidth = AppWindowGeometry.MinSize.x;
             view.style.minHeight = AppWindowGeometry.MinSize.y;
-            view.Tabs.SetBadge("Preview");
             foreach (var tab in AppTabs.Create(context))
                 view.AddTab(tab);
             host?.Add(view);
@@ -125,12 +125,13 @@ namespace SkySpaceAgency.AppUI
             host.style.position = Position.Absolute;
             host.style.left = 0; host.style.top = 0; host.style.right = 0; host.style.bottom = 0;
 
-            var context = new AppContext
+            var context = new AppTabContext
             {
                 Plugin = SkySpaceAgencyPlugin.Instance,
                 SetScale = s => { AppSettings.Scale.V = UiScale.Clamp(s); ApplyScale(); },
                 OpenClassicWindow = () => OpenClassicWindow?.Invoke(),
             };
+            _context = context;
             _view = BuildView(host, context);
             _hud = new AppHudView();
             _hud.style.display = DisplayStyle.None;
@@ -213,7 +214,7 @@ namespace SkySpaceAgency.AppUI
             if (_view == null) return;
             if (_open)
             {
-                try { _view.Tick(); }
+                try { _view.Tick(); _view.HeaderData.Tick(_context, _view.AnyRunning); }
                 catch (Exception e) { LogTickError(e); }
             }
             UpdateHud();

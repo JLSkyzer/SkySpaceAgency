@@ -159,13 +159,15 @@
 .ssa-page__scroll .unity-scroll-view__content-viewport,
 .ssa-page__scroll .unity-scroll-view__content-container { padding: 0; margin: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
 .ssa-page__scroll > .unity-scroll-view__content-viewport > .unity-scroll-view__content-container { flex-grow: 1; }
-.ssa-columns { flex-direction: row; flex-grow: 1; flex-shrink: 1; min-height: 300px; }
+.ssa-columns { flex-direction: row; flex-grow: 1; flex-shrink: 1; min-height: 300px; align-items: flex-start; }
+.ssa-col { align-self: auto; }
+.ssa-col > .ssa-card { flex-grow: 1; }
 .ssa-col { flex-shrink: 1; }
 .ssa-col--plan { width: 340px; min-width: 280px; }
 .ssa-col--view { flex-grow: 1; min-width: 300px; margin: 0 14px; }
 .ssa-col--side { width: 326px; min-width: 270px; }
 /* Narrow window: the view moves to its own row, under the plan and the telemetry (AppPage moves it last). */
-.ssa-app--narrow .ssa-columns { flex-wrap: wrap; }
+.ssa-app--narrow .ssa-columns { flex-wrap: wrap; align-items: stretch; flex-shrink: 0; }
 .ssa-app--narrow .ssa-col--plan { width: 48%; flex-grow: 1; margin-right: 14px; }
 .ssa-app--narrow .ssa-col--side { width: 48%; flex-grow: 1; }
 .ssa-app--narrow .ssa-col--view { width: 100%; min-height: 340px; margin: 14px 0 0 0; }
@@ -203,8 +205,10 @@
 
 /* ---- Field with a unit ---- */
 .ssa-fields { flex-direction: row; margin-bottom: 8px; }
-.ssa-field { flex-grow: 1; flex-basis: 0; margin-right: 14px; }
-.ssa-field--last { margin-right: 0; }
+/* Side by side in a .ssa-fields row only: basis 0 in a column would give the field no height. */
+.ssa-field { flex-shrink: 0; margin-bottom: 8px; }
+.ssa-fields > .ssa-field { flex-grow: 1; flex-basis: 0; margin-right: 14px; margin-bottom: 0; }
+.ssa-fields > .ssa-field.ssa-field--last { margin-right: 0; }
 .ssa-app Label.ssa-field__label { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
 .ssa-field__box { height: 37px; }
 .ssa-app .ssa-field__input { margin: 0; padding: 0; flex-grow: 1; height: 37px; }
@@ -234,6 +238,12 @@
 .ssa-app .ssa-slider__input > .unity-base-slider__input { height: 17px; margin: 0; padding: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
 .ssa-app .ssa-slider__input .unity-base-slider__drag-container { height: 17px; margin: 0; padding: 0; border-width: 0; }
 .ssa-app .ssa-slider .ssa-slider__input > .unity-base-field__input > .unity-base-slider__drag-container > .unity-base-slider__tracker {
+    /* Unity's default theme insets the track by 6 px on each side: it starts under the label, as in the mockups. */
+    position: absolute;
+    left: 0;
+    right: 0;
+    margin-left: 0;
+    margin-right: 0;
     height: 5px;
     margin-top: -2.5px;
     top: 50%;
@@ -360,7 +370,7 @@
 
 /* ---- Action bar ---- */
 .ssa-actionbar { flex-direction: row; align-items: center; height: 44px; margin-top: 16px; flex-shrink: 0; }
-.ssa-app Label.ssa-actionbar__note { font-size: 12px; color: var(--muted); flex-grow: 1; flex-shrink: 1; margin-left: 7px; }
+.ssa-app Label.ssa-actionbar__note { font-size: 12px; color: var(--muted); flex-grow: 1; flex-shrink: 1; flex-basis: 0; min-width: 0; white-space: normal; overflow: hidden; max-height: 44px; margin-left: 7px; }
 .ssa-button {
     min-width: 128px;
     padding: 0 18px;
@@ -394,7 +404,7 @@
 .ssa-app Label.ssa-setting__label { font-size: 13px; width: 45%; flex-shrink: 0; }
 .ssa-setting__control { flex-grow: 1; }
 .ssa-app Label.ssa-setting__text { font-size: 13px; white-space: normal; flex-shrink: 1; }
-.ssa-app Label.ssa-paragraph { font-size: 12px; color: var(--muted); white-space: normal; margin-top: 8px; margin-bottom: 6px; }
+.ssa-app .ssa-paragraph { font-size: 12px; color: var(--muted); white-space: normal; margin-top: 8px; margin-bottom: 6px; padding: 0; -unity-font-definition: var(--font); }
 .ssa-app Label.ssa-about__name { font-size: 19px; -unity-text-align: upper-center; -unity-font-definition: var(--font-strong); margin-top: 10px; }
 .ssa-app Label.ssa-about__line { font-size: 11px; color: var(--muted); -unity-text-align: upper-center; white-space: normal; margin-top: 3px; }
 .ssa-app Label.ssa-about__licence { font-size: 12px; color: var(--gold-light); -unity-text-align: upper-center; margin-top: 18px; }
@@ -409,3 +419,46 @@
 .ssa-app--minimised .ssa-tabbar,
 .ssa-app--minimised .ssa-pages { display: none; }
 .ssa-app--minimised .window-resize-handle { display: none; }
+
+/* ---- Controls added by the tab migration (AppMoreControls.cs) ---- */
+.ssa-tab--running Label.ssa-tab__label { color: var(--ok); }
+.ssa-tab--running.ssa-tab--active Label.ssa-tab__label { color: var(--gold-light); }
+.ssa-dropdown { margin-bottom: 8px; flex-shrink: 0; }
+.ssa-app .ssa-dropdown__input { margin: 0; height: 37px; flex-grow: 0; }
+.ssa-app .ssa-dropdown__input > .unity-base-field__input {
+    height: 37px;
+    margin: 0;
+    padding: 0 13px;
+    border-width: 1px;
+    border-radius: 8.5px;
+    border-color: var(--edge);
+    background-color: var(--night);
+    background-image: none;
+    flex-grow: 1;
+}
+.ssa-app .ssa-dropdown__input .unity-base-popup-field__text { color: var(--text); font-size: 14px; -unity-font-definition: var(--font); }
+.ssa-textfield { margin-right: 0; margin-bottom: 8px; flex-shrink: 0; }
+.ssa-section { margin-top: 8px; flex-shrink: 0; }
+.ssa-section__head { flex-direction: row; align-items: center; height: 26px; }
+.ssa-app Label.ssa-section__arrow { width: 14px; font-size: 11px; color: var(--muted); }
+.ssa-app Label.ssa-section__title { font-size: 11px; color: var(--muted); letter-spacing: 1.7px; }
+.ssa-section__head:hover Label.ssa-section__title { color: var(--text); }
+.ssa-section__body { padding-left: 2px; }
+.ssa-info { margin-top: 4px; flex-shrink: 0; }
+.ssa-info__row { flex-direction: row; justify-content: space-between; min-height: 22px; align-items: center; }
+.ssa-app Label.ssa-info__key { font-size: 12px; color: var(--muted); flex-grow: 1; flex-shrink: 1; flex-basis: 0; min-width: 0; white-space: normal; margin-right: 8px; }
+.ssa-app Label.ssa-info__value { font-size: 12px; color: var(--text); -unity-text-align: middle-right; flex-shrink: 0; white-space: nowrap; }
+.ssa-app Label.ssa-info__value--ok { color: var(--ok); }
+.ssa-app Label.ssa-info__value--alert { color: var(--alert); }
+.ssa-app Label.ssa-info__value--info { color: var(--gold-light); }
+/* Class-only selectors for the Label subclasses (AppNote): a USS type selector matches the exact type only. */
+.ssa-app .ssa-console { font-size: 11px; color: var(--muted); white-space: pre-wrap; margin-top: 6px; }
+.ssa-button-row { flex-direction: row; flex-wrap: wrap; margin: 4px 0 6px 0; flex-shrink: 0; }
+.ssa-button.ssa-button--small { height: 31px; min-width: 0; padding: 0 12px; margin: 0 8px 6px 0; flex-grow: 1; border-radius: 8px; }
+.ssa-button--small Label.ssa-button__label { font-size: 12px; }
+
+.ssa-app .ssa-dropdown__input .unity-base-popup-field__arrow { display: none; }
+.ssa-dropdown__chevron { position: absolute; right: 13px; top: 13px; width: 14px; height: 10px; }
+/* Narrow window: the action bar grows for a note that needs more lines next to the buttons. */
+.ssa-app--narrow .ssa-actionbar { height: auto; min-height: 44px; }
+.ssa-app--narrow Label.ssa-actionbar__note { max-height: none; font-size: 11px; }

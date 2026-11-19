@@ -28,21 +28,27 @@ public static class AppUiHarness
         public float Scale = 1;      // panel scale
         public Rect Window;          // in panel pixels
         public Action<AppWindowView> Setup;
+        public bool Hud;             // render the compact flight bar of the tab instead of the window
         public override string ToString() => Name;
     }
 
     static Rect MockupWindow => new Rect(20 * 0.85f, 20 * 0.85f, 1560 * 0.85f, 860 * 0.85f);
 
-    public static readonly Shot[] Shots =
+    // Each tab at its mockup's size (docs/design/ui/<tab>.png; NODES is nodes.png), sample data, then a few sizes.
+    public static readonly Shot[] Shots = BuildShots();
+
+    static Shot[] BuildShots()
     {
-        new Shot { Name = "lift_mockup_size", Tab = "lift", Texture = new Vector2(1600, 900), Scale = MockupScale, Window = MockupWindow },
-        new Shot { Name = "settings_mockup_size", Tab = "settings", Texture = new Vector2(1600, 900), Scale = MockupScale, Window = MockupWindow },
-        new Shot { Name = "orbit_placeholder", Tab = "orbit", Texture = new Vector2(1600, 900), Scale = MockupScale, Window = MockupWindow },
-        new Shot { Name = "lift_default_100pc", Tab = "lift", Texture = new Vector2(1400, 805), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.DefaultSize) },
-        new Shot { Name = "lift_minimum_narrow", Tab = "lift", Texture = new Vector2(800, 520), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.MinSize) },
-        new Shot { Name = "lift_scale_75pc", Tab = "lift", Texture = new Vector2(1100, 620), Scale = 0.75f, Window = new Rect(new Vector2(20, 20), AppWindowGeometry.DefaultSize) },
-        new Shot { Name = "lift_minimised", Tab = "lift", Texture = new Vector2(1400, 120), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.DefaultSize), Setup = v => v.SetMinimised(true) },
-    };
+        var list = new List<Shot>();
+        foreach (string tab in new[] { "lift", "orbit", "transfer", "rendezvous", "land", "return", "nodes", "settings" })
+            list.Add(new Shot { Name = tab + "_mockup_size", Tab = tab, Texture = new Vector2(1600, 900), Scale = MockupScale, Window = MockupWindow });
+        foreach (string tab in new[] { "lift", "land", "rendezvous" })
+            list.Add(new Shot { Name = tab + "_minimum_narrow", Tab = tab, Texture = new Vector2(800, 520), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.MinSize) });
+        list.Add(new Shot { Name = "lift_default_100pc", Tab = "lift", Texture = new Vector2(1400, 805), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.DefaultSize) });
+        list.Add(new Shot { Name = "lift_minimised", Tab = "lift", Texture = new Vector2(1400, 120), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.DefaultSize), Setup = v => v.SetMinimised(true) });
+        list.Add(new Shot { Name = "hud_land", Tab = "land", Texture = new Vector2(1600, 200), Scale = MockupScale, Window = new Rect(-4000, 0, 800, 480), Hud = true });
+        return list.ToArray();
+    }
 
     public sealed class Opened : IDisposable
     {
@@ -51,7 +57,8 @@ public static class AppUiHarness
         public object Panel;
         public VisualElement Root;
         public AppWindowView View;
-        public AppDemo.Hooks Hooks;
+        public AppTabContext Context;
+        public AppHudView HudView;
 
         public void Layout()
         {
@@ -97,8 +104,10 @@ public static class AppUiHarness
         o.Root.style.backgroundColor = SsaPalette.Hex(0x050816);   // the mockups' backdrop
         visualTree.Add(o.Root);
         var host = o.Root.Q("ssa-app-host");
-        o.Hooks = new AppDemo.Hooks();
-        o.View = AppWindow.BuildView(host, o.Hooks);
+        o.Context = AppTabContext.Editor();
+        o.View = AppWindow.BuildView(host, o.Context);
+        foreach (var t in o.View.TabList) t.ShowSample();
+        o.View.HeaderData.Set("Kerbal Explorer II", true, "Kerbin", "Pad", 4812, 1.46);   // the mockups' chips
         o.View.style.left = window.x; o.View.style.top = window.y;
         o.View.style.width = window.width; o.View.style.height = window.height;
         o.View.Select(tab);
@@ -110,8 +119,23 @@ public static class AppUiHarness
     {
         var o = Open(s.Tab, s.Window, s.Texture, s.Scale);
         if (s.Setup != null) { s.Setup(o.View); o.Layout(); }
+        if (s.Hud)
+        {
+            // The compact bar sits in the same host as the window (AppWindow), shown with the tab's sample state.
+            o.HudView = new AppHudView();
+            o.Root.Q("ssa-app-host").Add(o.HudView);
+            o.HudView.Show(o.View.TabFor(s.Tab)?.Hud ?? SampleHud());
+            o.Layout();
+        }
         return o;
     }
+
+    // The hud mockup's expanded bar, for tabs whose sample has no HudState.
+    public static HudState SampleHud() => new HudState
+    {
+        Pilot = "LAND", Phase = "Pre-brake", Phases = new[] { "Deorbit", "Pre-brake", "Coast", "Brake", "Touchdown" }, CurrentPhase = 1,
+        Readouts = { ("ALTITUDE", "54.8 km"), ("SPEED", "1 012 m/s"), ("TARGET", "0.4 km") }, GaugeLabel = "HOTTEST PART", Gauge = 0.22f,
+    };
 
     public static List<string> Check(Opened o) => UiLayoutHarness.Check(o.AsLayoutWindow());
 

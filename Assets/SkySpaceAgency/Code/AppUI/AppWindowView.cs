@@ -40,13 +40,26 @@ namespace SkySpaceAgency.AppUI
             Add(Scroll);
             // The columns fill the page's height (and so follow the window's size); they only scroll
             // when their content is taller than the page.
-            Scroll.contentViewport.RegisterCallback<GeometryChangedEvent>(e =>
-                Scroll.contentContainer.style.minHeight = e.newRect.height);
+            Scroll.contentViewport.RegisterCallback<GeometryChangedEvent>(e => FitColumns(e.newRect.height));
             Timeline = new AppTimeline();
             Timeline.style.display = DisplayStyle.None;
             Add(Timeline);
             Actions = new AppActionBar();
             Add(Actions);
+        }
+
+        float _viewportHeight;
+
+        // The columns fill the page's height. When the plan or the side column holds more than fits,
+        // the page scrolls, but the view keeps the page's height (it is not stretched with them).
+        void FitColumns(float height)
+        {
+            if (height <= 0) return;
+            _viewportHeight = height;
+            Scroll.contentContainer.style.minHeight = height;
+            Plan.style.minHeight = Narrow ? StyleKeyword.Null : (StyleLength)height;
+            Side.style.minHeight = Narrow ? StyleKeyword.Null : (StyleLength)height;
+            View.style.height = Narrow ? StyleKeyword.Null : (StyleLength)height;
         }
 
         public void SetTimeline(IReadOnlyList<string> steps, int current)
@@ -55,11 +68,27 @@ namespace SkySpaceAgency.AppUI
             Timeline.style.display = steps != null && steps.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
+        public bool Compact { get; private set; }
+
+        /// <summary>
+        /// Compact (a low window): the phase timeline scrolls with the columns instead of staying
+        /// fixed, so the columns keep most of the height; the action bar stays fixed.
+        /// </summary>
+        public void SetCompact(bool compact)
+        {
+            if (compact == Compact) return;
+            Compact = compact;
+            Timeline.RemoveFromHierarchy();
+            if (compact) Scroll.Add(Timeline);
+            else Insert(IndexOf(Scroll) + 1, Timeline);
+        }
+
         /// <summary>Narrow: plan and side on the first row, the view under them (the USS wraps the row).</summary>
         public void SetNarrow(bool narrow)
         {
             if (narrow == Narrow) return;
             Narrow = narrow;
+            FitColumns(_viewportHeight);
             View.RemoveFromHierarchy();
             if (narrow) _columns.Add(View);
             else _columns.Insert(1, View);
@@ -81,6 +110,7 @@ namespace SkySpaceAgency.AppUI
         StyleLength _heightBeforeMinimise, _minHeightBeforeMinimise;
 
         public AppHeader Header { get; }
+        public AppHeaderData HeaderData { get; }
         public AppTabBar Tabs { get; }
         public bool Narrow { get; private set; }
         public bool Minimised { get; private set; }
@@ -98,8 +128,10 @@ namespace SkySpaceAgency.AppUI
             _pages.name = "pages";
             Add(_pages);
             Tabs.selected += ShowPage;
+            Tabs.selected += code => Tabs.SetBadge(TabFor(code)?.Badge);
+            HeaderData = new AppHeaderData(Header);
             Header.MinimiseButton.clicked += () => SetMinimised(!Minimised);
-            RegisterCallback<GeometryChangedEvent>(e => UpdateNarrow(e.newRect.width));
+            RegisterCallback<GeometryChangedEvent>(e => { UpdateNarrow(e.newRect.width); UpdateCompact(e.newRect.height); });
         }
 
         readonly List<AppTab> _tabs = new();
@@ -123,7 +155,7 @@ namespace SkySpaceAgency.AppUI
         {
             CurrentTab?.Tick();
             foreach (var t in _tabs)
-                Tabs.TabElement(t.Code)?.EnableInClassList(RunningClass, t.IsRunning);
+                Tabs.TabElement(t.Code)?.EnableInClassList(RunningClass, SafeRunning(t));
         }
 
         public IEnumerable<string> PageCodes => _pageByCode.Keys;
@@ -146,7 +178,29 @@ namespace SkySpaceAgency.AppUI
                 kv.Value.style.display = kv.Key == code ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        public void Restore(string savedTab) => ShowPage(Tabs.Restore(savedTab));
+        public void Restore(string savedTab)
+        {
+            string code = Tabs.Restore(savedTab);
+            ShowPage(code);
+            Tabs.SetBadge(TabFor(code)?.Badge);
+        }
+
+        public bool AnyRunning => _tabs.Exists(t => SafeRunning(t));
+
+        static bool SafeRunning(AppTab t)
+        {
+            try { return t.IsRunning; } catch (System.Exception) { return false; }
+        }
+
+        /// <summary>Below this height the timeline scrolls with the columns.</summary>
+        public const float CompactHeight = 640;
+
+        public void UpdateCompact(float height)
+        {
+            if (height <= 0 || Minimised) return;
+            foreach (var p in _pageByCode.Values)
+                if (p is AppPage page) page.SetCompact(height < CompactHeight);
+        }
 
         public void UpdateNarrow(float width)
         {

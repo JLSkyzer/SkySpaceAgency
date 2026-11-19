@@ -7,22 +7,30 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// The new window laid out without the game (AppUiHarness), plan 2026-11-19-new-ui-foundations, task 3.
+// The new window laid out without the game (AppUiHarness): plans 2026-11-19-new-ui-foundations (task 3) and
+// 2026-11-19-new-ui-tab-migration (every tab at its mockup, default and minimum size).
 public class AppWindowTests
 {
     static readonly Vector2 FullHd = new Vector2(1920, 1080);
 
+    static readonly string[] Codes = AppTabs.Create(AppTabContext.Editor()).Select(t => t.Code).ToArray();
+
     static IEnumerable<TestCaseData> Tabs()
     {
-        foreach (var (code, _) in AppDemo.FlightTabs)
-            yield return new TestCaseData(code).SetName("Demo_DefaultSize_HasNoLayoutIssue_" + code);
-        yield return new TestCaseData("settings").SetName("Demo_DefaultSize_HasNoLayoutIssue_settings");
+        foreach (string code in Codes)
+            yield return new TestCaseData(code).SetName("Tab_" + code + "_DefaultSize");
+    }
+
+    static IEnumerable<TestCaseData> MockupTabs()
+    {
+        foreach (string code in Codes)
+            yield return new TestCaseData(code).SetName("Tab_" + code + "_MockupSize");
     }
 
     static IEnumerable<TestCaseData> NarrowTabs()
     {
-        foreach (string code in new[] { "lift", "orbit", "settings" })
-            yield return new TestCaseData(code).SetName("Demo_MinimumSize_HasNoLayoutIssue_" + code);
+        foreach (string code in Codes)
+            yield return new TestCaseData(code).SetName("Tab_" + code + "_MinimumSize");
     }
 
     static void AssertNoIssue(AppUiHarness.Opened o, string what)
@@ -34,7 +42,7 @@ public class AppWindowTests
     }
 
     [TestCaseSource(nameof(Tabs))]
-    public void Demo_DefaultSize(string tab)
+    public void DefaultSize(string tab)
     {
         using var o = AppUiHarness.Open(tab, new Rect(AppWindowGeometry.DefaultPosition, AppWindowGeometry.DefaultSize), FullHd);
         Assert.AreEqual(AppWindowGeometry.DefaultSize.x, o.View.layout.width, 0.5f);
@@ -43,13 +51,35 @@ public class AppWindowTests
         AssertNoIssue(o, tab + " default");
     }
 
+    // As the captures: 1600 x 900 at the mockups' scale, sample data.
+    [TestCaseSource(nameof(MockupTabs))]
+    public void MockupSize(string tab)
+    {
+        var shot = AppUiHarness.Shots.First(s => s.Name == tab + "_mockup_size");
+        using var o = AppUiHarness.Open(shot);
+        AssertNoIssue(o, tab + " mockup size");
+    }
+
     [TestCaseSource(nameof(NarrowTabs))]
-    public void Demo_MinimumSize(string tab)
+    public void MinimumSize(string tab)
     {
         using var o = AppUiHarness.Open(tab, new Rect(Vector2.zero, AppWindowGeometry.MinSize), FullHd);
         Assert.IsTrue(o.View.Narrow, "narrow below " + AppWindowGeometry.NarrowWidth);
         Assert.IsTrue(o.View.ClassListContains(AppWindowView.NarrowClass));
         AssertNoIssue(o, tab + " minimum");
+    }
+
+    [Test]
+    public void AllTabs_BuildAndTickWithoutTheGame()
+    {
+        using var o = AppUiHarness.Open("lift", new Rect(AppWindowGeometry.DefaultPosition, AppWindowGeometry.DefaultSize), FullHd);
+        foreach (var tab in o.View.TabList)
+        {
+            Assert.IsTrue(o.View.Select(tab.Code) || o.View.Tabs.Current == tab.Code, tab.Code);
+            Assert.DoesNotThrow(() => o.View.Tick(), tab.Code);
+            Assert.DoesNotThrow(() => { var _ = tab.IsRunning; var __ = tab.Hud; }, tab.Code);
+        }
+        Assert.IsFalse(o.View.AnyRunning, "no pilot runs without the game");
     }
 
     [Test]
@@ -59,53 +89,52 @@ public class AppWindowTests
         using var big = AppUiHarness.Open("lift", new Rect(0, 0, 1800, 1000), FullHd);
         var page = (AppPage)small.View.PageFor("lift");
         var bigPage = (AppPage)big.View.PageFor("lift");
-        Assert.AreEqual(340, page.Plan.layout.width, 1, "the plan column keeps its width");
-        Assert.AreEqual(340, bigPage.Plan.layout.width, 1);
+        Assert.AreEqual(page.Plan.layout.width, bigPage.Plan.layout.width, 1, "the plan column keeps its width");
         Assert.Greater(bigPage.View.layout.width, page.View.layout.width + 500, "the view takes the extra width");
-        Assert.Greater(bigPage.View.layout.height, page.View.layout.height + 150, "and the extra height (the 700 px one already scrolls)");
         Assert.Less(page.Plan.layout.xMax, page.View.layout.xMin);
         Assert.Less(page.View.layout.xMax, page.Side.layout.xMin, "three columns side by side");
     }
 
     [Test]
-    public void Demo_HasHeaderTabsAndLiftPage()
+    public void HeaderAndTabs()
     {
         using var o = AppUiHarness.Open("lift", new Rect(AppWindowGeometry.DefaultPosition, AppWindowGeometry.DefaultSize), FullHd);
         var v = o.View;
         Assert.AreEqual(ModIdentity.Title.ToUpperInvariant(), v.Header.Q<Label>(className: "ssa-brand__title").text);
         Assert.AreEqual("FLY FURTHER", v.Header.Q<Label>(className: "ssa-brand__slogan").text);
         Assert.AreEqual(4, v.Header.Chips.childCount);
-        Assert.AreEqual(8, v.Tabs.Model.Codes.Count);
+        CollectionAssert.AreEqual(new[] { "lift", "orbit", "transfer", "rendezvous", "land", "return", "nodes", "settings" }, v.Tabs.Model.Codes);
         Assert.AreEqual("lift", v.Tabs.Current);
-        var page = (AppPage)v.PageFor("lift");
-        Assert.AreEqual(DisplayStyle.Flex, page.resolvedStyle.display);
-        Assert.AreEqual(6, page.Timeline.Dots.Count);
-        Assert.AreEqual(2, page.Timeline.Model.Current);
-        Assert.AreEqual(3, page.Actions.Buttons.Count);
-        Assert.AreEqual(AppButton.Kind.Main, page.Actions.Buttons.Last().ButtonKind);
-        Assert.AreEqual(3, page.Query<AppSwitch>().ToList().Count);
-        Assert.AreEqual(3, page.Query<AppSlider>().ToList().Count);
-        Assert.AreEqual(4, page.Query<AppTile>().ToList().Count);
-        Assert.IsNotNull(page.Q<AscentProfileView>());
-        // Right-aligned SETTINGS is right of the badge, which is right of NODES.
-        Assert.Greater(v.Tabs.TabElement("settings").worldBound.xMin, v.Tabs.TabElement("nodes").worldBound.xMax + 100);
-        // Switching tab hides the others.
+        Assert.Greater(v.Tabs.TabElement("settings").worldBound.xMin, v.Tabs.TabElement("nodes").worldBound.xMax + 100, "SETTINGS on the right");
+        var page = v.PageFor("lift");
         Assert.IsTrue(v.Select("settings"));
         o.Layout();
-        Assert.AreEqual(DisplayStyle.None, page.resolvedStyle.display);
+        Assert.AreEqual(DisplayStyle.None, page.resolvedStyle.display, "switching tab hides the others");
+        Assert.IsTrue(v.Select("return"));
+        Assert.AreEqual(v.TabFor("return").Badge?.ToUpperInvariant() ?? "", v.Tabs.Q<Label>(className: "ssa-badge__label").text, "the badge follows the tab");
+    }
+
+    // Known defect of the foundations: the slider track started about 7 mockup px right of its label.
+    [Test]
+    public void Slider_TrackStartsUnderItsLabel()
+    {
+        using var o = AppUiHarness.Open("lift", new Rect(AppWindowGeometry.DefaultPosition, AppWindowGeometry.DefaultSize), FullHd);
+        var slider = o.View.PageFor("lift").Query<AppSlider>().ToList().First(s => UiLayoutHarness.IsDisplayed(s) && s.worldBound.width > 0);
+        var tracker = slider.Q(className: "unity-base-slider__tracker");
+        var fill = slider.Q(className: "ssa-slider__fill");
+        Debug.Log($"[AppUi] slider {slider.worldBound} input {slider.Input.worldBound} tracker {tracker.worldBound} fill {fill.worldBound}");
+        Assert.AreEqual(slider.worldBound.xMin, tracker.worldBound.xMin, 1, "track starts under the label");
+        Assert.AreEqual(slider.worldBound.xMax, tracker.worldBound.xMax, 1, "and ends under the value");
     }
 
     [Test]
-    public void Demo_SettingsScale_RaisesSnappedScale()
+    public void HeaderChips_Format()
     {
-        using var o = AppUiHarness.Open("settings", new Rect(AppWindowGeometry.DefaultPosition, AppWindowGeometry.DefaultSize), FullHd);
-        float got = -1;
-        o.Hooks.SetScale = s => got = s;
-        var slider = o.View.Q<AppSlider>("interface-scale");
-        slider.Value = 112.3f;
-        Assert.AreEqual(1.1f, got, 1e-4f);
-        Assert.AreEqual(110f, slider.Value, 1e-3f, "the slider snaps to 5 %");
-        Assert.AreEqual("110 %", slider.Q<Label>(className: "ssa-slider__value").text);
+        Assert.AreEqual("4 812 m/s", AppHeaderData.MetresPerSecond(4812.4));
+        Assert.AreEqual("—", AppHeaderData.MetresPerSecond(double.NaN));
+        Assert.AreEqual("Sub orbital", AppHeaderData.Words("SubOrbital"));
+        Assert.AreEqual("Pre launch", AppHeaderData.Words("PreLaunch"));
+        Assert.AreEqual("Orbiting", AppHeaderData.Words("Orbiting"));
     }
 
     [Test]

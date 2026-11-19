@@ -9,7 +9,7 @@ setting until the user validates the new one in game.
 
 **Architecture:** One `AppTab` subclass per tab (`Code/AppUI/Tabs/<Name>Tab.cs`), built from the foundations'
 components (plan 2026-11-19-new-ui-foundations). Settings are bound through `AppBind` (two-way, every key recorded);
-pilots are reached through `AppContext.Pilot<T>()` (null in the editor, so every tab builds and ticks without the
+pilots are reached through `AppTabContext.Pilot<T>()` (null in the editor, so every tab builds and ticks without the
 game). Pilot status keeps flowing through the controllers' `updateUI(root, FullStatus)`: `AppPilotStatus` hands
 them a detached classic `FullStatus` and mirrors it into a pill, a console note and a progress bar. The classic
 window stays built (pilots keep their `page`), only hidden.
@@ -24,7 +24,7 @@ the settings classes' `setupUI`), which define *what* must exist.
 ## Global Constraints
 
 - Nothing functional is lost: every setting, button, info line, message, warning and drop-down of each classic tab
-  has its place in the new tab (inventory `docs/superpowers/notes/2026-11-19-new-ui-inventory.md`, one section per
+  has its place in the new tab (inventory `docs/superpowers/notes/new-ui-inventory/README.md`, one section per
   tab, each line ticked with where it went). Settings files, plans and VAB files are read unchanged: same keys,
   same `Setting` objects.
 - The mockups decide the look; a case they do not cover takes the closest mockup and is listed in the inventory.
@@ -51,7 +51,7 @@ the settings classes' `setupUI`), which define *what* must exist.
 
 ### Task 1: Shared pieces (done by the coordinator before the tabs)
 
-`AppTab`/`AppContext`/`HudState` (`AppTab.cs`), `AppBind`, `AppDropdown`/`AppTextField`/`AppSection`/
+`AppTab`/`AppTabContext`/`HudState` (`AppTab.cs`), `AppBind`, `AppDropdown`/`AppTextField`/`AppSection`/
 `AppInfoTable`/`AppNote`/`AppButtonRow` (`AppMoreControls.cs`), `AppPilotStatus`, `AppTabs` (order), tab stubs,
 `AppWindowView.AddTab/Tick` (running tabs lit, class `ssa-tab--running`), `AppWindow` (tick of the shown tab, compact
 bar host, toolbar button state, `AppSettings.ClassicUi`, `AppSettings.CompactBar`), plugin (`ToggleDefaultWindow`,

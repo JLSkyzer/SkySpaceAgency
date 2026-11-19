@@ -21,6 +21,25 @@ namespace SkySpaceAgency.AppUI
             Input.AddToClassList("ssa-dropdown__input");
             Input.RegisterValueChangedCallback(_ => changed?.Invoke(Input.index));
             Add(Input);
+            // The mockups' chevron, drawn over the theme's arrow (hidden in SsaApp.uss).
+            var chevron = new VisualElement { name = "chevron", pickingMode = PickingMode.Ignore };
+            chevron.AddToClassList("ssa-dropdown__chevron");
+            chevron.generateVisualContent += ctx =>
+            {
+                Rect r = chevron.contentRect;
+                if (r.width <= 0) return;
+                var p = ctx.painter2D;
+                p.strokeColor = SsaPalette.Muted;
+                p.lineWidth = 2.2f;
+                p.lineCap = LineCap.Round;
+                p.lineJoin = LineJoin.Round;
+                p.BeginPath();
+                p.MoveTo(new Vector2(r.xMin + 1, r.yMin + r.height * 0.3f));
+                p.LineTo(new Vector2(r.center.x, r.yMin + r.height * 0.72f));
+                p.LineTo(new Vector2(r.xMax - 1, r.yMin + r.height * 0.3f));
+                p.Stroke();
+            };
+            Input.Q(className: "unity-base-field__input")?.Add(chevron);
         }
 
         public int Index => Input.index;

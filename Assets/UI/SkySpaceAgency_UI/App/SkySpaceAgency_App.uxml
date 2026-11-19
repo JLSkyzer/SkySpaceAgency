@@ -3,5 +3,12 @@
          and a full-screen host that lets clicks through to the game: AppUI/AppWindow.cs builds the window
          in code (plan docs/superpowers/plans/2026-11-19-new-ui-foundations.md). -->
     <Style src="SsaApp.uss" />
+    <Style src="Tabs/Nodes.uss" />
+    <Style src="Tabs/Orbit.uss" />
+    <Style src="Tabs/Lift.uss" />
+    <Style src="Tabs/Land.uss" />
+    <Style src="Tabs/Transfer.uss" />
+    <Style src="Tabs/Rendezvous.uss" />
+    <Style src="Tabs/Settings.uss" />
     <ui:VisualElement name="ssa-app-host" picking-mode="Ignore" style="position: absolute; left: 0; top: 0; right: 0; bottom: 0;" />
 </ui:UXML>

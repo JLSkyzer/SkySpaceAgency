@@ -11,7 +11,7 @@ namespace SkySpaceAgency.AppUI
     /// the editor (the EditMode harness builds every tab with Plugin == null, so a tab must build and
     /// tick without the game, from its settings alone).
     /// </summary>
-    public sealed class AppContext
+    public sealed class AppTabContext
     {
         public SkySpaceAgencyPlugin Plugin;
 
@@ -26,7 +26,7 @@ namespace SkySpaceAgency.AppUI
         public T Pilot<T>() where T : Pilot =>
             Plugin?.pilots_manager?.pilots?.OfType<T>().FirstOrDefault();
 
-        public static AppContext Editor() => new AppContext();
+        public static AppTabContext Editor() => new AppTabContext();
     }
 
     /// <summary>
@@ -37,9 +37,9 @@ namespace SkySpaceAgency.AppUI
     /// </summary>
     public abstract class AppTab
     {
-        protected AppTab(AppContext context) { Context = context ?? AppContext.Editor(); }
+        protected AppTab(AppTabContext context) { Context = context ?? AppTabContext.Editor(); }
 
-        public AppContext Context { get; }
+        public AppTabContext Context { get; }
         public abstract string Code { get; }
         public abstract string Label { get; }
         public virtual bool RightAligned => false;
