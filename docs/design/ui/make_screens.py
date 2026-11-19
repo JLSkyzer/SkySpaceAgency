@@ -257,7 +257,7 @@ def settings():
             b += f'<rect x="56" y="{y}" width="268" height="46" rx="10" fill="#1d2c66"/><rect x="56" y="{y}" width="4" height="46" rx="2" fill="url(#gold)"/>'
         b += t(80, y + 29, c, 16, GOLDL if sel else MUTE, weight="600" if sel else "400")
     b += card(356, 172, 804, 508, "GENERAL")
-    rows = [("Language", "English"), ("Units", "Metric (km, m/s)"), ("Open the window", "Alt + S")]
+    rows = [("Language", "English"), ("Units", "Metric (km, m/s)"), ("Open the window", "Alt + Y")]
     for i, (k, v) in enumerate(rows):
         y = 230 + i * 70
         b += t(380, y + 30, k, 16) + f'<rect x="760" y="{y}" width="376" height="48" rx="10" fill="{NIGHT}" stroke="#24366e"/>' + t(780, y + 31, v, 16) + f'<path d="M 1110 {y+20} l 8 8 l 8 -8" fill="none" stroke="{MUTE}" stroke-width="2.5"/>'

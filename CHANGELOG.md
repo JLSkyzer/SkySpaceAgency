@@ -2,6 +2,11 @@
 
 ## Unreleased (SkySpaceAgency)
 
+### Installed alongside K2-D2 (2026-11-19)
+
+- **Code names of our own** (user decision 2026-11-19): the C# namespaces and classes no longer use K2-D2's names (`K2D2.*` became `SkySpaceAgency.*`, `K2D2_Plugin` became `SkySpaceAgencyPlugin`, the `K2UI` controls became `SsaUI`), so error traces in `Player.log` say which mod's code ran, and FlightPlanRedux, which looks up `K2D2.K2D2_Plugin` by name, can no longer pick SkySpaceAgency for K2-D2. The `[K2D2_Plugin]` log tag is now `[Plugin]` (lines read `[SkySpaceAgency] [Plugin] …`). Settings files and keys, plans and VAB files are unchanged.
+- **Window shortcut: Alt+Y** (was Alt+O, which K2-D2 keeps; not yet checked in game): Alt+Y opens and closes the window in flight. It is stored in the mod's Space Warp configuration (`SkySpaceAgency-config.json`, section Keybinds, "Toggle window"), so it can be rebound in Redux's mod settings. Alt+S (the settings mockup) was not taken: with Alt held, S trims the pitch. Log `[Plugin] window shortcut: …` at startup.
+
 ### From K2-D2 1.4.0 / 1.4.1 (IanMealworm; window fixes by LeoMarinDev)
 
 - **Scenes and campaigns** (K2-D2 1.4.1; not yet flown in game): the pilots are stopped once when the flight scene is left, not on every frame after; **photo mode counts as flight**, so a landing or a burn keeps flying while the player takes a picture (the window hides, then comes back); leaving a campaign closes the window and stops the pilots; nothing of the mod runs in a campaign that has it off (the rails warp watchdog included), except giving back a physics warp one of our burns started. The game's developer console is no longer forced shut every frame. No more "skipped by serialization" warnings at startup.

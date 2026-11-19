@@ -19,6 +19,8 @@ using SkySpaceAgency.Node;
 using Redux.ExtraModTypes;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
+using SpaceWarp2.API.Configuration;
+using SpaceWarp2.API.Input;
 
 namespace SkySpaceAgency
 {
@@ -93,9 +95,36 @@ namespace SkySpaceAgency
 
         VabToolsWindow vab_window = null;
 
+        // The shortcut that opens and closes the main window in flight. Bound in the mod's Space Warp
+        // configuration (<mod folder>/<mod id>-config.json, section "Keybinds"), so Redux's mod
+        // settings can rebind it. Default Alt+Y: K2-D2 keeps Alt+O, and Y has no flight or map binding.
+        ConfigValue<KeyboardShortcut> window_shortcut;
+
         public override void OnPreInitialized()
         {
             logger = SWLogger;
+            try
+            {
+                window_shortcut = new ConfigValue<KeyboardShortcut>(SWConfiguration.Bind(
+                    "Keybinds", "Toggle window", ModIdentity.DefaultWindowShortcut,
+                    "Opens or closes the " + ModIdentity.Title + " window in flight."));
+                logger.LogInfo($"[Plugin] window shortcut: {window_shortcut.Value}");
+            }
+            catch (System.Exception e)
+            {
+                window_shortcut = null;
+                logger.LogWarning($"[Plugin] window shortcut not bound in the configuration ({e.Message}); using {ModIdentity.DefaultWindowShortcut}.");
+            }
+        }
+
+        bool WindowShortcutDown()
+        {
+            if (window_shortcut != null)
+            {
+                try { return window_shortcut.Value.Down; }
+                catch (System.Exception) { window_shortcut = null; }
+            }
+            return ModIdentity.DefaultWindowShortcut.Down;
         }
 
         /// <summary>
@@ -170,7 +199,7 @@ namespace SkySpaceAgency
             // The window is created lazily: since Redux 26w42 the mod is disabled in the main menu,
             // where OnInitialized runs, and the game then refuses to load our Addressables. A window
             // created from that null UXML stays empty forever. OnCampaignLoaded (enabled campaigns
-            // only), the AppBar button and Alt-O all go through EnsureWindow.
+            // only), the AppBar button and the window shortcut all go through EnsureWindow.
             if (Enabled)
                 EnsureWindow();
 
@@ -330,7 +359,7 @@ namespace SkySpaceAgency
 
             // Since Redux 26w42a a mod is installed but disabled in every campaign that does not
             // enable its default feature (and in the main menu). Redux hides our AppBar button
-            // then, but Alt-O and the pilots run from here, so nothing runs while it is off.
+            // then, but the window shortcut and the pilots run from here, so nothing runs while it is off.
             var step = SceneTransition.Next(in_flight, Enabled, Enabled ? CurrentGameState() : null,
                 main_window != null && main_window.IsWindowOpen, window_hidden_by_scene);
             in_flight = step.InFlight;
@@ -363,7 +392,7 @@ namespace SkySpaceAgency
 
                 if (in_flight)
                 {
-                    if (window_allowed && Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.O) && EnsureWindow())
+                    if (window_allowed && WindowShortcutDown() && EnsureWindow())
                         main_window.IsWindowOpen = !main_window.IsWindowOpen;
 
                     StagingPilot.Instance.Update();

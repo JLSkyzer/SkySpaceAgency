@@ -32,6 +32,12 @@ namespace SkySpaceAgency
         public const string ToolbarOabButtonId = ToolbarButtonPrefix + "OAB";
         public const string ToolbarKscButtonId = ToolbarButtonPrefix + "KSC";
 
+        // Default shortcut of the main window in flight (rebindable in Redux's mod settings). K2-D2
+        // uses Alt+O; Alt+Y is free in flight and on the map (Alt+S, Alt+W... are trim keys, Alt+K
+        // is KERNEL, Alt+P is FlightPlanRedux: docs/superpowers/notes/2026-11-19-coexistence-with-k2d2.md).
+        public static readonly SpaceWarp2.API.Input.KeyboardShortcut DefaultWindowShortcut =
+            new SpaceWarp2.API.Input.KeyboardShortcut(UnityEngine.KeyCode.Y, UnityEngine.KeyCode.LeftAlt);
+
         // Texts shown in the main window, set from code (the uxml holds neutral defaults).
         public const string AboutTitle = Title + ". Based on K2-D2, the droid astropilot.";
         public const string AboutButtonTooltip = "About " + Title;
