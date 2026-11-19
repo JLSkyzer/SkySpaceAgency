@@ -1,16 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Heating;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Heating;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Modules;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Inputs of the normal landing's descent plan (Heating/DescentPlanner) read from the live game
     // once: state, body (the pilot's rotation sign), the vehicle (active engines, stages of a landing

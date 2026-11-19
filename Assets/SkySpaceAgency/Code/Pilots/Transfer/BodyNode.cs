@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // One celestial body, as plain numbers: filled from the game at run time (GameBodySystem) or
     // from a test fixture. No game object is kept, so the transfer search can run on a worker thread.

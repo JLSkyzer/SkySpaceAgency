@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // Which crossing of the target plane a launch uses: northbound, southbound, or either (the plane
     // is out of reach, or every moment is as good as another).

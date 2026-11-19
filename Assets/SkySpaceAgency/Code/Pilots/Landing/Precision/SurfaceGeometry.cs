@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     // Surface geometry on a rotating body, in the body-relative inertial Zup frame (z = rotation
     // axis, latitude measured from the equatorial plane). Pure maths, tested in EditMode.

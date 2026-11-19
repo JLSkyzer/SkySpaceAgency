@@ -1,6 +1,6 @@
 using System;
-using K2D2.KSPService;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using NUnit.Framework;
 

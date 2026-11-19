@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using K2D2.Node;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The orientation of the game's Zup vectors, body by body. Pure code: no game API.
     //

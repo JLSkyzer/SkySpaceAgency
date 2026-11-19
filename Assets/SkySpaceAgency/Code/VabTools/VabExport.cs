@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
-namespace K2D2.VabTools
+namespace SkySpaceAgency.VabTools
 {
     public class VabCampaign
     {

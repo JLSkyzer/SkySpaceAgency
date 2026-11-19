@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using K2D2.Node;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // What the transfer pilot does next for the step it is at.
     public enum FlightAction

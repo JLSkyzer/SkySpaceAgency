@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     public struct WaypointChoice
     {

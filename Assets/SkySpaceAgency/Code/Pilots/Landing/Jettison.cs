@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Game;
 using KSP.Modules;
 using KSP.Sim.impl;
 using UnityEngine;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The service module jettison of a parachute precision return: plan it on the live vessel
     // (JettisonPlan), then activate the next stage once and check that the active vessel is the
@@ -133,7 +133,7 @@ namespace K2D2.Landing
             switched = false;
             capsule_lost = false;
             warp_exit_time = float.NaN;
-            VesselComponent vessel = K2D2_Plugin.Instance.current_vessel?.VesselComponent;
+            VesselComponent vessel = SkySpaceAgencyPlugin.Instance.current_vessel?.VesselComponent;
             // Planned again now: the player may have staged or reordered since the start.
             if (!TryPlan(vessel, out plan, out string log, out stage_count))
             {
@@ -162,7 +162,7 @@ namespace K2D2.Landing
 
         void Step()
         {
-            VesselComponent vessel = K2D2_Plugin.Instance.current_vessel?.VesselComponent;
+            VesselComponent vessel = SkySpaceAgencyPlugin.Instance.current_vessel?.VesselComponent;
             GameInstance game = GameManager.Instance?.Game;
             if (vessel == null || game == null)
                 return;

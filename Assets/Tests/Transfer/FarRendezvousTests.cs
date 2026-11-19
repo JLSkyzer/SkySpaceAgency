@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using K2D2.OrbitPlanning;
-using K2D2.Rendezvous;
-using K2D2.Transfer;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Rendezvous;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;
@@ -87,7 +87,7 @@ public class FarRendezvousTests
         var duna = _s[_duna];
         var q = Request(_duna);
         var el = OrbitMath.Elements(q.TargetR, q.TargetV, duna.Mu);
-        double parking = K2D2.Lift.RendezvousLaunch.ParkingRadius(el.PeriapsisRadius, duna.LowOrbitRadius, duna.Radius, out _);
+        double parking = SkySpaceAgency.Lift.RendezvousLaunch.ParkingRadius(el.PeriapsisRadius, duna.LowOrbitRadius, duna.Radius, out _);
         Assert.AreEqual(duna.Radius + 190_000, parking, 1e-6);
         var t = FarRendezvous.TransferRequestFor(q, parking);
         Assert.AreEqual(ArrivalKind.Orbit, t.Arrival);
@@ -102,7 +102,7 @@ public class FarRendezvousTests
         var low = Request(_duna, 65_000);
         var elLow = OrbitMath.Elements(low.TargetR, low.TargetV, duna.Mu);
         Assert.AreEqual(duna.LowOrbitRadius,
-            K2D2.Lift.RendezvousLaunch.ParkingRadius(elLow.PeriapsisRadius, duna.LowOrbitRadius, duna.Radius, out _), 1e-6);
+            SkySpaceAgency.Lift.RendezvousLaunch.ParkingRadius(elLow.PeriapsisRadius, duna.LowOrbitRadius, duna.Radius, out _), 1e-6);
     }
 
     // ------------------------------------------------------------ arrival geometry
@@ -127,7 +127,7 @@ public class FarRendezvousTests
     TransferPlan TransferFor(FarRendezvousRequest q)
     {
         var el = OrbitMath.Elements(q.TargetR, q.TargetV, _s[q.TargetBody].Mu);
-        double parking = K2D2.Lift.RendezvousLaunch.ParkingRadius(el.PeriapsisRadius, _s[q.TargetBody].LowOrbitRadius, _s[q.TargetBody].Radius, out _);
+        double parking = SkySpaceAgency.Lift.RendezvousLaunch.ParkingRadius(el.PeriapsisRadius, _s[q.TargetBody].LowOrbitRadius, _s[q.TargetBody].Radius, out _);
         var plan = TransferSearch.Find(_s, FarRendezvous.TransferRequestFor(q, parking), CancellationToken.None);
         Assert.IsTrue(plan.Ok, plan.Refusal);
         return plan;
@@ -160,7 +160,7 @@ public class FarRendezvousTests
             ike.EpochVelocity = OrbitMath.Rotate(v, r.normalized, 90 * Deg);
             var q = Request(_ike, 60_000, 10, 0);
             var el = OrbitMath.Elements(q.TargetR, q.TargetV, ike.Mu);
-            double parking = K2D2.Lift.RendezvousLaunch.ParkingRadius(el.PeriapsisRadius, ike.LowOrbitRadius, ike.Radius, out _);
+            double parking = SkySpaceAgency.Lift.RendezvousLaunch.ParkingRadius(el.PeriapsisRadius, ike.LowOrbitRadius, ike.Radius, out _);
             var plan = TransferSearch.Find(_s, FarRendezvous.TransferRequestFor(q, parking), CancellationToken.None);
             Assert.IsTrue(plan.Ok, plan.Refusal);
             if (plan.FinalLegRequest != null)

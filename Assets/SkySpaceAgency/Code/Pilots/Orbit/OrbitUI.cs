@@ -1,17 +1,17 @@
 using System;
 using System.Text;
-using K2D2.KSPService;
-using K2UI;
-using K2UI.Tabs;
+using SkySpaceAgency.KSPService;
+using SsaUI;
+using SsaUI.Tabs;
 using KSP.Sim;
 using KTools;
 using UnityEngine.UIElements;
 
-namespace K2D2.OrbitPlanning
+namespace SkySpaceAgency.OrbitPlanning
 {
     // Orbit tab: set a target Ap / Pe / inclination and create every maneuver node needed to
     // reach it. Execution stays with the Node tab. A page without a pilot, like AboutUI.
-    public class OrbitUI : K2Page
+    public class OrbitUI : SsaPage
     {
         const double Rad2Deg = 180 / Math.PI;
         // Both units are accepted by the frame guard because the unit of orbit.inclination is
@@ -48,9 +48,9 @@ namespace K2D2.OrbitPlanning
             ap_field = panel.Q<FloatField>("ap_km").Bind(OrbitSettings.ap_km);
             pe_field = panel.Q<FloatField>("pe_km").Bind(OrbitSettings.pe_km);
             inc_field = panel.Q<FloatField>("inc_deg").Bind(OrbitSettings.inc_deg);
-            panel.Q<K2Toggle>("ap_enabled").Bind(OrbitSettings.ap_enabled);
-            panel.Q<K2Toggle>("pe_enabled").Bind(OrbitSettings.pe_enabled);
-            panel.Q<K2Toggle>("inc_enabled").Bind(OrbitSettings.inc_enabled);
+            panel.Q<SsaToggle>("ap_enabled").Bind(OrbitSettings.ap_enabled);
+            panel.Q<SsaToggle>("pe_enabled").Bind(OrbitSettings.pe_enabled);
+            panel.Q<SsaToggle>("inc_enabled").Bind(OrbitSettings.inc_enabled);
 
             // Ticking a target starts it from the current value (spec).
             OrbitSettings.ap_enabled.listeners += on => { if (on && TryReadCurrent(out var c)) OrbitSettings.ap_km.V = (float)Math.Round(c.ApKm, 1); };
@@ -93,7 +93,7 @@ namespace K2D2.OrbitPlanning
             if (!TryReadState(out c.R, out c.V, out c.UT, out c.Body, out c.GameInclinationRad))
                 return false;
             c.El = OrbitMath.Elements(c.R, c.V, c.Body.Mu);
-            c.BodyName = K2D2_Plugin.Instance?.current_vessel?.VesselComponent?.Orbit?.referenceBody?.bodyName ?? "body";
+            c.BodyName = SkySpaceAgencyPlugin.Instance?.current_vessel?.VesselComponent?.Orbit?.referenceBody?.bodyName ?? "body";
             return true;
         }
 
@@ -114,7 +114,7 @@ namespace K2D2.OrbitPlanning
             ut = 0;
             body = default;
             gameInclination = 0;
-            var vessel = K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
+            var vessel = SkySpaceAgencyPlugin.Instance?.current_vessel?.VesselComponent;
             IKeplerPatch orbit = vessel?.Orbit;
             if (orbit == null)
                 return false;
@@ -152,14 +152,14 @@ namespace K2D2.OrbitPlanning
             if (gapRadAsDeg <= FrameGuardDeg || gapDegAsDeg <= FrameGuardDeg)
             {
                 string unit = gapRadAsDeg <= FrameGuardDeg ? "radians" : "degrees";
-                K2D2_Plugin.logger.LogInfo($"[OrbitUI] frame guard: game inclination {c.GameInclinationRad} " +
+                SkySpaceAgencyPlugin.logger.LogInfo($"[OrbitUI] frame guard: game inclination {c.GameInclinationRad} " +
                     $"matched as {unit} (computed {c.IncDeg:n3}°)");
             }
             else
             {
                 summary.text = $"Unexpected reference frame: computed inclination {c.IncDeg:n2}°, " +
                     $"game reports {c.GameInclinationRad:n4} (raw value). No node created.";
-                K2D2_Plugin.logger.LogWarning($"[OrbitUI] frame guard refused: computed inclination {c.IncDeg:n3}°, " +
+                SkySpaceAgencyPlugin.logger.LogWarning($"[OrbitUI] frame guard refused: computed inclination {c.IncDeg:n3}°, " +
                     $"game reports {c.GameInclinationRad} (raw value, matches neither radians nor degrees)");
                 return;
             }
@@ -181,11 +181,11 @@ namespace K2D2.OrbitPlanning
             double vesselDv = VesselDeltaV();
             var budget = OrbitPlanner.CheckCaptureBudget(plan, vesselDv);
             if (plan.Capture != null)
-                K2D2_Plugin.logger.LogInfo($"[OrbitUI] capture: {plan.Burns[0].Label} at {c.BodyName}, " +
+                SkySpaceAgencyPlugin.logger.LogInfo($"[OrbitUI] capture: {plan.Burns[0].Label} at {c.BodyName}, " +
                     $"{plan.Capture.DeltaV:n1} m/s (vessel {vesselDv:n1} m/s), then {plan.Burns.Count - 1} burn(s), " +
                     $"trajectory e {c.El.Eccentricity:n4} Pe {(c.El.PeriapsisRadius - c.Body.Radius) / 1000:n1} km, SOI {c.Body.SoiRadius / 1000:n0} km");
             else if (capture)
-                K2D2_Plugin.logger.LogInfo($"[OrbitUI] capture refused: {plan.Error}, trajectory e {c.El.Eccentricity:n4} " +
+                SkySpaceAgencyPlugin.logger.LogInfo($"[OrbitUI] capture refused: {plan.Error}, trajectory e {c.El.Eccentricity:n4} " +
                     $"Pe {(c.El.PeriapsisRadius - c.Body.Radius) / 1000:n1} km at {c.BodyName}");
             if (budget != OrbitPlanError.None)
             {
@@ -212,7 +212,7 @@ namespace K2D2.OrbitPlanning
             }
 
             plan_summary = Summary(plan, c);
-            K2D2_Plugin.ResetControllers(); // CreateNodes wipes every node: stop any pilot flying one
+            SkySpaceAgencyPlugin.ResetControllers(); // CreateNodes wipes every node: stop any pilot flying one
             OrbitPlanRun.Start(sequence, $"Step 1/{plan.Burns.Count}: creating the node for '{first.Burn.Label}'...");
             maneuver_creator.Update();
             maneuver_creator.CreateNodes(new[] { first.Burn }, count =>
@@ -228,7 +228,7 @@ namespace K2D2.OrbitPlanning
         // The vessel's total Δv (m/s), NaN when the game does not give it.
         static double VesselDeltaV()
         {
-            var dv = K2D2_Plugin.Instance?.current_vessel?.VesselComponent?.VesselDeltaV;
+            var dv = SkySpaceAgencyPlugin.Instance?.current_vessel?.VesselComponent?.VesselDeltaV;
             return dv != null ? dv.TotalDeltaVActual : double.NaN;
         }
 

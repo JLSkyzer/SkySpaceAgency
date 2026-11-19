@@ -1,12 +1,12 @@
 // using System.Reflection.Emit;
-using K2UI.Tabs;
-using K2UI;
+using SsaUI.Tabs;
+using SsaUI;
 using UnityEngine.UIElements;
-using K2D2.UI;
+using SkySpaceAgency.UI;
 
-namespace K2D2.Controller
+namespace SkySpaceAgency.Controller
 {
-    class AttitudeUI : K2Page
+    class AttitudeUI : SsaPage
     {
         AttitudePilot pilot;
         public AttitudeUI(AttitudePilot pilot)
@@ -34,9 +34,9 @@ namespace K2D2.Controller
             panel.Q<RepeatButton>("elevation_p_rb").SetAction(
                 () => elevation_field.value += 1, repeat_delay, repeat_interval);
 
-            panel.Q<K2Slider>("elevation_slider").Bind(AttitudeSettings.elevation);
+            panel.Q<SsaSlider>("elevation_slider").Bind(AttitudeSettings.elevation);
             var heading_label = panel.Q<Label>("heading_label");
-            panel.Q<K2Compass>("heading").Bind(AttitudeSettings.heading);
+            panel.Q<SsaCompass>("heading").Bind(AttitudeSettings.heading);
             AttitudeSettings.heading.listen(v => heading_label.text = $"Heading : {v:n1}");
 
             run_button = panel.Q<ToggleButton>("run");

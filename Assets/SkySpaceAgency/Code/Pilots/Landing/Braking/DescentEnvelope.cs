@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     // How fast the descent may go at a given height above the ground.
     public static class DescentEnvelope

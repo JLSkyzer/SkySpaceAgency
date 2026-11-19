@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>What the burn and the game report, read once per frame of the burn.</summary>
     public struct RailsInputs

@@ -1,18 +1,18 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.DeltaV;
 using KSP.Sim.impl;
 using KTools;
 // using KTools.UI;
-using K2D2.Controller;
-using K2D2.Node;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.Landing.Braking;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The precision sequence (OrbitPrep → … → terminal guidance) is in LandingPilotPrecision.cs,
     // the parachute precision return (PlaneChange → … → Jettison → Parachute) in LandingPilotReentry.cs.
@@ -59,7 +59,7 @@ namespace K2D2.Landing
 
         public LandingPilot()
         {
-            // Both created in K2D2_Plugin.OnInitialized(), before any pilot is constructed.
+            // Both created in SkySpaceAgencyPlugin.OnInitialized(), before any pilot is constructed.
             var atmo_file = SettingsFile.Get("land_atmo");
             var vac_file = SettingsFile.Get("land_vac");
             settings_atmo = new LandingSettings(atmo_file, atmospheric: true);
@@ -75,13 +75,13 @@ namespace K2D2.Landing
             Instance = this;
             debug_mode_only = false;
 
-            K2D2PilotsMgr.Instance.RegisterPilot("Land", this);
+            SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Land", this);
 
             sub_contollers.Add(burn_dV);
             sub_contollers.Add(current_executor);
 
             // logger.LogMessage("LandingController !");
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
 
@@ -330,7 +330,7 @@ namespace K2D2.Landing
                     burn_dV.reset();
 
                     // reset controller to desactivate other controllers.
-                    K2D2_Plugin.ResetControllers();
+                    SkySpaceAgencyPlugin.ResetControllers();
 
                     _active = true;
                     ResetReduxLogs();
@@ -458,7 +458,7 @@ namespace K2D2.Landing
         public void computeValues()
         {
             collision_detected = false;
-            var current_vessel = K2D2_Plugin.Instance.current_vessel;
+            var current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             if (current_vessel == null)
             {
                 // UI_Tools.Console("no vessel");

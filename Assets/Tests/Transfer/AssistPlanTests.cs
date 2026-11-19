@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
-using K2D2.Node;
-using K2D2.Transfer;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using NUnit.Framework;
 

@@ -1,16 +1,16 @@
 using System;
-using K2D2.KSPService;
-using K2D2.Landing;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Controller;
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Controller;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Gravity Turn ascent profile (see AscentProfile.cs), the alternative to Ascent.cs's fixed
     // altitude-based pitch curve ("Guided").
@@ -43,7 +43,7 @@ namespace K2D2.Lift
 
         public ReactiveAscent(LiftSettings lift_settings)
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             this.settings = lift_settings;
         }
 
@@ -482,7 +482,7 @@ namespace K2D2.Lift
             addRow("Throttle", $"{control.throttle:n2} ({control.throttle_limit})");
 
             // The rest is for tuning and bug reports.
-            if (!K2D2Settings.debug_mode.V)
+            if (!SkySpaceAgencySettings.debug_mode.V)
                 return;
 
             addRow("Altitude", $"{current_altitude_km:n2} km");

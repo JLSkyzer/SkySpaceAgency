@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace K2D2.VabTools
+namespace SkySpaceAgency.VabTools
 {
     // File and folder names of the VAB tools, under <mod folder>/vab/ (spec, "Fichiers").
     public static class VabFiles

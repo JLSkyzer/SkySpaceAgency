@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using KSP.Sim;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     /// <summary>
     /// The stop predictor of a parachute precision return (DeorbitSearch, PlaneChange and

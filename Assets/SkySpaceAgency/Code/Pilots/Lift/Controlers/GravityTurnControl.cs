@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // The Gravity Turn's throttle and steering rules. ReactiveAscent flies by them, and
     // AscentPredictor uses the very same ones to try out kick angles and hold times before the

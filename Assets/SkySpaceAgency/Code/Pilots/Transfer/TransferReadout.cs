@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The game's calendar: 6 h days, 426-day years, starting at year 1, day 1.
     public static class KerbinCalendar

@@ -1,11 +1,11 @@
 using System;
-using K2D2.KSPService;
-using K2D2.Lift;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Lift;
 using KSP.Sim;
 using KSP.Sim.impl;
 using UnityEngine;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // K2-D2 1.4.0 (IanMealworm), ported for the boost-back, which only the K2-D2 flavour flies
     // (ModIdentity.IsK2D2, BoostBackStart). Our own landings keep their SAS handling.
@@ -74,7 +74,7 @@ namespace K2D2.Landing
 
         public AtmoAttitudeHold()
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         // Updates the airflow axes from the vessel's state. Returns false with nothing to hold

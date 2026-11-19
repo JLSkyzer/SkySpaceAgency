@@ -1,14 +1,14 @@
 using System;
 using System.Globalization;
-using K2D2.Controller;
-using K2D2.KSPService;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The landing burn on a body with an atmosphere, from the handover down to final_height_m
     // (K2-D2 1.4.0, IanMealworm): one continuous burn, killing the sideways speed (or, with a
@@ -88,7 +88,7 @@ namespace K2D2.Landing
         public AtmoLandingBurn(LandingPilot landing)
         {
             this.landing = landing;
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         public void Start(bool steer_to_target)
@@ -298,7 +298,7 @@ namespace K2D2.Landing
         public override void UpdateInfoRows(Action<string, string> addRow)
         {
             addRow("Braking Ends", $"{stop_height:n0} m up in {burn_left_s:n0} s");
-            if (!K2D2Settings.debug_mode.V)
+            if (!SkySpaceAgencySettings.debug_mode.V)
                 return;
             addRow("Throttle", $"{wanted_throttle:P0}");
             addRow("Tilt", $"{tilt_deg:n1}°");

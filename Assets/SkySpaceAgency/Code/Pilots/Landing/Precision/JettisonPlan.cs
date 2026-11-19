@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     // One part of the vessel's tree with its staging, as JettisonPlan needs it.
     public struct JettisonPart

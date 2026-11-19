@@ -4,7 +4,7 @@ using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     public enum ReduxImpactState
     {
@@ -216,7 +216,7 @@ namespace K2D2.Landing
     }
 }
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Waits for a Redux prediction that can be trusted as a measurement: made after the vessel has
     // settled into the attitude being measured, and holding still. The test flights showed why both

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Sim;
 
-namespace K2D2.Landing.Heating
+namespace SkySpaceAgency.Landing.Heating
 {
     public struct AeroBrakeResult
     {

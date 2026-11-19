@@ -4,7 +4,7 @@ using KSP.Sim.impl;
 using KTools;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Orbit helpers from state vectors (period, apsides, time to the next apsis), shared by the
     // Node tab's closed-loop circularization and the Landing tab. The deorbit search that lived

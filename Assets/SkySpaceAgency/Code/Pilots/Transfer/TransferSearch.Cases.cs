@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     public static partial class TransferSearch
     {

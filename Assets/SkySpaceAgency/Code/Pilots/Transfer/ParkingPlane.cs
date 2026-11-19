@@ -4,7 +4,7 @@ using System.Threading;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     public class ParkingPlan
     {

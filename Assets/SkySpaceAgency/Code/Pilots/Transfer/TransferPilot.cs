@@ -6,19 +6,19 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.Node;
-using K2D2.Lift;
-using K2D2.OrbitPlanning;
-using K2D2.Rendezvous;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.Lift;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Rendezvous;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     /// <summary>
     /// Game glue of the transfer to a body (sub-project 4.1): plans with TransferSearch on a worker
@@ -86,7 +86,7 @@ namespace K2D2.Transfer
         {
             Instance = this;
             debug_mode_only = false;
-            K2D2PilotsMgr.Instance.RegisterPilot("Transfer", this);
+            SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Transfer", this);
             _page = new TransferUI(this);
             node = new PrepareOnlyNode(logger, "[Transfer]");
             burn.stage_when_dry = true;
@@ -94,7 +94,7 @@ namespace K2D2.Transfer
             AssistSearch.Log = line => assist_log.Enqueue(line);
         }
 
-        internal static string PlansFolder => K2D2_Plugin.PlansFolder;
+        internal static string PlansFolder => SkySpaceAgencyPlugin.PlansFolder;
 
         // ---------------------------------------------------------------- running
 
@@ -131,7 +131,7 @@ namespace K2D2.Transfer
                 isRunning = false;
                 Status = "Stopped by a vessel or scene change. Resume continues from the actual state.";
                 logger.LogInfo("[Transfer] stopped by a reset (vessel change, scene change or another pilot)");
-                ChainStoppedStatus(LiftGoalRules.StopReason(K2D2_Plugin.CurrentResetCause));
+                ChainStoppedStatus(LiftGoalRules.StopReason(SkySpaceAgencyPlugin.CurrentResetCause));
             }
             CancelJob();
             checked_vessel = null; // look for the new active vessel's saved plan
@@ -605,7 +605,7 @@ namespace K2D2.Transfer
             starting = true;
             try
             {
-                K2D2_Plugin.ResetControllers(); // one pilot at a time
+                SkySpaceAgencyPlugin.ResetControllers(); // one pilot at a time
             }
             finally
             {
@@ -675,7 +675,7 @@ namespace K2D2.Transfer
         {
             snap = null;
             transient = false;
-            VesselComponent vessel = K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
+            VesselComponent vessel = SkySpaceAgencyPlugin.Instance?.current_vessel?.VesselComponent;
             if (vessel == null)
             {
                 error = "no active vessel";
@@ -876,7 +876,7 @@ namespace K2D2.Transfer
 
         // ---------------------------------------------------------------- helpers
 
-        // The game's active vessel now. KSPVessel.VesselComponent is refreshed only in K2D2_Plugin.Update:
+        // The game's active vessel now. KSPVessel.VesselComponent is refreshed only in SkySpaceAgencyPlugin.Update:
         // inside a vessel-change message it may still be the previous vessel.
         static VesselComponent ActiveVessel() => PilotVessel.Active();
 

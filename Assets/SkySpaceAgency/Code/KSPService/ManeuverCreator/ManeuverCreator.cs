@@ -6,14 +6,14 @@ using KSP.Map;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP.Sim.Maneuver;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using UnityEngine;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     public class ManeuverCreator
     {
@@ -39,7 +39,7 @@ namespace K2D2.KSPService
 
         public void Update()
         {
-            kspVessel = K2D2_Plugin.Instance.current_vessel;
+            kspVessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             _vesselComponent = kspVessel.GetActiveSimVessel();
         }
 
@@ -257,7 +257,7 @@ namespace K2D2.KSPService
         /// <param name="TrueAnomaly"></param>
         private void CreateManeuverNode(Vector3d burnVector, double TrueAnomaly)
         {
-            K2D2_Plugin.Instance.StartCoroutine(CreateManeuverNode_Co(burnVector, TrueAnomaly));
+            SkySpaceAgencyPlugin.Instance.StartCoroutine(CreateManeuverNode_Co(burnVector, TrueAnomaly));
         }
 
         private IEnumerator CreateManeuverNode_Co(Vector3d burnVector, double TrueAnomaly)
@@ -333,7 +333,7 @@ namespace K2D2.KSPService
             // is validated in game.
             Game.SpaceSimulation.Maneuvers.AddNodeToVessel(nodeData);
 
-            K2D2_Plugin.Instance.StartCoroutine(UpdateMapGizmoWhenReady_Co(nodeData));
+            SkySpaceAgencyPlugin.Instance.StartCoroutine(UpdateMapGizmoWhenReady_Co(nodeData));
 
             return nodeData;
         }
@@ -428,7 +428,7 @@ namespace K2D2.KSPService
             }
 
             RemoveAllNodes();
-            K2D2_Plugin.Instance.StartCoroutine(RemoveAllNodesThenCreate_Co(UT, progradeDeltaV, onCreated, normalDeltaV, centerOnImpulse));
+            SkySpaceAgencyPlugin.Instance.StartCoroutine(RemoveAllNodesThenCreate_Co(UT, progradeDeltaV, onCreated, normalDeltaV, centerOnImpulse));
         }
 
         private IEnumerator RemoveAllNodesThenCreate_Co(double UT, double progradeDeltaV, System.Action<ManeuverNodeData> onCreated,
@@ -551,7 +551,7 @@ namespace K2D2.KSPService
             try
             {
                 RemoveAllNodes();
-                K2D2_Plugin.Instance.StartCoroutine(CreateNodes_Co(burns, onDone));
+                SkySpaceAgencyPlugin.Instance.StartCoroutine(CreateNodes_Co(burns, onDone));
             }
             catch (System.Exception e)
             {

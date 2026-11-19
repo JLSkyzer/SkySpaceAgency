@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // One part of the vessel as the stage list needs it, read from the game's DeltaVPartInfo.
     // ActivationStage and DecoupleStage are on the scale of DeltaVStageInfo.Stage: the game's

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using K2D2.VabTools;
+using SkySpaceAgency.VabTools;
 using NUnit.Framework;
 
 public class VabFilesTests

@@ -6,11 +6,11 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.Node;
-using K2D2.OrbitPlanning;
-using K2D2.Transfer;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP.Sim.Maneuver;
@@ -18,7 +18,7 @@ using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     /// <summary>
     /// Game glue of the rendezvous and docking (sub-project 4.3). Plans with RendezvousPlanner on a
@@ -75,13 +75,13 @@ namespace K2D2.Rendezvous
         {
             Instance = this;
             debug_mode_only = false;
-            K2D2PilotsMgr.Instance.RegisterPilot("Rendezvous", this);
+            SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Rendezvous", this);
             node = new PrepareOnlyNode(logger, "[Rendezvous]");
             _page = new RendezvousUI(this);   // the Rendezvous tab, in the old Dock tab's slot
             burn.stage_when_dry = true;
         }
 
-        static string PlansFolder => K2D2_Plugin.PlansFolder;
+        static string PlansFolder => SkySpaceAgencyPlugin.PlansFolder;
 
         // ---------------------------------------------------------------- running
 
@@ -275,7 +275,7 @@ namespace K2D2.Rendezvous
             starting = true;
             try
             {
-                K2D2_Plugin.ResetControllers(); // one pilot at a time
+                SkySpaceAgencyPlugin.ResetControllers(); // one pilot at a time
             }
             finally
             {

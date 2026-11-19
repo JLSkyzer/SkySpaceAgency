@@ -1,9 +1,9 @@
 using System;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Landing.Braking;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     // Air tables by altitude above Body.Radius, from 0 to Depth every SampleStep metres. Linear
     // interpolation; every value is 0 above Depth (or with missing tables).

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Picks the Gravity Turn's kick angle and hold time just before the kick. It flies the rest of
     // the ascent ahead of time for each combination, by the same rules ReactiveAscent flies

@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The cheapest transfer from the vessel's orbit to any body (patched conics). The case comes from
     // the body hierarchy only, through the common ancestor A of the two bodies:

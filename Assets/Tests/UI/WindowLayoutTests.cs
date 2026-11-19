@@ -1,13 +1,13 @@
 using System.Linq;
-using K2D2.Rendezvous;
-using K2D2.Transfer;
-using K2UI.Tabs;
+using SkySpaceAgency.Rendezvous;
+using SkySpaceAgency.Transfer;
+using SsaUI.Tabs;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine.UIElements;
 
 // The window as the game builds it: K2D2_Window.uxml is the only Addressables entry, so each tab is a
-// template of it. TabbedPage makes one button per TabPage, and K2Page.Init finds its page by code.
+// template of it. TabbedPage makes one button per TabPage, and SsaPage.Init finds its page by code.
 public class WindowLayoutTests
 {
     const string WindowPath = "Assets/UI/K2D2_UI/K2D2_Window.uxml";
@@ -36,8 +36,8 @@ public class WindowLayoutTests
         foreach (string element in TransferUI.Elements)
             Assert.IsNotNull(transfer.Q(element), $"the Transfer tab has no element named {element}");
         Assert.IsNotNull(transfer.Q<DropdownField>("target_body"));
-        Assert.IsNotNull(transfer.Q<K2UI.InlineEnum>("arrival"));
-        Assert.IsNotNull(transfer.Q<K2UI.K2Toggle>("gravity_assist"));
+        Assert.IsNotNull(transfer.Q<SsaUI.InlineEnum>("arrival"));
+        Assert.IsNotNull(transfer.Q<SsaUI.SsaToggle>("gravity_assist"));
         Assert.IsNotNull(transfer.Q<TextField>("max_trip_days"));
         Assert.IsNotNull(transfer.Q<Button>("cancel_saved"));
     }
@@ -52,9 +52,9 @@ public class WindowLayoutTests
         foreach (string element in new[] { "transfer_goal_group", "transfer_infos", "heading_row", "heading", "lift_infos" })
             Assert.IsNotNull(lift.Q(element), $"the Lift tab has no element named {element}");
         // Rendezvous goal (4.4): one toggle, inside the goal group.
-        var dock = lift.Q<K2UI.K2Toggle>("rendezvous_dock");
-        Assert.IsNotNull(dock, "the Lift tab has no K2Toggle named rendezvous_dock");
-        Assert.IsNotNull(lift.Q("transfer_goal_group").Q<K2UI.K2Toggle>("rendezvous_dock"), "rendezvous_dock is in transfer_goal_group");
+        var dock = lift.Q<SsaUI.SsaToggle>("rendezvous_dock");
+        Assert.IsNotNull(dock, "the Lift tab has no SsaToggle named rendezvous_dock");
+        Assert.IsNotNull(lift.Q("transfer_goal_group").Q<SsaUI.SsaToggle>("rendezvous_dock"), "rendezvous_dock is in transfer_goal_group");
     }
 
     [Test]
@@ -71,7 +71,7 @@ public class WindowLayoutTests
         Assert.IsNotNull(page.Q<DropdownField>("target_vessel"));
         Assert.IsNotNull(page.Q<DropdownField>("our_port"));
         Assert.IsNotNull(page.Q<DropdownField>("target_port"));
-        Assert.IsNotNull(page.Q<K2UI.K2Toggle>("prepare_only"));
+        Assert.IsNotNull(page.Q<SsaUI.SsaToggle>("prepare_only"));
         foreach (string button in new[] { "rendezvous_dock", "rendezvous_only", "dock_only", "transfer_rendezvous_dock", "transfer_rendezvous", "stop", "resume", "cancel_saved" })
             Assert.IsNotNull(page.Q<Button>(button), $"the Rendezvous tab has no button named {button}");
         // The old Dock assistant's controls are gone.

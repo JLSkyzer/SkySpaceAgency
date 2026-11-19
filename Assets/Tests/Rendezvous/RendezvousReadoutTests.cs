@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.Rendezvous;
-using K2D2.Transfer;
+using SkySpaceAgency.Rendezvous;
+using SkySpaceAgency.Transfer;
 using NUnit.Framework;
 
 public class RendezvousReadoutTests

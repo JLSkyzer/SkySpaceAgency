@@ -1,8 +1,8 @@
 using System;
 using System.Globalization;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Landing.Braking;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     // The Δv check of a precision landing, both sides predicted at start for the same vessel from
     // the same orbit:

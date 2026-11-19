@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using K2D2.Rendezvous;
+using SkySpaceAgency.Rendezvous;
 using KSP.Sim;
 using NUnit.Framework;
 

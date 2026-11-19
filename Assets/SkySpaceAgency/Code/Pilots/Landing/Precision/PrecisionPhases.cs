@@ -1,8 +1,8 @@
 using System;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Landing.Braking;
 using KSP.Sim;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     public struct Miss
     {
@@ -24,7 +24,7 @@ namespace K2D2.Landing.Precision
         public const double CorrectionDoneDeltaV = MinCorrection;
         // Seconds between planning a burn and its impulse: the longest alignment lead of
         // TargetOrbitBurn (BurnWarp.MaxLead) plus a margin.
-        public const double PlanLead = K2D2.Node.BurnWarp.MaxLead + 10;
+        public const double PlanLead = SkySpaceAgency.Node.BurnWarp.MaxLead + 10;
         // Seconds between two predicted-distance readouts outside the burns.
         public const double ReadoutInterval = 2;
         // Hand-over to terminal guidance below this share of the hand-over height while still

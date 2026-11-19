@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
-using K2D2.KSPService;
-using K2D2.Transfer;
-using K2D2.UI;
-using K2UI;
-using K2UI.Tabs;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Transfer;
+using SkySpaceAgency.UI;
+using SsaUI;
+using SsaUI.Tabs;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine.UIElements;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // The Rendezvous tab's choices, kept between sessions.
     public static class RendezvousSettings
@@ -21,7 +21,7 @@ namespace K2D2.Rendezvous
     // Rendezvous tab (spec 4.3), in the old Dock tab's slot (page code "dock"): the target vessel,
     // the port pair, the buttons, and RendezvousPilot's readouts (relative state, steps, Δv per
     // stage, translation mode, docking phase). Lists and texts come from RendezvousReadout (pure).
-    public class RendezvousUI : K2Page
+    public class RendezvousUI : SsaPage
     {
         // Every element this page looks up, by name (checked by the UI tests against the window).
         public static readonly string[] Elements =
@@ -74,7 +74,7 @@ namespace K2D2.Rendezvous
             foreach (string name in Elements)
                 if (panel.Q(name) == null)
                 {
-                    K2D2_Plugin.logger.LogError($"[Rendezvous] the Rendezvous tab has no element named {name}");
+                    SkySpaceAgencyPlugin.logger.LogError($"[Rendezvous] the Rendezvous tab has no element named {name}");
                     return false;
                 }
 
@@ -86,7 +86,7 @@ namespace K2D2.Rendezvous
             target_port_drop.RegisterValueChangedCallback(evt => target_port_pick = PickedPort(their_ports, evt.newValue));
             relative_label = panel.Q<Label>("relative");
             port_hint = panel.Q<Label>("port_hint");
-            panel.Q<K2Toggle>("prepare_only").Bind(RendezvousSettings.prepare_only);
+            panel.Q<SsaToggle>("prepare_only").Bind(RendezvousSettings.prepare_only);
 
             rv_dock_bt = panel.Q<Button>("rendezvous_dock");
             rv_only_bt = panel.Q<Button>("rendezvous_only");
@@ -165,7 +165,7 @@ namespace K2D2.Rendezvous
             }
             catch (Exception e)
             {
-                K2D2_Plugin.logger.LogInfo($"[Rendezvous] tab: {e.GetType().Name}: {e.Message}");
+                SkySpaceAgencyPlugin.logger.LogInfo($"[Rendezvous] tab: {e.GetType().Name}: {e.Message}");
             }
         }
 

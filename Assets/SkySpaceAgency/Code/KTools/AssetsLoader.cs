@@ -1,6 +1,6 @@
 using System.IO;
 using UnityEngine;
-using K2D2;
+using SkySpaceAgency;
 using UnityEngine.UIElements;
 
 namespace KTools
@@ -10,30 +10,30 @@ namespace KTools
     {
         // No longer used now that LoadUxml() below loads through Addressables instead - left in place
         // (unused, harmless) rather than deleted so reverting to the old AssetBundle path is a one-line
-        // job if the Addressables switch doesn't pan out in testing. See K2D2_Plugin.cs's OnInitialized()
+        // job if the Addressables switch doesn't pan out in testing. See SkySpaceAgencyPlugin.cs's OnInitialized()
         // for the matching commented-out AssetBundle.LoadFromFile() call.
         internal static AssetBundle Bundle;
 
         public static Texture2D LoadIcon(string path)
         {
-            // var imageTexture = AssetManager.GetAsset<Texture2D>($"{K2D2_Plugin.ModGuid}/images/{path}.png");
+            // var imageTexture = AssetManager.GetAsset<Texture2D>($"{SkySpaceAgencyPlugin.ModGuid}/images/{path}.png");
 
             // SWMetadata.Folder is a System.IO.DirectoryInfo, not a string (confirmed via the current
-            // SpaceWarpPluginDescriptor's real field type - see K2D2_Plugin.cs's OnInitialized for the same
+            // SpaceWarpPluginDescriptor's real field type - see SkySpaceAgencyPlugin.cs's OnInitialized for the same
             // fix) - .FullName is the correct, intended accessor.
             var texture = new Texture2D(1, 1);
-            texture.LoadImage(File.ReadAllBytes(K2D2_Plugin.Instance.SWMetadata.Folder.FullName + $"/assets/images/{path}"));
+            texture.LoadImage(File.ReadAllBytes(SkySpaceAgencyPlugin.Instance.SWMetadata.Folder.FullName + $"/assets/images/{path}"));
             //   Check if the texture is null
             if (texture == null)
             {
                 // Print an error message to the Console
-                K2D2_Plugin.logger.LogError("Failed to load image texture from path: " + path);
+                SkySpaceAgencyPlugin.logger.LogError("Failed to load image texture from path: " + path);
 
                 // Print the full path of the resource
-                K2D2_Plugin.logger.LogInfo("Full resource path: " + K2D2_Plugin.Instance.SWMetadata.Folder.FullName + $"/assets/images/{path}");
+                SkySpaceAgencyPlugin.logger.LogInfo("Full resource path: " + SkySpaceAgencyPlugin.Instance.SWMetadata.Folder.FullName + $"/assets/images/{path}");
 
                 // Print the type of resource that was expected
-                K2D2_Plugin.logger.LogInfo("Expected resource type: Texture2D");
+                SkySpaceAgencyPlugin.logger.LogInfo("Expected resource type: Texture2D");
             }
 
             return texture;
@@ -57,15 +57,15 @@ namespace KTools
         public static VisualTreeAsset LoadUxml(string path)
         {
             var address = $"Assets/UI/K2D2_UI/{path}";
-            // KerbalMonoBehaviour.Assets is protected, so this goes through K2D2_Plugin's public
-            // LoadAddressableAsset<T>() wrapper rather than K2D2_Plugin.Instance.Assets directly
-            // (confirmed via CS0122 build error - see the wrapper's own comment in K2D2_Plugin.cs).
-            var handle = K2D2_Plugin.Instance.LoadAddressableAsset<VisualTreeAsset>(address);
+            // KerbalMonoBehaviour.Assets is protected, so this goes through SkySpaceAgencyPlugin's public
+            // LoadAddressableAsset<T>() wrapper rather than SkySpaceAgencyPlugin.Instance.Assets directly
+            // (confirmed via CS0122 build error - see the wrapper's own comment in SkySpaceAgencyPlugin.cs).
+            var handle = SkySpaceAgencyPlugin.Instance.LoadAddressableAsset<VisualTreeAsset>(address);
             var asset = handle.WaitForCompletion();
 
             if (asset == null)
             {
-                K2D2_Plugin.logger.LogError($"Failed to load UXML from Addressables at '{address}' - " +
+                SkySpaceAgencyPlugin.logger.LogError($"Failed to load UXML from Addressables at '{address}' - " +
                     "check that the asset is marked Addressable in the Unity Editor and that its address " +
                     "matches this path exactly.");
             }

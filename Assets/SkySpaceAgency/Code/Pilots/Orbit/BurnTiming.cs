@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.OrbitPlanning
+namespace SkySpaceAgency.OrbitPlanning
 {
     /// <summary>
     /// Timing of a finite burn around an impulsive instant. The game treats a node's Time as the

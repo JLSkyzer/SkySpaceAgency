@@ -1,6 +1,6 @@
 using KSP.Game;
 
-namespace K2D2
+namespace SkySpaceAgency
 {
     /// <summary>What the plugin does this frame after reading the scene (SceneTransition.Next).</summary>
     public struct SceneStep

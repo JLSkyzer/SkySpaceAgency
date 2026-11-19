@@ -1,14 +1,14 @@
 using System;
 using System.Globalization;
-using K2D2.Controller;
-using K2D2.KSPService;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The boost-back burn (K2-D2 1.4.0, IanMealworm), for landing a recovered stage (or anything
     // else on a suborbital trajectory inside the atmosphere) on the precision-landing target - flown
@@ -91,7 +91,7 @@ namespace K2D2.Landing
 
         public BoostBackBurn()
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         public override void Start()
@@ -423,7 +423,7 @@ namespace K2D2.Landing
         public override void UpdateInfoRows(Action<string, string> addRow)
         {
             addRow("Burn Left", $"{burn.magnitude:n1} m/s");
-            if (K2D2Settings.debug_mode.V)
+            if (SkySpaceAgencySettings.debug_mode.V)
                 addRow("Attitude Error", $"{hold.attitude_error_deg:n1}°");
         }
     }

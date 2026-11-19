@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using K2D2.Lift;
-using K2D2.OrbitPlanning;
-using K2D2.Rendezvous;
+using SkySpaceAgency.Lift;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Rendezvous;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // "Transfer + rendezvous (+ dock)" (sub-project 4.5): a target vessel around another body. The
     // chain lives here: FarRendezvous plans the transfer into the target's plane, the rendezvous

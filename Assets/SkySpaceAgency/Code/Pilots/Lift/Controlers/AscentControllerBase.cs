@@ -1,10 +1,10 @@
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.impl;
 using UnityEngine;
-using K2D2.Controller;
+using SkySpaceAgency.Controller;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Shared surface between the two selectable Ascent-phase controllers (Ascent = Guided,
     // ReactiveAscent = GravityTurn - see AscentProfile.cs). Pulled out so LiftPilot can hold one

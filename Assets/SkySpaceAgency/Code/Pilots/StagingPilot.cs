@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KTools;
 
 using KSP.Sim.impl;
 using KSP.Sim.ResourceSystem;
 using SpaceWarp2.API.Logging;
 
-namespace K2D2.Controller
+namespace SkySpaceAgency.Controller
 {
     public class StagingSettings
     {
@@ -41,7 +41,7 @@ namespace K2D2.Controller
         {
             Instance = this;
             debug_mode_only = false;
-            K2D2PilotsMgr.Instance.RegisterPilot("Staging", this);
+            SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Staging", this);
         } 
     
         public ILogger logger = ModIdentity.Logger("StagingController");
@@ -255,9 +255,9 @@ namespace K2D2.Controller
 
         // public override void onGUI()
         // {  
-        //     if (K2D2_Plugin.Instance.settings_visible)
+        //     if (SkySpaceAgencyPlugin.Instance.settings_visible)
         //     {
-        //         K2D2Settings.onGUI();
+        //         SkySpaceAgencySettings.onGUI();
         //         StagingSettings.settings_UI();
         //         return;
         //     }

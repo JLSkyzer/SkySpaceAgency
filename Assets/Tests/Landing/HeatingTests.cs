@@ -1,7 +1,7 @@
 using System;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Heating;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Heating;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;

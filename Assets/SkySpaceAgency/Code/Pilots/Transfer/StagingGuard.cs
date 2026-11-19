@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The mod drops an empty stage during a burn, but never one that would drop a docking port, a
     // parachute or the command part (nor, when the landing pilot drops a lower stage, landing

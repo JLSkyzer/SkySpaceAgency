@@ -7,7 +7,7 @@ using KSP.Sim.Maneuver;
 using KSP.Sim.State;
 using UnityEngine;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     public class KSPVessel
     {

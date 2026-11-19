@@ -1,4 +1,4 @@
-using K2D2.VabTools;
+using SkySpaceAgency.VabTools;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using F = VabFixtures;

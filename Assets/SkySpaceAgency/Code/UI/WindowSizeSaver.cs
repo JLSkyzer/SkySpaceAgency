@@ -2,7 +2,7 @@ using KTools;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace K2D2.UI
+namespace SkySpaceAgency.UI
 {
     /// <summary>
     /// Saves the window size the player picks with Redux's resize handle (WindowResizeHandle in

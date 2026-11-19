@@ -2,12 +2,12 @@ using KSP.Sim;
 using KSP.Sim.Maneuver;
 using KTools;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Controller;
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Controller;
 using SpaceWarp2.API.Logging;
 
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     class WarpToSettings
     {
@@ -45,7 +45,7 @@ namespace K2D2.Node
 
         public int max_warp_index = -1;
 
-        public K2D2.KSPService.KSPVessel current_vessel;
+        public SkySpaceAgency.KSPService.KSPVessel current_vessel;
 
         public void StartManeuver(ManeuverNodeData node, bool check_direction = false)
         {
@@ -95,7 +95,7 @@ namespace K2D2.Node
         public override void Start()
         {
             finished = false;
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         double dt;
@@ -173,7 +173,7 @@ namespace K2D2.Node
             st.Status("Warping ahead...");
             st.Console(status_line);
 
-            if (K2D2Settings.debug_mode.V)
+            if (SkySpaceAgencySettings.debug_mode.V)
             {
                 st.Console($"CurrentRateIndex {TimeWarpTools.CurrentRateIndex}");
                 st.Console($"CurrentRate x{TimeWarpTools.CurrentRate}");

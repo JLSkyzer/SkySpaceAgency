@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     // Standing on the ground while the height reading may still say tens of metres up (from
     // K2-D2 1.4.0, IanMealworm's LandingPilot.UpdateStanding): barely moving with the engines

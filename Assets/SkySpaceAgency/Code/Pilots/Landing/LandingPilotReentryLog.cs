@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using K2D2.KSPService;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Modules;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The parachute precision return after the jettison (LandingPilotReentry.cs has the rest):
     // the descent readouts, the interface, heating and chute opening logs against the reference

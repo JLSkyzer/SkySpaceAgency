@@ -3,19 +3,19 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.Landing.Braking;
-using K2D2.Node;
-using K2D2.Transfer;
-using K2D2.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.Transfer;
+using SkySpaceAgency.UI;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine.UIElements;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Transfer goal (LiftGoal.PrepareTransfer), before the ascent: plans the parking orbit and the
     // launch window, then waits on the pad until the launch time and fires the first stage. The
@@ -56,7 +56,7 @@ namespace K2D2.Lift
         {
             this.lift = lift;
             this.settings = settings;
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         // A refusal here is ended in Update: ending the pilot from inside its status setter (which
@@ -64,7 +64,7 @@ namespace K2D2.Lift
         public override void Start()
         {
             base.Start();
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             refusal = null;
             refusal_is_plan = false;
             status_line = "";

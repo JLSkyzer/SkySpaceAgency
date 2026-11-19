@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using KSP.Sim;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // A docking port, as the chooser needs it (read from PartComponentModule_DockingNode /
     // Data_DockingNode and the view's docking transform). Position and Axis are inertial.

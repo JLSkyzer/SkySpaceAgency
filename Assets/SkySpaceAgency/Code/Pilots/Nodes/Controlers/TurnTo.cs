@@ -1,13 +1,13 @@
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.Maneuver;
 using KTools;
 // using KTools.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Controller;
-namespace K2D2.Node
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Controller;
+namespace SkySpaceAgency.Node
 {
     class TurnToSettings
     {
@@ -69,7 +69,7 @@ namespace K2D2.Node
 
         public override void Start()
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             // reset time warp
             TimeWarpTools.SetRateIndex(0, false);
         }
@@ -228,7 +228,7 @@ namespace K2D2.Node
 
             // UI_Tools.Console($"sas.sas_response v {Tools.print_vector(sas_response)}");
 
-            if (K2D2Settings.debug_mode.V)
+            if (SkySpaceAgencySettings.debug_mode.V)
             {
                 var telemetry = SASTool.getTelemetry();
                 if (telemetry == null || !telemetry.HasManeuver)

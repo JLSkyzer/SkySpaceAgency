@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using KSP.Modules;
 using KSP.Sim.impl;
 using UnityEngine;
-// L (see K2D2_Plugin.cs) lives in the K2D2 namespace, not a using - it resolves here for free
-// since K2D2.Landing nests under K2D2.
+// L (see SkySpaceAgencyPlugin.cs) lives in the SkySpaceAgency namespace, not a using - it resolves here for free
+// since SkySpaceAgency.Landing nests under SkySpaceAgency.
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Per-part aerodynamic drag/lift estimation, reproducing the game's own real force-application
     // formulas rather than approximating them, so results are directly comparable to the vessel's

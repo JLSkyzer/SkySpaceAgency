@@ -1,4 +1,4 @@
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>What BurnManeuver sets the throttle to for the Δv still to burn.</summary>
     public struct BurnThrottleStep

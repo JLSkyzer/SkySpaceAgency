@@ -1,5 +1,5 @@
 using System;
-using K2D2.Rendezvous;
+using SkySpaceAgency.Rendezvous;
 using KSP.Sim;
 
 // A test double for DockingGuidance. What it models, and what it leaves out:

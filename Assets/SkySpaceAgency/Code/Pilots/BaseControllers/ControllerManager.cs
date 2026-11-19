@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace K2D2.Controller
+namespace SkySpaceAgency.Controller
 {
     public class PilotsManager
     {

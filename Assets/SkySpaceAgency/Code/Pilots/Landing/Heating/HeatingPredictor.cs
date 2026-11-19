@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Landing.Heating
+namespace SkySpaceAgency.Landing.Heating
 {
     // The vessel as the unpowered descent sees it: whole-vessel drag at retrograde, the parts heated.
     public struct DescentVehicle

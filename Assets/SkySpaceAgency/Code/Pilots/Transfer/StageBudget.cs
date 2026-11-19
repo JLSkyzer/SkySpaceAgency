@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // One stage of the vessel, as the game reports it (VesselDeltaV.StageInfo, vacuum).
     public struct StageDv

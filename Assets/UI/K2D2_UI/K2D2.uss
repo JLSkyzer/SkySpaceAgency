@@ -40,20 +40,20 @@ DropdownField.unity-popup-field {
     margin-bottom: 2px;
 }
 
-/* K2UI.StatusLine (run-status messages like "No Maneuver node.", shown via the shared
-   StatusGroup.uxml template - reaches every tab): K2UI.uss's own .k2-status-line rule used to
+/* SsaUI.StatusLine (run-status messages like "No Maneuver node.", shown via the shared
+   StatusGroup.uxml template - reaches every tab): SsaUI.uss's own .k2-status-line rule used to
    point it at NotoSansMonoCJK; it now names JetBrains Mono too, because merely referencing the
    CJK face pulled its ~16 MB source font into the Addressables bundle (fix from LeoMarinDev's
    PR #2 on IanMealworm/K2D2Redux). This override is kept so the font stays pinned here.
-   Same tie-specificity/load-order issue as the progress bar (K2UI.uss loads after K2D2.uss),
+   Same tie-specificity/load-order issue as the progress bar (SsaUI.uss loads after K2D2.uss),
    so !important - this is scoped to just this one class, not a blanket override, so it won't
    touch .console/.oab-button__label's own intentional fonts. */
 .k2-status-line {
     -unity-font-definition: url('project://database/Packages/uitkforksp2.controls/Assets/Theme/Fonts/JetBrainsMono/JetBrainsMono-Regular%20SDF.asset?fileID=11400000&guid=f5454c9c675002c44a5a7234bd40c390&type=2#JetBrainsMono-Regular SDF') !important;
 }
 
-/* K2UI.Console ("Node Infos" / dV / duration readouts, and every other tab's console-style
-   text panel) - K2UI.uss's own .console rule used to name a missing font (Sax Mono,
+/* SsaUI.Console ("Node Infos" / dV / duration readouts, and every other tab's console-style
+   text panel) - SsaUI.uss's own .console rule used to name a missing font (Sax Mono,
    a K2D2-specific asset, not part of the stock theme at all) plus its own color. Same class-
    beats-type override problem as .k2-status-line above, so it never picked up the generic
    Label rule below - fixed the same way. */
@@ -73,11 +73,11 @@ Label {
     color: rgb(192, 199, 213);
 }
 
-/* Restyles the About tab's "debug" K2UI.ToggleButton to match the stock KerbalUI
+/* Restyles the About tab's "debug" SsaUI.ToggleButton to match the stock KerbalUI
    .oab-button-toggle palette (see Packages/uitkforksp2.controls/Assets/Theme/KerbalUI.uss).
-   Kept as K2UI.ToggleButton rather than swapping to a native Toggle + .oab-button-toggle,
-   since AboutUI.cs binds it via K2UI.ToggleButton's own .Bind(SettingsField) extension -
-   this only ports the stock colors/font onto K2UI.ToggleButton's own class structure
+   Kept as SsaUI.ToggleButton rather than swapping to a native Toggle + .oab-button-toggle,
+   since AboutUI.cs binds it via SsaUI.ToggleButton's own .Bind(SettingsField) extension -
+   this only ports the stock colors/font onto SsaUI.ToggleButton's own class structure
    (.toggle-button / .checked / > Label, from ToggleButton.uss). #debug is used instead of
    a shared class so these rules win regardless of stylesheet load order. */
 /* #debug and #run below point at the same JetBrains Mono Regular SDF asset as #reset_all's
@@ -117,13 +117,13 @@ Label {
 }
 
 /* "Reset All Settings" is a stock UitkForKsp2.Controls.OabButton (Button -> .oab-button__inner ->
-   .oab-button__label), not a K2UI.ToggleButton like the others on this page - same bevel look
+   .oab-button__label), not a SsaUI.ToggleButton like the others on this page - same bevel look
    applied directly to the button itself, with its label recolored to match since the stock
    .oab-button__label styling assumes a dark button face, not this light one. */
 /* flex-basis: 0 (instead of the default "auto", which sizes each flex item off its own content
    width before growing) makes Reset All Settings and Debug Mode split buttons_bar's width
    exactly evenly - with flex-basis:auto, OabButton's slightly different intrinsic padding/font
-   metrics vs. K2UI.ToggleButton's meant the two never came out equal despite both already having
+   metrics vs. SsaUI.ToggleButton's meant the two never came out equal despite both already having
    flex-grow:1 in the uxml. */
 #reset_all {
     background-color: rgb(225, 227, 233);
@@ -147,7 +147,7 @@ Label {
    paints an opaque flat-gray fill AND its own separate 7px-rounded corners on this inner wrapper,
    regardless of what's set on the button itself - that's what was actually showing through as the
    button's face, sitting inside the bevel border above rather than being replaced by it, which is
-   why this looked visibly different from Debug Mode (a plain K2UI.ToggleButton with no such
+   why this looked visibly different from Debug Mode (a plain SsaUI.ToggleButton with no such
    nested layer). Made fully transparent in every state so only the outer #reset_all bevel paints. */
 #reset_all > .oab-button__inner,
 #reset_all:hover > .oab-button__inner,
@@ -162,7 +162,7 @@ Label {
 }
 
 /* Node/Lift tabs: the settings Reset button, relocated to the bottom of each tab's own ADVANCED
-   foldout (see K2Page.cs's addResetButton) now that the settings-gear page it used to live on is
+   foldout (see SsaPage.cs's addResetButton) now that the settings-gear page it used to live on is
    on its way out. Same bevel as Debug Mode/Reset All Settings - this one's a plain Unity Button
    (not an OabButton), so unlike #reset_all there's no nested .oab-button__inner/label to also
    neutralize - the color/background/border all land directly on the element itself. */
@@ -392,7 +392,7 @@ Label {
 }
 
 /* Same fix as #button_bars #run above, for the About tab's own Reset All Settings/Debug Mode
-   row (named "buttons_bar", singular, not "button_bars") - Debug Mode is a K2UI.ToggleButton so
+   row (named "buttons_bar", singular, not "button_bars") - Debug Mode is a SsaUI.ToggleButton so
    it inherits .toggle-button's built-in margin, Reset All Settings (an OabButton) doesn't and
    instead gets its spacing from an explicit margin-right in the uxml. Zeroing Debug Mode's here
    leaves the gap between them coming from just that one explicit margin, same box width both
@@ -406,7 +406,7 @@ Label {
 
 /* Tab bar (Node/Lift/Land/Dock/Att.) - a flat "underline" tab style (plain text row, dim/gray
    for unselected, bright/bold + a colored underline for the selected tab, no boxes or fills at
-   all) rather than a boxed/filled pill-tab look. K2Tabs.uss's base rule gives every tab a full
+   all) rather than a boxed/filled pill-tab look. SsaTabs.uss's base rule gives every tab a full
    rounded-box border (top-left/right radius, border on all 4 sides) - this flattens that out to
    just a bottom border, repurposed as the underline indicator. Green matches the same "confirm/
    active" green used for Start and the progress bar elsewhere in this theme.
@@ -419,7 +419,7 @@ Label {
    "#progress", which pairs a class-selector ancestor with an ID on the element actually being
    styled). This tab-bar block was the only override in K2D2.uss using bare class selectors with
    no ID anchor anywhere in the chain, and empirically it's the only one that silently failed to
-   apply. TabPage.setButton() (K2UI/Tabs/TabButton.cs) copies each TabPage's UXML "name" onto its
+   apply. TabPage.setButton() (SsaUI/Tabs/TabButton.cs) copies each TabPage's UXML "name" onto its
    TabButton, so every tab button already has a unique, stable id matching its tab page's name
    (node/lift/landing/dock/attitude/about) - reusing that id, scoped under "#TabsBar" (the id
    TabbedPage.Setup() gives the tab bar itself) to avoid colliding with the identically-named
@@ -443,11 +443,11 @@ Label {
     border-bottom-right-radius: 0 !important;
     margin-bottom: 0 !important;
     margin-left: 0 !important;
-    /* K2Tabs.uss's base rule gives every button flex-grow: 0 (size-to-content, packed left by
+    /* SsaTabs.uss's base rule gives every button flex-grow: 0 (size-to-content, packed left by
        .k2-tabsbar's justify-content: flex-start) - grow: 1 makes all 5 buttons split the bar's
        width evenly instead, so the row reads as one evenly-spaced strip rather than a
        left-anchored cluster. Label centering (-unity-text-align: middle-center) already comes
-       from K2Tabs.uss's own ".k2-tab-button > Label" rule, so text stays centered in each slot. */
+       from SsaTabs.uss's own ".k2-tab-button > Label" rule, so text stays centered in each slot. */
     flex-grow: 1 !important;
 }
 
@@ -484,7 +484,7 @@ Label {
 #TabsBar #node.k2-tab-button--active > Label, #TabsBar #lift.k2-tab-button--active > Label, #TabsBar #landing.k2-tab-button--active > Label, #TabsBar #dock.k2-tab-button--active > Label, #TabsBar #attitude.k2-tab-button--active > Label, #TabsBar #about.k2-tab-button--active > Label {
     color: rgb(230, 233, 238) !important;
     -unity-font-style: bold !important;
-    /* K2Tabs.uss's own ".k2-tab-button--active > Label" rule bumps font-size to 16px (vs. the
+    /* SsaTabs.uss's own ".k2-tab-button--active > Label" rule bumps font-size to 16px (vs. the
        14px every other tab label gets from its ".k2-tab-button > Label" rule) - that's what was
        making the active tab visibly grow when pressed. Selection is already communicated by the
        underline + bold + brighter text, so pin it back to the same 14px as the unselected tabs
@@ -492,7 +492,7 @@ Label {
     font-size: 14px !important;
 }
 
-/* K2ProgressBar (K2UI.K2ProgressBar, used inside the shared StatusGroup.uxml template - so
+/* SsaProgressBar (SsaUI.SsaProgressBar, used inside the shared StatusGroup.uxml template - so
    this reaches every tab, not just Node): dark stock-style panel with a beveled "3D" frame
    (lighter top/left border, darker bottom/right border - same bevel technique used elsewhere
    in this theme to fake a raised look without needing an image asset) and a fill that matches
@@ -500,7 +500,7 @@ Label {
    The fill also gets a tileable diagonal-stripe texture (Assets/Images/progress_stripes.png -
    translucent white stripes over transparency, so the green shows through) via
    background-repeat, the same tiling technique KerbalUI.uss itself uses for its dashed
-   separator line. Same selectors as the base rules in K2UI.uss - using !important since, per
+   separator line. Same selectors as the base rules in SsaUI.uss - using !important since, per
    the Debug Mode diagnosis, load order isn't reliable for tie-specificity selectors like these. */
 .k2-progress-bar #frame {
     background-color: rgb(41, 47, 57) !important;
@@ -518,10 +518,10 @@ Label {
     background-size: 16px 16px !important;
 }
 
-/* K2Tabs.uss's #tab_light was a separate "pilot is running" indicator (unrelated to tab
+/* SsaTabs.uss's #tab_light was a separate "pilot is running" indicator (unrelated to tab
    selection), previously restyled as a small pixelated dot in each tab's top-right corner (see
    git history for that pass) and now removed outright - only one autopilot can actually be
-   running at a time (K2D2_Plugin.ResetControllers() stops whichever pilot was active the moment
+   running at a time (SkySpaceAgencyPlugin.ResetControllers() stops whichever pilot was active the moment
    a different one starts), so it never showed more than one tab lit anyway and wasn't worth the
    extra chrome. Hidden via the same ID-anchored selectors that were needed to style it
    in the first place - a bare ".k2-tab-button #tab_light { display: none; }" won't reliably apply
@@ -540,7 +540,7 @@ Label {
    versions better than guessing at Foldout's internal element structure. */
 /* Node Info (live readout) and Advanced (Turn/Warp/Burn/Experimental settings) are Node tab's
    two top-level dropdowns. Header look (font-size/color/letter-spacing/header-bar background) now
-   comes entirely from K2UI.uss's shared .unity-foldout rules - the "// LABEL" category-header
+   comes entirely from SsaUI.uss's shared .unity-foldout rules - the "// LABEL" category-header
    treatment matching the RCS Thruster reference - so these two no longer need their own
    bold/color override; top-level and nested (Turn/Warp/Burn/Experimental) headers intentionally
    share the same look now, same as the reference's category headers. Just a small top margin

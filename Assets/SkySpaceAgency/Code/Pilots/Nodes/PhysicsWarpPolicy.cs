@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>What the game reports and what the burn allows, read once per frame.</summary>
     public struct WarpInputs

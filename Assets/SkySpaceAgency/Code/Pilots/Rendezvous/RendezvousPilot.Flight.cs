@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
-using K2D2.KSPService;
-using K2D2.Node;
-using K2D2.OrbitPlanning;
-using K2D2.Transfer;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP.Sim.Maneuver;
@@ -11,7 +11,7 @@ using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using UnityEngine;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // The rendezvous flight: one decision per frame (RendezvousFlight.Next), the warp, the burns,
     // the correction, the arrival check and Prepare only's nodes.

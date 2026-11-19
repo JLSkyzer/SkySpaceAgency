@@ -1,4 +1,4 @@
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Player-facing choice of ascent technique, picked from the dropdown in the Lift tab's
     // "Profile" foldout (see Lift.uxml's ascent_profile_drop / LiftSettings.setupUI) and read by

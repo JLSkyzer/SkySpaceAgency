@@ -6,11 +6,11 @@ using UnityEngine;
 using KTools;
 using KSP.Sim.impl;
 using UnityEngine.UIElements;
-using K2UI.Graph;
-using K2UI;
+using SsaUI.Graph;
+using SsaUI;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     public class MultiGraphLine
     {
@@ -109,10 +109,10 @@ namespace K2D2.Lift
         {
             float scale = (float)(lift_settings.target_Ap_km / y_range);
 
-            if (lastbody != K2D2_Plugin.Instance.current_vessel.currentBody() ||
+            if (lastbody != SkySpaceAgencyPlugin.Instance.current_vessel.currentBody() ||
                 last_max_alt != lift_settings.target_Ap_km)
             {
-                UpdateAtmoTexture(K2D2_Plugin.Instance.current_vessel.currentBody(), lift_settings.target_Ap_km);
+                UpdateAtmoTexture(SkySpaceAgencyPlugin.Instance.current_vessel.currentBody(), lift_settings.target_Ap_km);
             }
 
             reset();

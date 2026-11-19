@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     // End of a propulsive landing, below FinalHeight: stand up, lean against the horizontal drift
     // to cancel it, and never cut the thrust only because SAS lags behind.

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
-using K2D2.VabTools;
+using SkySpaceAgency;
+using SkySpaceAgency.VabTools;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using F = VabFixtures;
@@ -74,10 +75,8 @@ public class VabImportTests
         StringAssert.Contains("no assembly", VabImport.Parse("{\"Assemblies\": []}").Error);
     }
 
-    // Files exchanged between the two flavours of the mod (SkySpaceAgency and K2-D2): same format,
-    // another prefix.
-    [TestCase("SkySpaceAgency")]
-    [TestCase("K2D2")]
+    // Files exchanged between the two flavours of the mod: same format, another prefix.
+    [TestCaseSource(typeof(ModIdentity), nameof(ModIdentity.AcceptedVabFormatPrefixes))]
     public void Parse_ModExportOfEitherFlavour(string prefix)
     {
         var export = new JObject
@@ -90,8 +89,7 @@ public class VabImportTests
         Assert.AreEqual(VabImportFormat.ModExport, r.File.Format);
     }
 
-    [TestCase("SkySpaceAgency")]
-    [TestCase("K2D2")]
+    [TestCaseSource(typeof(ModIdentity), nameof(ModIdentity.AcceptedVabFormatPrefixes))]
     public void Parse_PartsDumpOfEitherFlavour_IsRefused(string prefix)
     {
         StringAssert.Contains("parts dump",

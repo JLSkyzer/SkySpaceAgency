@@ -1,18 +1,18 @@
 using System;
-using K2D2.KSPService;
-using K2UI;
+using SkySpaceAgency.KSPService;
+using SsaUI;
 using KSP.Sim;
 // using KTools.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Controller;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.Landing.Braking;
 
 using KTools;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     /// apply the wanted speed in the good direction
     public class TouchDown : ExecuteController
@@ -86,8 +86,8 @@ namespace K2D2.Landing
         // properties above (those follow the CURRENT profile, which one-time UI binding must not).
         public void SetupFullUI(VisualElement root)
         {
-            root.Q<K2Slider>("touch_down_max_angle_vac").Bind(vac.touch_down_max_angle);
-            root.Q<K2Slider>("steering_max_angle_vac").Bind(vac.steering_max_angle);
+            root.Q<SsaSlider>("touch_down_max_angle_vac").Bind(vac.touch_down_max_angle);
+            root.Q<SsaSlider>("steering_max_angle_vac").Bind(vac.steering_max_angle);
         }
 
         // Reduced binding (Atmo panel) - just touch_down_max_angle, the one general-purpose
@@ -95,7 +95,7 @@ namespace K2D2.Landing
         // max_throttle_rate_per_sec have no control on either panel.
         public void SetupBasicUI(VisualElement root)
         {
-            root.Q<K2Slider>("touch_down_max_angle_atmo").Bind(atmo.touch_down_max_angle);
+            root.Q<SsaSlider>("touch_down_max_angle_atmo").Bind(atmo.touch_down_max_angle);
         }
 
         // compute_Throttle() below recomputes wanted_throttle fresh every frame from delta_speed,
@@ -127,7 +127,7 @@ namespace K2D2.Landing
             vac = new TouchDownSettings(vac_file);
             sub_contollers.Add(burn_dV);
             // logger.LogMessage("LandingController !");
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         // Not currently called anywhere - Brake/TouchDown deliberately never call this, since
@@ -438,7 +438,7 @@ namespace K2D2.Landing
             if (final_descent)
                 addRow("Final Descent", $"tilt {final_tilt_deg:n1}°, thrust x{thrust_factor:n2}");
 
-            if (K2D2Settings.debug_mode.V)
+            if (SkySpaceAgencySettings.debug_mode.V)
             {
                 if (gravity_compensation)
                 {
@@ -464,7 +464,7 @@ namespace K2D2.Landing
             if (burn_dV.burned_dV > 0)
                 st.Console($"dV consumed : {burn_dV.burned_dV:n2} m/s");
 
-            if (K2D2Settings.debug_mode.V)
+            if (SkySpaceAgencySettings.debug_mode.V)
             {
                 if (gravity_compensation)
                 {

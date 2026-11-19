@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
-using K2D2.Rendezvous;
+using SkySpaceAgency.Rendezvous;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The result of the assist search (4.6): the direct plan, the cheapest assist, and whether that
     // assist is offered to the player.

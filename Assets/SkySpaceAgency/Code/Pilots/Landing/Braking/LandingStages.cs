@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     // One stage of the vessel as the stage choice needs it, read from the game's
     // VesselDeltaV.StageInfo (DeltaVStageInfo).

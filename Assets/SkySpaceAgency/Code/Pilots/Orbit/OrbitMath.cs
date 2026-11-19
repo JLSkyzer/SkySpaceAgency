@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.OrbitPlanning
+namespace SkySpaceAgency.OrbitPlanning
 {
     // Two-body orbital elements from a state vector (position and velocity relative to the body,
     // in the game's "Zup" frame where z is the body's rotation axis).

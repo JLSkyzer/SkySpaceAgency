@@ -1,15 +1,15 @@
 // using System.Reflection.Emit;
 
-using K2UI.Tabs;
-using K2UI;
+using SsaUI.Tabs;
+using SsaUI;
 using KSP.Sim.Maneuver;
 using KTools;
 using UnityEngine.UIElements;
-using K2D2.UI;
+using SkySpaceAgency.UI;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
-    class NodeExUI : K2Page
+    class NodeExUI : SsaPage
     {
         NodeExPilot pilot;
         public NodeExUI(NodeExPilot pilot)
@@ -19,7 +19,7 @@ namespace K2D2.Node
         }
     
         // Advanced Info is now a plain VisualElement built into label/value table rows from
-        // C# (see AddInfoRow/UpdateNodeInfos below) instead of a K2UI.Console text block.
+        // C# (see AddInfoRow/UpdateNodeInfos below) instead of a SsaUI.Console text block.
         public VisualElement node_infos_el;
 
         public FullStatus status_bar;

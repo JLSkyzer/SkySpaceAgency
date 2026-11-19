@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using K2D2.Rendezvous;
+using SkySpaceAgency.Rendezvous;
 using NUnit.Framework;
 
 // A docking that fails near the target holds position before stopping; the docked message

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using KSP.Sim;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // The translation controller's pure part (Translate.cs is the game glue). Vectors are in one
     // inertial frame (the caller uses the body's celestial frame, Zup), times are UT seconds.

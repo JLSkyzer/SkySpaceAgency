@@ -5,7 +5,7 @@ using KSP.Sim.impl;
 using UnityEngine;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2
+namespace SkySpaceAgency
 {
     /// <summary>
     /// When rails warp may start, and the decision of the watchdog. Pure, tested.
@@ -81,7 +81,7 @@ namespace K2D2
     }
 
     /// <summary>
-    /// Game glue: watches the active vessel's throttle and engine forces every frame (K2D2_Plugin.Update)
+    /// Game glue: watches the active vessel's throttle and engine forces every frame (SkySpaceAgencyPlugin.Update)
     /// and gates every rails warp the mod asks for (TimeWarpTools.SetRateIndex). Also the watchdog
     /// against a burn the game starts under rails warp on its own.
     ///
@@ -106,7 +106,7 @@ namespace K2D2
         {
             try
             {
-                return K2D2_Plugin.Instance?.current_vessel?.GetActiveSimVessel();
+                return SkySpaceAgencyPlugin.Instance?.current_vessel?.GetActiveSimVessel();
             }
             catch (Exception)
             {

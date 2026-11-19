@@ -1,6 +1,6 @@
 using System;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Sim;
 using NUnit.Framework;
 
@@ -145,7 +145,7 @@ public class PrecisionFlightTests
     [Test]
     public void PlanLead_CoversTheLongestAlignmentLeadPlusAMargin()
     {
-        Assert.GreaterOrEqual(PrecisionPhases.PlanLead, K2D2.Node.BurnWarp.MaxLead + 10);
+        Assert.GreaterOrEqual(PrecisionPhases.PlanLead, SkySpaceAgency.Node.BurnWarp.MaxLead + 10);
     }
 
     [Test]

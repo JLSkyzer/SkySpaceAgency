@@ -2,7 +2,7 @@ using System;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The targeting helpers K2-D2 1.4.0's boost-back needs (IanMealworm, LandingTargeting.cs),
     // with their upstream names. Everything here works in ImpactModel's axes (the body frame at the

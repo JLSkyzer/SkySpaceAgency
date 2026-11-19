@@ -3,7 +3,7 @@ using System.Globalization;
 using KSP.Game;
 using KSP.Sim;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Latitude/longitude of the KSC launch pad, read from the game (nothing is hard-coded).
     //
@@ -78,7 +78,7 @@ namespace K2D2.Landing
                 cached_body = home.Name;
                 cached_lat = lat;
                 cached_lon = lon;
-                K2D2_Plugin.logger.LogInfo(string.Format(CultureInfo.InvariantCulture,
+                SkySpaceAgencyPlugin.logger.LogInfo(string.Format(CultureInfo.InvariantCulture,
                     "[Landing] target: KSC launch pad at ({0:0.0000}, {1:0.0000}) on {2} from " +
                     "CelestialBodyComponent.TryGetSurfaceObjectPosition('{3}')", lat, lon, cached_body, spawn));
 
@@ -99,7 +99,7 @@ namespace K2D2.Landing
             if (!failure_logged)
             {
                 failure_logged = true;
-                K2D2_Plugin.logger.LogInfo("[Landing] target: KSC launch pad unavailable, entry omitted: " + reason);
+                SkySpaceAgencyPlugin.logger.LogInfo("[Landing] target: KSC launch pad unavailable, entry omitted: " + reason);
             }
             return false;
         }

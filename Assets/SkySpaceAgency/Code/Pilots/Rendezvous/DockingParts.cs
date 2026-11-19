@@ -8,7 +8,7 @@ using KSP.Sim.impl;
 using KTools;
 using UnityEngine;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // One docking port of a vessel, read on the main thread.
     public class PortRead
@@ -46,9 +46,9 @@ namespace K2D2.Rendezvous
         static DockingParts()
         {
             if (DockingTransformField == null)
-                K2D2_Plugin.logger.LogWarning("[Docking] reflection: Module_DockingNode._dockingTransform not found, port frames cannot be read");
+                SkySpaceAgencyPlugin.logger.LogWarning("[Docking] reflection: Module_DockingNode._dockingTransform not found, port frames cannot be read");
             if (ControlFromHereMethod == null)
-                K2D2_Plugin.logger.LogWarning("[Docking] reflection: Module_DockingNode.OnControlFromHere() not found, control falls back to SetControlOwner");
+                SkySpaceAgencyPlugin.logger.LogWarning("[Docking] reflection: Module_DockingNode.OnControlFromHere() not found, control falls back to SetControlOwner");
         }
 
         // A new docking run: forget what an earlier run recorded and did not restore.
@@ -151,7 +151,7 @@ namespace K2D2.Rendezvous
                 if (line != frameError)
                 {
                     frameError = line;
-                    K2D2_Plugin.logger.LogInfo(line);
+                    SkySpaceAgencyPlugin.logger.LogInfo(line);
                 }
                 return false;
             }
@@ -233,11 +233,11 @@ namespace K2D2.Rendezvous
                     if (Id(ours.GetControlOwner()) == port.Info.PartId)
                         how = "the port's own action";
                     else
-                        K2D2_Plugin.logger.LogInfo("[Docking] the port's control action left the control part unchanged");
+                        SkySpaceAgencyPlugin.logger.LogInfo("[Docking] the port's control action left the control part unchanged");
                 }
                 catch (Exception e)
                 {
-                    K2D2_Plugin.logger.LogInfo($"[Docking] the port's control action failed: {(e.InnerException ?? e).GetType().Name}: {(e.InnerException ?? e).Message}");
+                    SkySpaceAgencyPlugin.logger.LogInfo($"[Docking] the port's control action failed: {(e.InnerException ?? e).GetType().Name}: {(e.InnerException ?? e).Message}");
                 }
             }
             if (how == null)
@@ -246,7 +246,7 @@ namespace K2D2.Rendezvous
                 how = "SetControlOwner (without the port's control transform)";
             }
             bool ok = Id(ours.GetControlOwner()) == port.Info.PartId;
-            K2D2_Plugin.logger.LogInfo($"[Docking] control from {port.Part.PartName} through {how}: " +
+            SkySpaceAgencyPlugin.logger.LogInfo($"[Docking] control from {port.Part.PartName} through {how}: " +
                 (ok ? "done" : "the control part did not change") + $", previous control part {previousControlId ?? "none"}");
             return ok;
         }
@@ -263,10 +263,10 @@ namespace K2D2.Rendezvous
                 if (p != null && Id(p) == id)
                 {
                     vessel.SetControlOwner(p);
-                    K2D2_Plugin.logger.LogInfo($"[Docking] control restored to {p.PartName}");
+                    SkySpaceAgencyPlugin.logger.LogInfo($"[Docking] control restored to {p.PartName}");
                     return;
                 }
-            K2D2_Plugin.logger.LogInfo("[Docking] control not restored: the previous control part is not on this vessel");
+            SkySpaceAgencyPlugin.logger.LogInfo("[Docking] control not restored: the previous control part is not on this vessel");
         }
 
         // ---- RCS ----
@@ -301,11 +301,11 @@ namespace K2D2.Rendezvous
             bool? on = DockingReads.RcsRestore(before);
             if (on == null)
             {
-                K2D2_Plugin.logger.LogInfo($"[Docking] RCS left as it is: it was {before?.ToString() ?? "unknown"} before, which the action group cannot set back");
+                SkySpaceAgencyPlugin.logger.LogInfo($"[Docking] RCS left as it is: it was {before?.ToString() ?? "unknown"} before, which the action group cannot set back");
                 return;
             }
             vessel.SetActionGroup(KSPActionGroup.RCS, on.Value);
-            K2D2_Plugin.logger.LogInfo($"[Docking] RCS restored to {before}");
+            SkySpaceAgencyPlugin.logger.LogInfo($"[Docking] RCS restored to {before}");
         }
 
         // The status of every RCS thruster of the vessel (Data_RCS.ThrustStatus).

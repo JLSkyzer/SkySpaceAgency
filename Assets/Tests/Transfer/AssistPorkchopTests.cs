@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using K2D2.Transfer;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.Landing.Precision;
-using K2D2.Transfer;
+using SkySpaceAgency.Landing.Precision;
+using SkySpaceAgency.Transfer;
 using NUnit.Framework;
 
 public class StageDropTests

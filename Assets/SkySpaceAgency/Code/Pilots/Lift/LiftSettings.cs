@@ -1,9 +1,9 @@
-using K2UI;
+using SsaUI;
 using KTools;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     public class LiftSettings
     {
@@ -174,7 +174,7 @@ namespace K2D2.Lift
             end_adjust_alt.text = $"Final Adjust Alt : {target_Ap_km - end_adjust_error:n2} km";
         }
 
-        K2Toggle auto_circularize_toggle, pause_toggle;
+        SsaToggle auto_circularize_toggle, pause_toggle;
 
         // ASCENT PROFILE (K2-D2 1.4.0). Must match nothing in the uxml: the choices are set here.
         const string GuidedChoice = "Guided";
@@ -213,26 +213,26 @@ namespace K2D2.Lift
         {
             end_ascent_alt =  root.Q<Label>("end_ascent_alt");
             end_adjust_alt = root.Q<Label>("end_adjust_alt");
-            adjust_group = root.Q<K2UI.Group>("adjust_group");
+            adjust_group = root.Q<SsaUI.Group>("adjust_group");
 
-            root.Q<K2Toggle>("heading_correction").Bind(heading_correction);  
+            root.Q<SsaToggle>("heading_correction").Bind(heading_correction);  
 
             // bind to settings and add listener on the same line !
-            root.Q<K2Slider>("end_ascent_pc").Bind(end_ascent_pc);
+            root.Q<SsaSlider>("end_ascent_pc").Bind(end_ascent_pc);
             end_ascent_pc.listen(v => setLabels());
 
-            root.Q<K2Toggle>("coasting_warp").Bind(coasting_warp);
+            root.Q<SsaToggle>("coasting_warp").Bind(coasting_warp);
 
             // adjust is binded to setting and to show adjust group 
-            root.Q<K2Toggle>("adjust").Bind(adjust);
+            root.Q<SsaToggle>("adjust").Bind(adjust);
             adjust.listen(v => adjust_group.Show(v));
 
-            root.Q<K2Slider>("end_adjust_pc").Bind(end_adjust_pc);
+            root.Q<SsaSlider>("end_adjust_pc").Bind(end_adjust_pc);
             end_adjust_pc.listen(v => setLabels());
 
-            auto_circularize_toggle = root.Q<K2Toggle>("auto_circularize").Bind(auto_circularize);
+            auto_circularize_toggle = root.Q<SsaToggle>("auto_circularize").Bind(auto_circularize);
 
-            pause_toggle = root.Q<K2Toggle>("pause_on_final").Bind(pause_on_final);
+            pause_toggle = root.Q<SsaToggle>("pause_on_final").Bind(pause_on_final);
 
             // ASCENT PROFILE (K2-D2 1.4.0): the dropdown, and the settings of each profile.
             ascent_profile_drop = root.Q<DropdownField>("ascent_profile_drop");
@@ -251,30 +251,30 @@ namespace K2D2.Lift
             });
             goal.listeners += g => UpdateProfileSettings();
 
-            gravity_turn_settings.Q<K2Toggle>("gravity_turn_auto").Bind(gravity_turn_auto);
-            gravity_turn_settings.Q<K2Slider>("gravity_turn_kick_speed_mps").Bind(gravity_turn_kick_speed_mps);
-            var pitch_kick_slider = gravity_turn_settings.Q<K2Slider>("gravity_turn_pitch_kick_deg").Bind(gravity_turn_pitch_kick_deg);
-            var hold_time_slider = gravity_turn_settings.Q<K2Slider>("gravity_turn_hold_time_s").Bind(gravity_turn_hold_time_s);
+            gravity_turn_settings.Q<SsaToggle>("gravity_turn_auto").Bind(gravity_turn_auto);
+            gravity_turn_settings.Q<SsaSlider>("gravity_turn_kick_speed_mps").Bind(gravity_turn_kick_speed_mps);
+            var pitch_kick_slider = gravity_turn_settings.Q<SsaSlider>("gravity_turn_pitch_kick_deg").Bind(gravity_turn_pitch_kick_deg);
+            var hold_time_slider = gravity_turn_settings.Q<SsaSlider>("gravity_turn_hold_time_s").Bind(gravity_turn_hold_time_s);
             // Auto picks these two itself, so the sliders only show when it's off.
             gravity_turn_auto.listen(v =>
             {
                 pitch_kick_slider.Show(!v);
                 hold_time_slider.Show(!v);
             });
-            gravity_turn_settings.Q<K2Slider>("gravity_turn_min_throttle").Bind(gravity_turn_min_throttle);
-            gravity_turn_settings.Q<K2Slider>("gravity_turn_max_twr").Bind(gravity_turn_max_twr);
-            gravity_turn_settings.Q<K2Slider>("gravity_turn_max_q_kpa").Bind(gravity_turn_max_q_kpa);
+            gravity_turn_settings.Q<SsaSlider>("gravity_turn_min_throttle").Bind(gravity_turn_min_throttle);
+            gravity_turn_settings.Q<SsaSlider>("gravity_turn_max_twr").Bind(gravity_turn_max_twr);
+            gravity_turn_settings.Q<SsaSlider>("gravity_turn_max_q_kpa").Bind(gravity_turn_max_q_kpa);
 
             // ROLL PROGRAM - .listen(), not .listeners += (see LandingSettings.setupUI's comment on
             // precision_landing for why that distinction matters): this defaults to off, so a plain
             // .listeners += would leave roll_program_settings visible on a fresh window open until
             // the toggle was flipped once.
-            root.Q<K2Toggle>("roll_program").Bind(roll_program);
+            root.Q<SsaToggle>("roll_program").Bind(roll_program);
             var roll_program_settings = root.Q<VisualElement>("roll_program_settings");
             roll_program.listen(v => roll_program_settings.Show(v));
-            roll_program_settings.Q<K2Slider>("roll_program_altitude_km").Bind(roll_program_altitude_km);
-            roll_program_settings.Q<K2Slider>("roll_program_angle_deg").Bind(roll_program_angle_deg);
-            roll_program_settings.Q<K2Slider>("roll_program_rate_deg_s").Bind(roll_program_rate_deg_s);
+            roll_program_settings.Q<SsaSlider>("roll_program_altitude_km").Bind(roll_program_altitude_km);
+            roll_program_settings.Q<SsaSlider>("roll_program_angle_deg").Bind(roll_program_angle_deg);
+            roll_program_settings.Q<SsaSlider>("roll_program_rate_deg_s").Bind(roll_program_rate_deg_s);
         }
     }
 }

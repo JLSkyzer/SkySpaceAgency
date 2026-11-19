@@ -5,7 +5,7 @@ using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // Game glue: the body hierarchy read from the game at one UT, as a fresh BodySystem. Never
     // mutate the nodes of a built system (PatchedPropagator caches its hierarchy per BodySystem):
@@ -42,7 +42,7 @@ namespace K2D2.Transfer
         static void LogOnce(string line)
         {
             if (Logged.Add(line))
-                K2D2_Plugin.logger.LogInfo(line);
+                SkySpaceAgencyPlugin.logger.LogInfo(line);
         }
 
         // The game's bodies; a body's index in a built BodySystem is its index in this list.
@@ -172,13 +172,13 @@ namespace K2D2.Transfer
                 }
 
                 var system = new BodySystem(nodes);
-                K2D2_Plugin.logger.LogInfo($"[Transfer] body system at UT {F(ut)}: {nodes.Count} bodies, {roots} root(s)");
+                SkySpaceAgencyPlugin.logger.LogInfo($"[Transfer] body system at UT {F(ut)}: {nodes.Count} bodies, {roots} root(s)");
                 return system;
             }
             catch (Exception e)
             {
                 error = $"Cannot read the game's bodies: {e.GetType().Name}: {e.Message}";
-                K2D2_Plugin.logger.LogInfo("[Transfer] " + error);
+                SkySpaceAgencyPlugin.logger.LogInfo("[Transfer] " + error);
                 return null;
             }
         }
@@ -215,7 +215,7 @@ namespace K2D2.Transfer
             {
                 double assumed = UnknownTerrainShare * b.radius;
                 source += $"; nothing above the radius, so the terrain height is unknown: {F(assumed)} m assumed ({UnknownTerrainShare * 100:F0} % of the radius)";
-                K2D2_Plugin.logger.LogWarning($"[Transfer] {key}: the terrain height is unknown (MaxTerrainHeight {F(h)}, samples found nothing above the radius); " +
+                SkySpaceAgencyPlugin.logger.LogWarning($"[Transfer] {key}: the terrain height is unknown (MaxTerrainHeight {F(h)}, samples found nothing above the radius); " +
                     $"the low orbit assumes {F(assumed)} m. Check the capture orbit by hand.");
                 sampled = assumed;
             }

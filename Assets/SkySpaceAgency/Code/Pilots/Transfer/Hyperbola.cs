@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // Hyperbolic two-body relations for leaving and entering an SOI (patched conics): the excess
     // velocity v∞ is the asymptote of the hyperbola inside the SOI. Pure code: no game API.

@@ -1,26 +1,26 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/K2D2_UI/K2D2.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#K2D2" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2UI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#K2UI" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Toggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#K2Toggle" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaUI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#SsaUI" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaToggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#SsaToggle" />
     <!-- Rendezvous and docking around the same body (spec 4.3). It replaces the old Dock tab and
          keeps its page code "dock" (the window's template slot and the tab bar's styles).
          RendezvousUI.cs fills it; RendezvousPilot plans, flies and docks. -->
-    <K2UI.Tabs.TabPage name="dock" label="Rendezvous" style="display: flex;">
+    <SsaUI.Tabs.TabPage name="dock" label="Rendezvous" style="display: flex;">
         <ui:VisualElement name="page" style="flex-grow: 1;">
             <ui:Label text="Rendezvous and docking" name="Title" class="unselectedContent" style="width: 100%; -unity-text-align: upper-center;" />
-            <K2UI.Group text="Target">
+            <SsaUI.Group text="Target">
                 <!-- Every other vessel, grouped by body (ours first); the game's target pre-selected. -->
                 <ui:DropdownField label="Vessel" index="-1" choices="" name="target_vessel" tooltip="Every other vessel, grouped by body. The game's target is selected" />
                 <ui:Label name="relative" text="" style="white-space: normal;" />
-            </K2UI.Group>
-            <K2UI.Group text="Docking ports">
+            </SsaUI.Group>
+            <SsaUI.Group text="Docking ports">
                 <ui:DropdownField label="Ours" index="-1" choices="Auto" name="our_port" tooltip="Auto: the free compatible pair that needs the least rotation" />
                 <ui:DropdownField label="Target's" index="-1" choices="Auto" name="target_port" tooltip="Auto: the free compatible pair that needs the least rotation" />
                 <ui:Label name="port_hint" text="" style="white-space: normal; font-size: 12px; color: rgb(180, 180, 180);" />
-            </K2UI.Group>
-            <K2UI.Group text="Options">
-                <K2UI.K2Toggle label="Prepare only" name="prepare_only" tooltip="Make one game node at a time for the rendezvous burns; no warp. The docking is always flown" />
-            </K2UI.Group>
+            </SsaUI.Group>
+            <SsaUI.Group text="Options">
+                <SsaUI.SsaToggle label="Prepare only" name="prepare_only" tooltip="Make one game node at a time for the rendezvous burns; no warp. The docking is always flown" />
+            </SsaUI.Group>
             <ui:VisualElement style="margin-top: 8px;">
                 <ui:Button name="rendezvous_dock" text="Rendezvous + dock" class="big" style="height: 30px;" />
                 <ui:VisualElement style="flex-direction: row;">
@@ -38,27 +38,27 @@
             <ui:Label name="resume_offer" text="" style="white-space: normal; color: rgb(224, 200, 132); display: none;" />
             <ui:VisualElement name="status_progress_group" style="margin-top: 8px; margin-bottom: 8px;">
                 <ui:VisualElement name="k2_status_row" class="k2-status-row">
-                    <K2UI.K2Avatar name="k2_avatar" />
+                    <SsaUI.SsaAvatar name="k2_avatar" />
                     <ui:VisualElement name="k2_status_speech" class="k2-status-speech">
-                        <K2UI.StatusLine tabindex="-1" text="Status Pilot" name="status_pilot" />
-                        <K2UI.Console tabindex="-1" name="pilot_console" text="Console Pilot" />
+                        <SsaUI.StatusLine tabindex="-1" text="Status Pilot" name="status_pilot" />
+                        <SsaUI.Console tabindex="-1" name="pilot_console" text="Console Pilot" />
                     </ui:VisualElement>
                 </ui:VisualElement>
-                <K2UI.K2ProgressBar name="progress" set-label-to-value="false" value="0" max="100" label=" " postfix=" %" style="height: 25px;" />
+                <SsaUI.SsaProgressBar name="progress" set-label-to-value="false" value="0" max="100" label=" " postfix=" %" style="height: 25px;" />
             </ui:VisualElement>
             <ui:VisualElement name="dock_group" style="display: none;">
-                <K2UI.Group text="Docking">
+                <SsaUI.Group text="Docking">
                     <ui:Label name="dock_ports" text="" style="white-space: normal;" />
                     <ui:Label name="translate_mode" text="" style="white-space: normal;" />
                     <ui:Label name="dock_phase" text="" style="white-space: normal;" />
                     <ui:Label name="dock_aborts" text="" style="white-space: normal; color: rgb(224, 200, 132);" />
-                </K2UI.Group>
+                </SsaUI.Group>
             </ui:VisualElement>
             <ui:VisualElement name="plan_group" style="display: none;">
-                <K2UI.Group text="Plan">
+                <SsaUI.Group text="Plan">
                     <ui:VisualElement name="steps" />
                     <ui:Label name="totals" text="" style="white-space: normal; margin-top: 4px;" />
-                </K2UI.Group>
+                </SsaUI.Group>
             </ui:VisualElement>
             <ui:Foldout text="STAGES" value="false" name="stages_foldout">
                 <ui:VisualElement name="stages" />
@@ -67,5 +67,5 @@
         <ui:VisualElement name="settings" style="display: none;">
             <ui:Label text="No Rendezvous Settings..." name="Title" class="unselectedContent" />
         </ui:VisualElement>
-    </K2UI.Tabs.TabPage>
+    </SsaUI.Tabs.TabPage>
 </ui:UXML>

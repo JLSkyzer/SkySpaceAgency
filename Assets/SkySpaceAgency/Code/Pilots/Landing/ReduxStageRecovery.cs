@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // What Redux's stage recovery is doing (Redux.StageRecovery.StageRecoveryManager in
     // Ksp2Redux, all internal - so read through reflection, like ReduxWaypoints).

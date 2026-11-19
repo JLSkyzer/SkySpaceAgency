@@ -5,7 +5,7 @@ using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // IanMealworm's boost-back (K2-D2 1.4.0), carried for the K2-D2 flavour (plan 2026-11-19 §4.4,
     // user decision 2): compiled and tested here, flown only when ModIdentity.IsK2D2. In this mod

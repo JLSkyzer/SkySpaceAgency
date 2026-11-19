@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.Rendezvous;
+using SkySpaceAgency.Rendezvous;
 using KSP.Modules;
 using KSP.OAB;
 using KSP.Sim;

@@ -1,12 +1,12 @@
-using K2D2.KSPService;
-using K2D2.Landing;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using UnityEngine;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>
     /// Closed-loop circularization at the next apoapsis or periapsis, without any maneuver node:

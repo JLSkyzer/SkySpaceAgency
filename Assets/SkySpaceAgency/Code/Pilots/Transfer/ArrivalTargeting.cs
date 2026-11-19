@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // Solves a trajectory correction: the impulse, now, that puts the arrival periapsis at the target
     // at the wanted radius (and, when asked, its orbit at the wanted inclination). The aim is the

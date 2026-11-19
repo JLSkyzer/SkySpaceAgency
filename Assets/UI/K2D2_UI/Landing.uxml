@@ -1,10 +1,10 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/K2D2_UI/K2D2.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#K2D2" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2UI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#K2UI" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/ToggleButton.uss?fileID=7433441132597879392&amp;guid=1b6a73cd9e0a617469e5d501d696c7be&amp;type=3#ToggleButton" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Toggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#K2Toggle" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Slider.uss?fileID=7433441132597879392&amp;guid=3d8e4d9f1386ac94c97e6381ad01c59b&amp;type=3#K2Slider" />
-    <K2UI.Tabs.TabPage name="landing" label="Land" style="display: flex;">
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaUI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#SsaUI" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/ToggleButton.uss?fileID=7433441132597879392&amp;guid=1b6a73cd9e0a617469e5d501d696c7be&amp;type=3#ToggleButton" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaToggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#SsaToggle" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaSlider.uss?fileID=7433441132597879392&amp;guid=3d8e4d9f1386ac94c97e6381ad01c59b&amp;type=3#SsaSlider" />
+    <SsaUI.Tabs.TabPage name="landing" label="Land" style="display: flex;">
         <ui:VisualElement name="page" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); display: flex;">
             <ui:Label tabindex="-1" text="Landing Autopilot" display-tooltip-when-elided="true" name="Title" class="unselectedContent" style="display: flex; width: 100%; -unity-text-align: upper-center;" />
 
@@ -33,14 +33,14 @@
             <ui:VisualElement name="landing_mode_group_atmo" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); margin-top: 8px; display: none;">
                 <!-- Landing mode (LandingSettings.mode, atmo profile only): Propulsive brakes on the
                      engines, Parachute lands without them (ParachuteDescent.cs). -->
-                <K2UI.InlineEnum name="land_mode_atmo" labels="Propulsive;Parachute" />
-                <K2UI.K2Toggle label="Deploy legs early" name="deploy_legs_early_atmo" tooltip="Propulsive landing: deploy the legs when braking starts instead of at Touch Down" />
+                <SsaUI.InlineEnum name="land_mode_atmo" labels="Propulsive;Parachute" />
+                <SsaUI.SsaToggle label="Deploy legs early" name="deploy_legs_early_atmo" tooltip="Propulsive landing: deploy the legs when braking starts instead of at Touch Down" />
                 <!-- Landing with a chosen stage (LandingUI.UpdateStageChoices, LandingPilotStages.cs): the
                      lower stages brake first and are dropped when dry or at the drop height. -->
                 <ui:DropdownField label="Land with stage" index="-1" choices="" name="land_stage_atmo" tooltip="Brake with the lower stages first, drop them when they are empty or at the drop height, and land on the chosen stage. The current stage lands as before." />
                 <!-- Precision landing toggle: enabled in Parachute mode only (LandingSettings.setupBasicUI);
                      in Propulsive mode it is disabled and kept off, with the note below. -->
-                <K2UI.K2Toggle label="Precision Landing" name="precision_landing_atmo" tooltip="Parachute mode: deorbit with the engines, jettison the service module and land under the parachutes near the target" />
+                <SsaUI.SsaToggle label="Precision Landing" name="precision_landing_atmo" tooltip="Parachute mode: deorbit with the engines, jettison the service module and land under the parachutes near the target" />
                 <!-- Boost-back (K2-D2 flavour only, ModIdentity.IsK2D2; never shown in this mod): why a
                      boost-back cannot start (Redux's prediction settings, suborbital only). -->
                 <ui:Label tabindex="-1" text="" display-tooltip-when-elided="true" name="precision_landing_gate_atmo" style="display: none; color: rgb(224, 200, 132); font-size: 12px; white-space: normal; margin-top: 2px; margin-bottom: 4px;" />
@@ -71,7 +71,7 @@
                  ReduxWaypoints.cs), the map picker or manual lat/lon. Brake then flies the
                  precision sequence toward it (LandingPilotPrecision.cs). -->
             <ui:VisualElement name="landing_mode_group_vac" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); margin-top: 8px;">
-                <K2UI.K2Toggle label="Precision Landing" name="precision_landing_vac" tooltip="Steer toward a chosen landing site instead of just braking straight down wherever the current course naturally lands (vacuum bodies only)" />
+                <SsaUI.SsaToggle label="Precision Landing" name="precision_landing_vac" tooltip="Steer toward a chosen landing site instead of just braking straight down wherever the current course naturally lands (vacuum bodies only)" />
                 <!-- Orbit gate (see LandingUI.UpdateOrbitGate) - Precision Landing needs a periapsis
                      within PrecisionStart.MaxPeriapsisAltitude (100 km), the same limit the start
                      check refuses above. Hidden by default (style="display: none") - shown/updated
@@ -88,7 +88,7 @@
                     <ui:FloatField label="Target Latitude" value="0" name="target_latitude_vac" />
                     <ui:FloatField label="Target Longitude" value="0" name="target_longitude_vac" />
                 </ui:VisualElement>
-                <K2UI.K2Toggle label="Deploy legs early" name="deploy_legs_early_vac" tooltip="Deploy the landing legs when braking starts instead of at Touch Down" />
+                <SsaUI.SsaToggle label="Deploy legs early" name="deploy_legs_early_vac" tooltip="Deploy the landing legs when braking starts instead of at Touch Down" />
                 <!-- Landing with a chosen stage (LandingUI.UpdateStageChoices, LandingPilotStages.cs): the
                      lower stages brake first and are dropped when dry or at the drop height. -->
                 <ui:DropdownField label="Land with stage" index="-1" choices="" name="land_stage_vac" tooltip="Brake with the lower stages first, drop them when they are empty or at the drop height, and land on the chosen stage. The current stage lands as before." />
@@ -100,7 +100,7 @@
                  Down sizing to its own text. margin-top/bottom on the row gives both buttons some
                  breathing room from the table above and K2 below, matching Lift's Start button. -->
             <ui:VisualElement name="button_bars" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); flex-direction: row; margin-top: 10px; margin-bottom: 10px;">
-                <K2UI.ToggleButton name="run" label="Brake" class="big" style="flex-grow: 1;" />
+                <SsaUI.ToggleButton name="run" label="Brake" class="big" style="flex-grow: 1;" />
                 <ui:Button text="Touch Down" display-tooltip-when-elided="true" name="touch_down" style="flex-grow: 1; margin-left: 3px; margin-right: 0; margin-top: 0; margin-bottom: 0;" />
             </ui:VisualElement>
 
@@ -110,13 +110,13 @@
                  pair. -->
             <ui:VisualElement name="status_progress_group" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); margin-top: 10px; margin-bottom: 12px;">
                 <ui:VisualElement name="k2_status_row" class="k2-status-row">
-                    <K2UI.K2Avatar name="k2_avatar" />
+                    <SsaUI.SsaAvatar name="k2_avatar" />
                     <ui:VisualElement name="k2_status_speech" class="k2-status-speech">
-                        <K2UI.StatusLine tabindex="-1" text="Status Pilot" name="status_pilot" />
-                        <K2UI.Console tabindex="-1" name="pilot_console" text="Console Pilot" />
+                        <SsaUI.StatusLine tabindex="-1" text="Status Pilot" name="status_pilot" />
+                        <SsaUI.Console tabindex="-1" name="pilot_console" text="Console Pilot" />
                     </ui:VisualElement>
                 </ui:VisualElement>
-                <K2UI.K2ProgressBar name="progress" set-label-to-value="false" value="70.27" max="100" label=" " postfix=" %" style="height: 25px;" />
+                <SsaUI.SsaProgressBar name="progress" set-label-to-value="false" value="70.27" max="100" label=" " postfix=" %" style="height: 25px;" />
             </ui:VisualElement>
 
             <!-- Same treatment as Node/Lift's own INFO dropdowns (LIFT INFO, see Lift.uxml): the
@@ -138,13 +138,13 @@
                  "// SECTION" header bars, replacing the old ExFoldoutGroup-of-3-foldouts (which
                  kept Warp/Brake/Touch Down each independently collapsible, accordion-style, inside
                  the separate hidden "settings" page). "settings" below is kept only because
-                 K2Page.Init()'s Q<VisualElement>("settings") lookup expects to find it, but it no
+                 SsaPage.Init()'s Q<VisualElement>("settings") lookup expects to find it, but it no
                  longer carries any real controls - the Reset button now lives at the bottom of
                  this ADVANCED foldout instead (see LandingUI.cs's addResetButton call). -->
             <!-- Atmo/Vacuum profile split (see LandingSettings.cs's class comment): two full
                  sibling panels below, only one shown at a time (LandingUI.UpdateProfilePanels,
                  based on LandingProfile.IsAtmospheric) - never rebound after onInit(), since
-                 K2Page.onInit() only ever runs once per game session and a bound K2Slider/K2Toggle
+                 SsaPage.onInit() only ever runs once per game session and a bound SsaSlider/SsaToggle
                  stays wired to whichever Setting object it was given at that moment (see
                  LandingSettings.cs's own comment for why this ruled out one shared panel with a
                  dynamically-swapped settings object). -->
@@ -157,34 +157,34 @@
                          (from-orbit entry, not ported). -->
                     <ui:VisualElement name="PrecisionLanding_atmo" style="display: none;">
                         <ui:Label text="// BOOST-BACK" class="k2-section-header" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="10" max="30" name="entry_angle_of_attack_atmo" format="N0" label="Entry Angle of Attack (°)" tooltip="How far the vessel is held off retrograde during reentry to make lift for steering. More gives more steering, but exposes more of the vessel to reentry heat." />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="10" max="60" name="entry_flight_path_angle_atmo" format="N0" label="Entry Steepness (°)" style="display: none;" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="10" max="30" name="entry_angle_of_attack_atmo" format="N0" label="Entry Angle of Attack (°)" tooltip="How far the vessel is held off retrograde during reentry to make lift for steering. More gives more steering, but exposes more of the vessel to reentry heat." />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="10" max="60" name="entry_flight_path_angle_atmo" format="N0" label="Entry Steepness (°)" style="display: none;" />
                         <ui:Label text="Boost-back Flip" tooltip="How a boost-back landing turns the stage round before its burn. Powered: the engines light at once and their gimbals help it turn. Unpowered: turn first, then burn." />
-                        <K2UI.InlineEnum name="boost_back_flip_atmo" labels="Powered;Unpowered" />
+                        <SsaUI.InlineEnum name="boost_back_flip_atmo" labels="Powered;Unpowered" />
                     </ui:VisualElement>
                     <ui:VisualElement name="Warp_atmo">
                         <ui:Label text="// WARP" class="k2-section-header" />
-                        <K2UI.K2Toggle label="Auto Warp" name="auto_warp_atmo" tooltip="Warp time before burn" />
+                        <SsaUI.SsaToggle label="Auto Warp" name="auto_warp_atmo" tooltip="Warp time before burn" />
                         <ui:VisualElement name="warp_settings_atmo" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
                             <ui:IntegerField label="Rot. Warp Duration" value="42" name="rotation_warp_duration_atmo" tooltip="During Rotation Warp, Attitude is checked" />
-                            <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="30" max="90" name="max_rotation_atmo" label="Safe Warp Rotation °" tooltip="Max angle (stop warp when reached)" />
+                            <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="30" max="90" name="max_rotation_atmo" label="Safe Warp Rotation °" tooltip="Max angle (stop warp when reached)" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement name="Brake_atmo">
                         <ui:Label text="// BRAKE" class="k2-section-header" />
-                        <K2UI.K2Slider name="burn_before_atmo" label="Burn Before (s)" max="10" print-value="true" label-on-top="true" value="0" min="0" />
+                        <SsaUI.SsaSlider name="burn_before_atmo" label="Burn Before (s)" max="10" print-value="true" label-on-top="true" value="0" min="0" />
                         <ui:TextField label="Drop lower stage at the latest at (km)" name="drop_stage_at_km_atmo" class="stacked-field" is-delayed="true" tooltip="Landing with a chosen stage: drop the lower stage at this height above the ground at the latest. Empty = automatic. A value raises the drop height, never below the safe one." />
                     </ui:VisualElement>
                     <ui:VisualElement name="TouchDown_atmo">
                         <ui:Label text="// TOUCH DOWN" class="k2-section-header" />
-                        <K2UI.K2Slider label-on-top="true" print-value="false" min="0.001" value="0.08" max="0.1" name="start_touchdown_altitude_atmo" label="Start TouchDown Altitude" tooltip="Altitude for starting Touch-Down Phase" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="5" value="30" max="45" name="touch_down_max_angle_atmo" label="Max Angle" tooltip="Max Angle for Final touch Down" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0.5" value="0.5" max="3" name="touch_down_ratio_atmo" label="Altitude/speed ratio" tooltip="Speed is based on altitude" min-max-label="Safe-Danger" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0.1" value="0.2" max="10" name="touch_down_speed_atmo" label="Touch-Down speed (m/s)" tooltip="Speed is based on altitude" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="false" min="0.001" value="0.08" max="0.1" name="start_touchdown_altitude_atmo" label="Start TouchDown Altitude" tooltip="Altitude for starting Touch-Down Phase" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="5" value="30" max="45" name="touch_down_max_angle_atmo" label="Max Angle" tooltip="Max Angle for Final touch Down" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0.5" value="0.5" max="3" name="touch_down_ratio_atmo" label="Altitude/speed ratio" tooltip="Speed is based on altitude" min-max-label="Safe-Danger" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0.1" value="0.2" max="10" name="touch_down_speed_atmo" label="Touch-Down speed (m/s)" tooltip="Speed is based on altitude" />
                     </ui:VisualElement>
                     <ui:VisualElement name="Reentry_atmo">
                         <ui:Label text="// PRECISION RETURN" class="k2-section-header" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0.3" value="1" max="3" name="reentry_drag_scale_atmo" label="Reentry drag scale" tooltip="Multiplies the capsule's drag in the reentry prediction. 1 = the game's drag data. After a precision return, the Land tab suggests a value from where the capsule really landed." />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0.3" value="1" max="3" name="reentry_drag_scale_atmo" label="Reentry drag scale" tooltip="Multiplies the capsule's drag in the reentry prediction. 1 = the game's drag data. After a precision return, the Land tab suggests a value from where the capsule really landed." />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
@@ -198,27 +198,27 @@
                          it can be tuned live in-game. -->
                     <ui:VisualElement name="PrecisionLanding_vac">
                         <ui:Label text="// PRECISION LANDING" class="k2-section-header" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="40" max="80" name="steering_max_angle_vac" label="Max Steering Angle °" tooltip="Largest tilt off vertical the terminal guidance may use below the Touch Down altitude to reach the target. It also sizes the lateral Δv reserve of the precision plan; 0 refuses precision landing." />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="40" max="80" name="steering_max_angle_vac" label="Max Steering Angle °" tooltip="Largest tilt off vertical the terminal guidance may use below the Touch Down altitude to reach the target. It also sizes the lateral Δv reserve of the precision plan; 0 refuses precision landing." />
                     </ui:VisualElement>
                     <ui:VisualElement name="Warp_vac">
                         <ui:Label text="// WARP" class="k2-section-header" />
-                        <K2UI.K2Toggle label="Auto Warp" name="auto_warp_vac" tooltip="Warp time before burn" />
+                        <SsaUI.SsaToggle label="Auto Warp" name="auto_warp_vac" tooltip="Warp time before burn" />
                         <ui:VisualElement name="warp_settings_vac" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
                             <ui:IntegerField label="Rot. Warp Duration" value="42" name="rotation_warp_duration_vac" tooltip="During Rotation Warp, Attitude is checked" />
-                            <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="30" max="90" name="max_rotation_vac" label="Safe Warp Rotation °" tooltip="Max angle (stop warp when reached)" />
+                            <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="30" max="90" name="max_rotation_vac" label="Safe Warp Rotation °" tooltip="Max angle (stop warp when reached)" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement name="Brake_vac">
                         <ui:Label text="// BRAKE" class="k2-section-header" />
-                        <K2UI.K2Slider name="burn_before_vac" label="Burn Before (s)" max="10" print-value="true" label-on-top="true" value="0" min="0" />
+                        <SsaUI.SsaSlider name="burn_before_vac" label="Burn Before (s)" max="10" print-value="true" label-on-top="true" value="0" min="0" />
                         <ui:TextField label="Drop lower stage at the latest at (km)" name="drop_stage_at_km_vac" class="stacked-field" is-delayed="true" tooltip="Landing with a chosen stage: drop the lower stage at this height above the ground at the latest. Empty = automatic. A value raises the drop height, never below the safe one." />
                     </ui:VisualElement>
                     <ui:VisualElement name="TouchDown_vac">
                         <ui:Label text="// TOUCH DOWN" class="k2-section-header" />
-                        <K2UI.K2Slider label-on-top="true" print-value="false" min="0.001" value="0.08" max="0.1" name="start_touchdown_altitude_vac" label="Start TouchDown Altitude" tooltip="Altitude for starting Touch-Down Phase" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="5" value="30" max="45" name="touch_down_max_angle_vac" label="Max Angle" tooltip="Max Angle for Final touch Down" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0.5" value="0.5" max="3" name="touch_down_ratio_vac" label="Altitude/speed ratio" tooltip="Speed is based on altitude" min-max-label="Safe-Danger" />
-                        <K2UI.K2Slider label-on-top="true" print-value="true" min="0.1" value="0.2" max="10" name="touch_down_speed_vac" label="Touch-Down speed (m/s)" tooltip="Speed is based on altitude" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="false" min="0.001" value="0.08" max="0.1" name="start_touchdown_altitude_vac" label="Start TouchDown Altitude" tooltip="Altitude for starting Touch-Down Phase" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="5" value="30" max="45" name="touch_down_max_angle_vac" label="Max Angle" tooltip="Max Angle for Final touch Down" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0.5" value="0.5" max="3" name="touch_down_ratio_vac" label="Altitude/speed ratio" tooltip="Speed is based on altitude" min-max-label="Safe-Danger" />
+                        <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0.1" value="0.2" max="10" name="touch_down_speed_vac" label="Touch-Down speed (m/s)" tooltip="Speed is based on altitude" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:Foldout>
@@ -226,5 +226,5 @@
         <ui:VisualElement name="settings" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); display: none;">
             <ui:Label tabindex="-1" text="Landing Settings" display-tooltip-when-elided="true" name="Title" class="unselectedContent" style="display: flex;" />
         </ui:VisualElement>
-    </K2UI.Tabs.TabPage>
+    </SsaUI.Tabs.TabPage>
 </ui:UXML>

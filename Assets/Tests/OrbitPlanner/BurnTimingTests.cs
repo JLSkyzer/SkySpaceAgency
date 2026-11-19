@@ -1,5 +1,5 @@
 using System;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using NUnit.Framework;
 
 public class BurnTimingTests

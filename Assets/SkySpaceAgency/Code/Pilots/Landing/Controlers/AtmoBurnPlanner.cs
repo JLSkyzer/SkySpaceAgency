@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Plans the landing burn for atmospheric precision landing: when to light the engines so that
     // the braking (AtmoLandingBurn) ends a little above the ground, and how much shorter that burn makes

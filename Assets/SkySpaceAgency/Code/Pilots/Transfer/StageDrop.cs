@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Precision;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // One part of the vessel's tree, as StageDrop needs it (read like JettisonPart, by
     // ReentryContext.ReadParts).

@@ -1,5 +1,5 @@
 using System;
-using K2D2.Rendezvous;
+using SkySpaceAgency.Rendezvous;
 using KSP.Sim;
 using NUnit.Framework;
 

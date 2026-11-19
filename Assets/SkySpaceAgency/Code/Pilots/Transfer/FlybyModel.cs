@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // A flyby in the patched-conic picture (4.6): the excess arrives as vInf (in) and must leave as
     // vInf (out), both relative to the flyby body. An unpowered flyby turns the excess without

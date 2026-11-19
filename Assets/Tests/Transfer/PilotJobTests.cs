@@ -1,5 +1,5 @@
 using System.Threading;
-using K2D2.Transfer;
+using SkySpaceAgency.Transfer;
 using NUnit.Framework;
 
 // The pilots' Fly() waits only while a job runs (job.Running). The job object itself is never null

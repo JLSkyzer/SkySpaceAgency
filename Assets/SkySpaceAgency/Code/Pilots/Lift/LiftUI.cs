@@ -1,16 +1,16 @@
 using System;
 using System.Collections.Generic;
-using K2UI.Tabs;
-using K2UI;
+using SsaUI.Tabs;
+using SsaUI;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Rendezvous;
-using K2D2.Transfer;
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Rendezvous;
+using SkySpaceAgency.Transfer;
 using KTools;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
-    class LiftUI : K2Page
+    class LiftUI : SsaPage
     {
         LiftPilot pilot;
         public LiftUI(LiftPilot pilot)
@@ -21,7 +21,7 @@ namespace K2D2.Lift
 
         public FullStatus status_bar;
 
-        K2Slider end_rotate_ratio, mid_rotate_ratio;
+        SsaSlider end_rotate_ratio, mid_rotate_ratio;
 
         Label heading_label;
 
@@ -35,7 +35,7 @@ namespace K2D2.Lift
         // (4.4): the same group, the target dropdown listing the vessels around our body, plus the
         // "Dock after the rendezvous" toggle (no other element: UI rule, no new old-style UI).
         static readonly string[] GoalLabels = { "Orbit", "Prepare transfer", "Rendezvous" };
-        K2Toggle dock_toggle;
+        SsaToggle dock_toggle;
         List<RendezvousReadout.Choice> vessel_choices = new List<RendezvousReadout.Choice>();
         float next_vessel_try;
         string last_game_target;
@@ -53,8 +53,8 @@ namespace K2D2.Lift
 
             status_bar = new FullStatus(panel);
             panel.Q<IntegerField>("start_altitude_km").Bind(settings.start_altitude_km);
-            mid_rotate_ratio = panel.Q<K2Slider>("mid_rotate_ratio").Bind(settings.mid_rotate_ratio);
-            end_rotate_ratio = panel.Q<K2Slider>("end_rotate_ratio").Bind(settings.end_rotate_ratio);
+            mid_rotate_ratio = panel.Q<SsaSlider>("mid_rotate_ratio").Bind(settings.mid_rotate_ratio);
+            end_rotate_ratio = panel.Q<SsaSlider>("end_rotate_ratio").Bind(settings.end_rotate_ratio);
             panel.Q<IntegerField>("destination_Ap_km").Bind(settings.destination_Ap_km);
 
             lift_infos_el = panel.Q<VisualElement>("lift_infos");
@@ -74,7 +74,7 @@ namespace K2D2.Lift
             };
 
             heading_label = panel.Q<Label>("heading_label");
-            var heading = panel.Q<K2Compass>("heading").Bind(settings.heading);
+            var heading = panel.Q<SsaCompass>("heading").Bind(settings.heading);
             heading_el = heading;
             heading_row = panel.Q<VisualElement>("heading_row");
 
@@ -103,7 +103,7 @@ namespace K2D2.Lift
                 if (i >= 0)
                     settings.transfer_target.V = entries[i].Name;
             });
-            dock_toggle = panel.Q<K2Toggle>("rendezvous_dock").Bind(settings.rendezvous_dock);
+            dock_toggle = panel.Q<SsaToggle>("rendezvous_dock").Bind(settings.rendezvous_dock);
             transfer_group = panel.Q<VisualElement>("transfer_goal_group");
             transfer_infos_el = panel.Q<VisualElement>("transfer_infos");
             transfer_hint = panel.Q<Label>("transfer_hint");
@@ -111,7 +111,7 @@ namespace K2D2.Lift
             var graph = panel.Q<VisualElement>("graph");
             pilot.ascent_path.InitUI(graph);
 
-            var max_throttle = panel.Q<K2Slider>("max_throttle").Bind(settings.max_throttle);
+            var max_throttle = panel.Q<SsaSlider>("max_throttle").Bind(settings.max_throttle);
 
             var run_button = panel.Q<ToggleButton>("run");
             pilot.is_running_event += is_running => run_button.Value = is_running;
@@ -171,7 +171,7 @@ namespace K2D2.Lift
                 }
                 catch (Exception e)
                 {
-                    K2D2_Plugin.logger.LogInfo($"[Lift] tab: no vessel list yet ({e.GetType().Name}: {e.Message})");
+                    SkySpaceAgencyPlugin.logger.LogInfo($"[Lift] tab: no vessel list yet ({e.GetType().Name}: {e.Message})");
                 }
             }
             int i = RendezvousReadout.FindId(vessel_choices, settings.rendezvous_target.V);
@@ -209,7 +209,7 @@ namespace K2D2.Lift
                 {
                     BodySystem s = GameBodySystem.Build(GeneralTools.Current_UT, out string error);
                     if (s == null)
-                        K2D2_Plugin.logger.LogInfo($"[Lift] tab: no body list yet ({error})");
+                        SkySpaceAgencyPlugin.logger.LogInfo($"[Lift] tab: no body list yet ({error})");
                     else
                     {
                         list_system = s;
@@ -219,7 +219,7 @@ namespace K2D2.Lift
                 }
                 catch (Exception e)
                 {
-                    K2D2_Plugin.logger.LogInfo($"[Lift] tab: no body list yet ({e.GetType().Name}: {e.Message})");
+                    SkySpaceAgencyPlugin.logger.LogInfo($"[Lift] tab: no body list yet ({e.GetType().Name}: {e.Message})");
                 }
             }
             if (drop_lists_vessels)

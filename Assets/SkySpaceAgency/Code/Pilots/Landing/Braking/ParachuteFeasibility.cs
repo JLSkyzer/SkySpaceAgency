@@ -1,4 +1,4 @@
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     // Parachute landing: start checks (no engine checks at all) and the two alerts shown under
     // canopy, where nothing can be done about them since there is no engine.

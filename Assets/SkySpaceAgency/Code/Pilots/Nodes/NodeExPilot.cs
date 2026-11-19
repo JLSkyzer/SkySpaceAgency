@@ -1,17 +1,17 @@
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Messages;
 using KSP.Sim;
 using KSP.Sim.Maneuver;
 using KTools;
 
 // using KTools.UI;
-// using K2D2.InfosPages;
+// using SkySpaceAgency.InfosPages;
 using UnityEngine;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     public class NodeExPilot : Pilot
     {
@@ -48,10 +48,10 @@ namespace K2D2.Node
 
             _page = ui = new NodeExUI(this);
 
-            K2D2PilotsMgr.Instance.RegisterPilot("Node", this);
+            SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Node", this);
 
             sub_contollers.Add(current_executor);
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
 
             GeneralTools.Game.Messages.Subscribe<VesselChangedMessage>(OnActiveVesselChanged);
 
@@ -305,10 +305,10 @@ namespace K2D2.Node
         // through circularize_error and the pilot does not start.
         public void StartCircularize(bool atApoapsis)
         {
-            if (K2D2_Plugin.Instance.current_vessel == null) return;
+            if (SkySpaceAgencyPlugin.Instance.current_vessel == null) return;
 
             // Reset every pilot first (this one included), same as every other "start a pilot" path.
-            K2D2_Plugin.ResetControllers();
+            SkySpaceAgencyPlugin.ResetControllers();
             TimeWarpTools.SetIsPaused(false);
 
             circularize.allow_warp = settings.auto_warp.V;
@@ -672,7 +672,7 @@ namespace K2D2.Node
                     }
 
                     // reset controller to desactivate other controllers.
-                    K2D2_Plugin.ResetControllers();
+                    SkySpaceAgencyPlugin.ResetControllers();
                     TimeWarpTools.SetIsPaused(false);
 
                     if (!StartNodeRun())

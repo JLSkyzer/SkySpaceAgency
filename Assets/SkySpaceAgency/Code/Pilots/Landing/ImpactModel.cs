@@ -4,7 +4,7 @@ using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // What ImpactModel needs from a body. Every vector is in the model's axes: the body frame
     // (body.transform.bodyFrame) as it is at the model's epoch. GameImpactBody reads a real body;

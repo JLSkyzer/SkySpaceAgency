@@ -3,10 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Redux's own player-waypoint system (Redux.UI.Waypoints.PlayerWaypointManager and friends,
-    // in Assembly-CSharp) is declared `internal`, so it's invisible to K2D2.dll through a normal
+    // in Assembly-CSharp) is declared `internal`, so it's invisible to our DLL through a normal
     // reference - same problem, and same fix, as VisualElementFactoryRegistry.RegisterFactory()
     // in KTools/K2UIFactoryRegistration.cs (see NOTICE.md's UI Toolkit section): reflection.
     // Confirmed against the real decompiled PlayerWaypointManager.cs/PlayerWaypointRecord.cs
@@ -156,7 +156,7 @@ namespace K2D2.Landing
         internal static void LogOnce(string message)
         {
             if (_logged.Add(message))
-                K2D2_Plugin.logger.LogWarning(message);
+                SkySpaceAgencyPlugin.logger.LogWarning(message);
         }
     }
 }

@@ -1,6 +1,6 @@
 using System;
-using K2D2.Lift;
-using K2D2.Transfer;
+using SkySpaceAgency.Lift;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using NUnit.Framework;
 
@@ -24,11 +24,11 @@ public class LiftGoalTests
         Assert.IsFalse(LiftGoalRules.HoldsThrottleAtZero(PadAction.LiftedOff));
         Assert.IsFalse(LiftGoalRules.HoldsThrottleAtZero(PadAction.Resolve));
         // With the throttle at 0 and no engine force, the gate lets the rails warp through after 1 s.
-        var quiet = new K2D2.EngineQuietTimer();
+        var quiet = new SkySpaceAgency.EngineQuietTimer();
         for (int i = 0; i < 11; i++)
             quiet.Update(true, i * 0.11);
-        Assert.AreEqual(6, K2D2.WarpGatePolicy.AllowedIndex(6, 0, false, quiet.Quiet(1.1)));
-        Assert.AreEqual(0, K2D2.WarpGatePolicy.AllowedIndex(6, 0, false, false), "held at 1x at full throttle");
+        Assert.AreEqual(6, SkySpaceAgency.WarpGatePolicy.AllowedIndex(6, 0, false, quiet.Quiet(1.1)));
+        Assert.AreEqual(0, SkySpaceAgency.WarpGatePolicy.AllowedIndex(6, 0, false, false), "held at 1x at full throttle");
     }
 
     [Test]
@@ -370,10 +370,10 @@ public class LiftGoalTests
     public void StopReason_PerCause()
     {
         Assert.AreEqual("Stop pressed", LiftGoalRules.StopReason(null));
-        Assert.AreEqual("another pilot started", LiftGoalRules.StopReason(K2D2.ResetCause.AnotherPilot));
-        Assert.AreEqual("the scene changed (flight left)", LiftGoalRules.StopReason(K2D2.ResetCause.SceneChange));
-        Assert.AreEqual("the active vessel changed", LiftGoalRules.StopReason(K2D2.ResetCause.VesselChange));
-        Assert.AreEqual("the mod is off in this campaign", LiftGoalRules.StopReason(K2D2.ResetCause.ModDisabled));
+        Assert.AreEqual("another pilot started", LiftGoalRules.StopReason(SkySpaceAgency.ResetCause.AnotherPilot));
+        Assert.AreEqual("the scene changed (flight left)", LiftGoalRules.StopReason(SkySpaceAgency.ResetCause.SceneChange));
+        Assert.AreEqual("the active vessel changed", LiftGoalRules.StopReason(SkySpaceAgency.ResetCause.VesselChange));
+        Assert.AreEqual("the mod is off in this campaign", LiftGoalRules.StopReason(SkySpaceAgency.ResetCause.ModDisabled));
     }
 
     // 4.5, Task 0: a planner refusal gives the same answer on every Start: no "press Start again".
@@ -428,7 +428,7 @@ public class LiftGoalTests
             ParkingRadius = 710000,
             ParkingReason = "10 km under the target's periapsis",
             Window = new LaunchWindowResult { Ok = true, LaunchUT = 1000 + 3600 + 120, AzimuthDeg = 84.2, PlaneErrorDeg = 0.1, PlaneChangeDeltaV = 4 },
-            Rendezvous = new K2D2.Rendezvous.RvPlan { Ok = true, TotalDeltaV = 18.6, ArrivalUT = 3 * KerbinCalendar.DaySeconds },
+            Rendezvous = new SkySpaceAgency.Rendezvous.RvPlan { Ok = true, TotalDeltaV = 18.6, ArrivalUT = 3 * KerbinCalendar.DaySeconds },
             Passes = new System.Collections.Generic.List<RendezvousPass>
             {
                 new RendezvousPass { DeltaV = 67.3 }, new RendezvousPass { DeltaV = 18.6 }, new RendezvousPass { DeltaV = 40 },

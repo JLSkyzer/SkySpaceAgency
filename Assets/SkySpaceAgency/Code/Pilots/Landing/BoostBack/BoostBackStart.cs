@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     public enum BoostBackDecision
     {

@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     // The four precision burns, in flight order.
     public enum PrecisionStage { OrbitPrep, PlaneChange, Deorbit, MidCourse }

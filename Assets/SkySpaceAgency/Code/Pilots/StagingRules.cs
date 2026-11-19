@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace K2D2.Controller
+namespace SkySpaceAgency.Controller
 {
     /// <summary>One propellant of one lit engine, as the auto-staging reads it.</summary>
     public struct EngineFuel<T>

@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim.impl;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Single shared switch for Landing's Atmo/Vacuum profile split (see LandingSettings.cs/
     // TouchDown.cs) - one source of truth every "which profile is active right now" read goes

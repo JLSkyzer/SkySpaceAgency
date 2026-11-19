@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;
@@ -80,7 +80,7 @@ public class DeorbitSearchTests
         KeplerPropagator.Propagate(R0Vec, V0Vec, Mu, plan.BurnUT - UT, out var rb, out var vb);
         Assert.That(Vector3d.Dot(plan.DeltaV.normalized, vb.normalized), Is.LessThan(-0.9999));
         Vector3d vAfter = vb + plan.DeltaV;
-        double rp = K2D2.OrbitPlanning.OrbitMath.Elements(rb, vAfter, Mu).PeriapsisRadius;
+        double rp = SkySpaceAgency.OrbitPlanning.OrbitMath.Elements(rb, vAfter, Mu).PeriapsisRadius;
         Assert.That(rp, Is.EqualTo(R - DeorbitSearch.DescentPeriapsisMargin).Within(1));
     }
 

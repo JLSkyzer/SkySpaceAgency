@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using K2D2.VabTools;
+using SkySpaceAgency.VabTools;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
@@ -22,7 +22,7 @@ public class VabExportTests
             new[] { "format", "version", "exported_at", "game_version", "mod_version", "campaign",
                     "instructions_for_ai", "summary", "game_assembly" },
             doc.Properties().Select(p => p.Name).ToArray());
-        Assert.AreEqual(K2D2.ModIdentity.VabFormatPrefix + ".VabExport", (string)doc["format"]);
+        Assert.AreEqual(SkySpaceAgency.ModIdentity.VabFormatPrefix + ".VabExport", (string)doc["format"]);
         Assert.AreEqual(1, (int)doc["version"]);
         Assert.AreEqual("2026-10-16T05:07:09", (string)doc["exported_at"]);
         Assert.AreEqual("0.2.9.0.104880", (string)doc["game_version"]);

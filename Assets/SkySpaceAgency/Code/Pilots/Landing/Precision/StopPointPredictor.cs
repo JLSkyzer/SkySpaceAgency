@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Landing.Braking;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     public struct Vehicle
     {

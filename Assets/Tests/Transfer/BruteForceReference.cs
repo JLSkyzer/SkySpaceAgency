@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using K2D2.Transfer;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 
 // Independent reference for the transfer search, tests only. It computes the ideal patched-conic

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     /// <summary>
     /// A registered node: the orbit planned right after it, and the node's BurnVector and Time

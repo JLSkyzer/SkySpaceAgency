@@ -1,17 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.KSPService;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
-using K2D2.Node;
-using K2D2.Transfer;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.Transfer;
 using KSP.Game;
 using KSP.Modules;
 using KSP.Sim.impl;
 using UnityEngine;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Game glue of a landing with a chosen stage: drops the active lower stage, one activation at
     // a time, the way BurnStaging and Jettison do. The decisions are pure: StagedBrakePlan.DropNow

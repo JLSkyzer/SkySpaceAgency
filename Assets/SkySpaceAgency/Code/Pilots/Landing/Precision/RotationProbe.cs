@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     // Sign of the body rotation in the Zup frame, measured from the game: the game longitude of
     // one fixed inertial position, read twice. The body turns under it by ω·dt, so a body-fixed

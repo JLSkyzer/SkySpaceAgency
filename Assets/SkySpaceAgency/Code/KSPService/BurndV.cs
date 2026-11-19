@@ -1,11 +1,11 @@
 using System.Collections.Generic;
-using K2D2.Controller;
+using SkySpaceAgency.Controller;
 using KSP.Sim.DeltaV;
 // using KTools.UI;
 using UnityEngine;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     public class BurndV : BaseController
     {
@@ -15,7 +15,7 @@ namespace K2D2.KSPService
 
         public BurndV()
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         public float burned_dV = 0;
@@ -164,12 +164,12 @@ namespace K2D2.KSPService
                 }
             }
 
-            actual_dv = (float)K2D2.Landing.Braking.ThrustMath.Acceleration(actual_thrust.magnitude, mass);
-            full_dv = (float)K2D2.Landing.Braking.ThrustMath.Acceleration(full_thrust.magnitude, mass);
+            actual_dv = (float)SkySpaceAgency.Landing.Braking.ThrustMath.Acceleration(actual_thrust.magnitude, mass);
+            full_dv = (float)SkySpaceAgency.Landing.Braking.ThrustMath.Acceleration(full_thrust.magnitude, mass);
 
             active_thrust = active_vector.magnitude;
-            active_dv = (float)K2D2.Landing.Braking.ThrustMath.Acceleration(active_thrust, mass);
-            active_isp = (float)K2D2.Landing.Braking.ThrustMath.CombinedIsp(active_thrusts, active_isps);
+            active_dv = (float)SkySpaceAgency.Landing.Braking.ThrustMath.Acceleration(active_thrust, mass);
+            active_isp = (float)SkySpaceAgency.Landing.Braking.ThrustMath.CombinedIsp(active_thrusts, active_isps);
         }
 
         // public override void onGUI()

@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using K2D2.OrbitPlanning;
-using K2D2.Transfer;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KTools;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // What a Lift run is for. Orbit is today's ascent, unchanged. PrepareTransfer waits on the pad for
     // the parking-orbit plane of a transfer, lifts into it and trims it (sub-project 4.2). Rendezvous
@@ -73,7 +73,7 @@ namespace K2D2.Lift
         // The plane is "right" within this angle; above it, a trim burn.
         public const double TrimThresholdDeg = 0.1;
         // The trim node must be this far ahead for TargetOrbitBurn's longest alignment lead.
-        public const double TrimMinLead = K2D2.Node.BurnWarp.MaxLead + 10;
+        public const double TrimMinLead = SkySpaceAgency.Node.BurnWarp.MaxLead + 10;
 
         // ESTIMATE (not measured): until a first transfer ascent has measured its own, the time from
         // liftoff to the end of the Lift ascent burn and the ground distance covered meanwhile, for a

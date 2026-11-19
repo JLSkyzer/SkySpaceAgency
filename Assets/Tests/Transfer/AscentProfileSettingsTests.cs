@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using K2D2.Lift;
+using SkySpaceAgency.Lift;
 using NUnit.Framework;
 
 // The Gravity Turn ascent profile's settings keep K2-D2 1.4.0's keys, defaults and ranges

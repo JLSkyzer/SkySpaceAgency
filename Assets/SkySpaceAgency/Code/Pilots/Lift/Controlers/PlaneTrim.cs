@@ -1,17 +1,17 @@
 using System;
 using System.Globalization;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.Node;
-using K2D2.OrbitPlanning;
-using K2D2.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.UI;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine.UIElements;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Transfer goal, after the circularisation: when the plane is more than 0.1° off the parking
     // plane, a closed-loop burn (TargetOrbitBurn, OrbitTargetGuidance) at the next crossing of the
@@ -31,14 +31,14 @@ namespace K2D2.Lift
         public PlaneTrim(LiftPilot lift)
         {
             this.lift = lift;
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         // Ends in Update, never here (Start runs inside LiftPilot's status setter).
         public override void Start()
         {
             base.Start();
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             burning = false;
             refusal = null;
             status_line = "";

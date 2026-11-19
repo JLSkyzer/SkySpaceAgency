@@ -4,7 +4,7 @@ using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace K2D2.VabTools
+namespace SkySpaceAgency.VabTools
 {
     // JSON helpers of the VAB tools. Game JSON goes through them unchanged: no date parsing
     // (a date-like string stays a string), 64-bit integers kept, nothing after the value accepted.

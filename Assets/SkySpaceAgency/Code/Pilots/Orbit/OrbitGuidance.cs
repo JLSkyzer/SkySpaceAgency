@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.OrbitPlanning
+namespace SkySpaceAgency.OrbitPlanning
 {
     /// <summary>A target orbit: apsis radii (m, Ra ≥ Rp) and the unit normal of its plane (Zup frame).</summary>
     public struct TargetOrbit

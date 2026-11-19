@@ -1,7 +1,7 @@
 using System;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Precision;
 
-namespace K2D2.Landing.Heating
+namespace SkySpaceAgency.Landing.Heating
 {
     // The game's part heating, as read in the IL of Ksp2Redux.dll (Redux 26w42c, 2026-10-30). Pure
     // maths, tested in EditMode. What is read and what is assumed:

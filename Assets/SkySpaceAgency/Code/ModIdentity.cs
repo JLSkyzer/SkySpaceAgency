@@ -1,6 +1,6 @@
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2
+namespace SkySpaceAgency
 {
     /// <summary>
     /// Every literal that names this mod: title, ids, settings file names, logger names, VAB file

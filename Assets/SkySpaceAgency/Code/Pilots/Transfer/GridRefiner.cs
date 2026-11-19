@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // Refinement of a 2-D search grid (departure UT × time of flight): the best local minima, each
     // polished by Nelder–Mead on the same cost. Pure code.

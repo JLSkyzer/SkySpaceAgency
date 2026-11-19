@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using K2D2.Lift;
+using SkySpaceAgency.Lift;
 using NUnit.Framework;
 
 // The Gravity Turn's auto plan (K2-D2 1.4.0, AscentPredictor), on a fixture rocket and a fixture

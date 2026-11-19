@@ -4,13 +4,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using K2D2.VabTools;
+using SkySpaceAgency.VabTools;
 using KSP.OAB;
 using KSP.Sim;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     // The three VAB tools: files, checks, game calls and their "[VabTools] ..." log lines.
     // Called by UI/VabToolsWindow.
@@ -19,7 +19,7 @@ namespace K2D2.KSPService
         static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
         const string Unchanged = " Your rocket was not changed.";
 
-        public static string Folder() => K2D2_Plugin.VabFolder;
+        public static string Folder() => SkySpaceAgencyPlugin.VabFolder;
 
         static string Folder(string sub) => Path.Combine(Folder(), sub);
 
@@ -39,7 +39,7 @@ namespace K2D2.KSPService
         static IEnumerable<string> FileNames(string sub) =>
             Directory.GetFiles(Folder(sub), "*.json").Select(f => Path.GetFileName(f));
 
-        static void Log(string message) => K2D2_Plugin.logger.LogInfo("[VabTools] " + message);
+        static void Log(string message) => SkySpaceAgencyPlugin.logger.LogInfo("[VabTools] " + message);
 
         static void WriteJson(string path, JToken document) =>
             File.WriteAllText(path, VabJson.Write(document), Utf8NoBom);

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // An instantaneous burn. The Δv is in the frame of the body orbited at that UT; all frames share
     // the same inertial Zup axes, so the vector is simply added to the velocity.

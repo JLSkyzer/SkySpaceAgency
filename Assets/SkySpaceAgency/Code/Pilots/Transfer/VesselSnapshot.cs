@@ -7,7 +7,7 @@ using KSP.Sim.DeltaV;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // Game glue: the active vessel's state and stages for the transfer search.
     //
@@ -42,7 +42,7 @@ namespace K2D2.Transfer
             stages = null;
             try
             {
-                VesselComponent vessel = K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
+                VesselComponent vessel = SkySpaceAgencyPlugin.Instance?.current_vessel?.VesselComponent;
                 IKeplerPatch orbit = vessel?.Orbit;
                 if (orbit == null)
                 {
@@ -66,7 +66,7 @@ namespace K2D2.Transfer
             catch (Exception e)
             {
                 error = $"Cannot read the vessel: {e.GetType().Name}: {e.Message}";
-                K2D2_Plugin.logger.LogInfo("[Transfer] " + error);
+                SkySpaceAgencyPlugin.logger.LogInfo("[Transfer] " + error);
                 return false;
             }
         }
@@ -101,7 +101,7 @@ namespace K2D2.Transfer
                     if (warning != lastNaNWarning)
                     {
                         lastNaNWarning = warning;
-                        K2D2_Plugin.logger.LogWarning(warning);
+                        SkySpaceAgencyPlugin.logger.LogWarning(warning);
                     }
                     dvVac = 0;
                 }
@@ -135,7 +135,7 @@ namespace K2D2.Transfer
             if (line != lastStages)
             {
                 lastStages = line;
-                K2D2_Plugin.logger.LogInfo(line);
+                SkySpaceAgencyPlugin.logger.LogInfo(line);
             }
             return stages;
         }
@@ -151,11 +151,11 @@ namespace K2D2.Transfer
         {
             try
             {
-                VesselComponent vessel = K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
+                VesselComponent vessel = SkySpaceAgencyPlugin.Instance?.current_vessel?.VesselComponent;
                 IKeplerPatch orbit = vessel?.Orbit;
                 if (orbit == null)
                 {
-                    K2D2_Plugin.logger.LogInfo("[Transfer] start checks: no active vessel.");
+                    SkySpaceAgencyPlugin.logger.LogInfo("[Transfer] start checks: no active vessel.");
                     return;
                 }
                 double ut = GeneralTools.Current_UT;
@@ -191,18 +191,18 @@ namespace K2D2.Transfer
                         line += $", tilted chain vs BodySystem {F((rb + system[b].FrameToCommon * orbit.GetRelativePositionAtUTZup(ut) - tilted).magnitude)} m";
                     }
                 }
-                K2D2_Plugin.logger.LogInfo(line);
+                SkySpaceAgencyPlugin.logger.LogInfo(line);
 
                 IPatchedOrbit moving = vessel.Orbiter?.PatchedOrbit;
                 bool nBody = moving is PatchedNBodyOrbit;
-                K2D2_Plugin.logger.LogInfo($"[Transfer] game trajectory model: " +
+                SkySpaceAgencyPlugin.logger.LogInfo($"[Transfer] game trajectory model: " +
                     (nBody ? "n-body (PatchedNBodyOrbit)" : "patched conics") +
                     $", PatchedOrbit is {moving?.GetType().Name ?? "null"}, " +
                     $"orbital physics under thrust {vessel.IsOrbitalPhysicsUnderThrustActive}");
             }
             catch (Exception e)
             {
-                K2D2_Plugin.logger.LogInfo($"[Transfer] start checks failed: {e.GetType().Name}: {e.Message}");
+                SkySpaceAgencyPlugin.logger.LogInfo($"[Transfer] start checks failed: {e.GetType().Name}: {e.Message}");
             }
         }
 

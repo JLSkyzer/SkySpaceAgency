@@ -1,10 +1,10 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/K2D2_UI/K2D2.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#K2D2" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2UI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#K2UI" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/ToggleButton.uss?fileID=7433441132597879392&amp;guid=1b6a73cd9e0a617469e5d501d696c7be&amp;type=3#ToggleButton" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Toggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#K2Toggle" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Slider.uss?fileID=7433441132597879392&amp;guid=3d8e4d9f1386ac94c97e6381ad01c59b&amp;type=3#K2Slider" />
-    <K2UI.Tabs.TabPage name="lift" label="Lift" style="display: flex;">
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaUI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#SsaUI" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/ToggleButton.uss?fileID=7433441132597879392&amp;guid=1b6a73cd9e0a617469e5d501d696c7be&amp;type=3#ToggleButton" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaToggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#SsaToggle" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaSlider.uss?fileID=7433441132597879392&amp;guid=3d8e4d9f1386ac94c97e6381ad01c59b&amp;type=3#SsaSlider" />
+    <SsaUI.Tabs.TabPage name="lift" label="Lift" style="display: flex;">
         <ui:VisualElement name="page" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); display: flex;">
             <ui:Label tabindex="-1" text="Ascent Autopilot" display-tooltip-when-elided="true" name="Title" class="unselectedContent" style="display: flex; width: 100%; -unity-text-align: upper-center;" />
             <!-- Goal (sub-project 4.2): Orbit is today's ascent and layout, unchanged. Prepare
@@ -19,7 +19,7 @@
             <ui:DropdownField label="Ascent Profile" index="-1" choices="" name="ascent_profile_drop" tooltip="Guided: fixed pitch-over curve (the original K2-D2 ascent). Gravity Turn (Experimental): rises straight up, kicks over, then holds prograde and modulates the throttle to hold a target time to apoapsis. Orbit launches only; not yet flown in game" />
             <ui:VisualElement name="transfer_goal_group">
                 <ui:DropdownField label="Target" index="-1" choices="" name="transfer_target" tooltip="The body of the transfer, every body grouped by parent; for a rendezvous, a vessel around the launch body" />
-                <K2UI.K2Toggle label="Dock after the rendezvous" name="rendezvous_dock" tooltip="After the rendezvous, dock with a free compatible port (Rendezvous tab rules)" />
+                <SsaUI.SsaToggle label="Dock after the rendezvous" name="rendezvous_dock" tooltip="After the rendezvous, dock with a free compatible port (Rendezvous tab rules)" />
                 <ui:Label name="transfer_hint" text="" style="white-space: normal; font-size: 12px; color: rgb(180, 180, 180);" />
                 <ui:VisualElement name="transfer_infos" class="advanced-info-table" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);" />
             </ui:VisualElement>
@@ -29,35 +29,35 @@
                 </ui:IntegerField>
                 <!-- Reverted back to sliders (typed absolute-km fields didn't stick) - title
                      stays static now ("5° Alt"/"45° Alt", never rewritten), the live computed
-                     altitude reads in the amber value slot via K2Slider's new ValueText override
-                     (see K2Slider.cs) instead of being baked into one plain-white title string,
+                     altitude reads in the amber value slot via SsaSlider's new ValueText override
+                     (see SsaSlider.cs) instead of being baked into one plain-white title string,
                      matching the amber "cockpit gauge" value convention used elsewhere. -->
                 <!-- Guided only (hidden with Gravity Turn). -->
                 <ui:VisualElement name="guided_profile_settings">
-                <K2UI.K2Slider name="end_rotate_ratio" label="5° Alt" max="10" print-value="false" label-on-top="true" value="0" min="0.01" />
-                <K2UI.K2Slider name="mid_rotate_ratio" label="45° Alt" max="10" print-value="false" label-on-top="true" value="0.98" min="0.01" />
+                <SsaUI.SsaSlider name="end_rotate_ratio" label="5° Alt" max="10" print-value="false" label-on-top="true" value="0" min="0.01" />
+                <SsaUI.SsaSlider name="mid_rotate_ratio" label="45° Alt" max="10" print-value="false" label-on-top="true" value="0.98" min="0.01" />
                 <ui:IntegerField label="90° Alt. :" value="42" name="start_altitude_km" style="justify-content: space-between;">
                     <ui:Label tabindex="-1" text="km" display-tooltip-when-elided="true" style="width: 28px; min-width: 10px; margin-right: 0; margin-left: 10px;" />
                 </ui:IntegerField>
                 </ui:VisualElement>
                 <!-- Gravity Turn only (K2-D2 1.4.0, upstream names and tooltips). -->
                 <ui:VisualElement name="gravity_turn_settings">
-                    <K2UI.K2Toggle label="Auto Kick &amp; Hold" name="gravity_turn_auto" tooltip="Works out the best Pitch Kick and Hold Time for this rocket just before the kick, from its measured drag and its stages. Turn this off to set Pitch Kick and Hold Time yourself. Their last values are also used if it can't make a plan" />
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="10" value="100" max="300" name="gravity_turn_kick_speed_mps" label="Kick Speed (m/s)" format="N0" tooltip="Vertical speed the rocket needs to reach during the initial straight-up rise before it performs its pitch kick" />
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="1" value="7.5" max="25" name="gravity_turn_pitch_kick_deg" label="Pitch Kick (°)" format="N1" tooltip="Tilt after the vertical rise, held until the velocity follows - prograde straight up has nothing to fall over from, so the turn needs this seed" />
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="25" value="45" max="120" name="gravity_turn_hold_time_s" label="Hold Time to Apoapsis (s)" format="N0" tooltip="Seconds to apoapsis the throttle holds during the turn. Lower makes a flatter climb (usually cheaper, but more time in thick air), higher a steeper one" />
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="0.25" max="0.5" name="gravity_turn_min_throttle" label="Min Throttle (%)" format="percent" tooltip="Throttle never goes below this during the turn. Near the end it keeps the rocket raising its apoapsis instead of levelling off in the air" />
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="1.2" value="2.5" max="5" name="gravity_turn_max_twr" label="Max TWR" format="N1" tooltip="The throttle is held down so thrust never exceeds this many times the rocket's weight - keeps powerful rockets from climbing too steeply and fast through thick air" />
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="10" value="40" max="100" name="gravity_turn_max_q_kpa" label="Max Dynamic Pressure (kPa)" format="N0" tooltip="The throttle eases off as the air pressure on the rocket nears this, to limit drag and aerodynamic stress" />
+                    <SsaUI.SsaToggle label="Auto Kick &amp; Hold" name="gravity_turn_auto" tooltip="Works out the best Pitch Kick and Hold Time for this rocket just before the kick, from its measured drag and its stages. Turn this off to set Pitch Kick and Hold Time yourself. Their last values are also used if it can't make a plan" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="10" value="100" max="300" name="gravity_turn_kick_speed_mps" label="Kick Speed (m/s)" format="N0" tooltip="Vertical speed the rocket needs to reach during the initial straight-up rise before it performs its pitch kick" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="1" value="7.5" max="25" name="gravity_turn_pitch_kick_deg" label="Pitch Kick (°)" format="N1" tooltip="Tilt after the vertical rise, held until the velocity follows - prograde straight up has nothing to fall over from, so the turn needs this seed" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="25" value="45" max="120" name="gravity_turn_hold_time_s" label="Hold Time to Apoapsis (s)" format="N0" tooltip="Seconds to apoapsis the throttle holds during the turn. Lower makes a flatter climb (usually cheaper, but more time in thick air), higher a steeper one" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="0.25" max="0.5" name="gravity_turn_min_throttle" label="Min Throttle (%)" format="percent" tooltip="Throttle never goes below this during the turn. Near the end it keeps the rocket raising its apoapsis instead of levelling off in the air" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="1.2" value="2.5" max="5" name="gravity_turn_max_twr" label="Max TWR" format="N1" tooltip="The throttle is held down so thrust never exceeds this many times the rocket's weight - keeps powerful rockets from climbing too steeply and fast through thick air" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="10" value="40" max="100" name="gravity_turn_max_q_kpa" label="Max Dynamic Pressure (kPa)" format="N0" tooltip="The throttle eases off as the air pressure on the rocket nears this, to limit drag and aerodynamic stress" />
                 </ui:VisualElement>
                 <!-- Same title-left/amber-value-right treatment as the sliders above, reusing
-                     K2Slider's own label_row/value_label CSS classes directly since this isn't a
-                     K2Slider itself. -->
+                     SsaSlider's own label_row/value_label CSS classes directly since this isn't a
+                     SsaSlider itself. -->
                 <ui:VisualElement name="heading_row" class="k2-slider-label-row">
                     <ui:Label text="Heading" style="font-size: 13px;" />
                     <ui:Label tabindex="-1" text="30°" display-tooltip-when-elided="true" name="heading_label" class="k2-slider-value-label" style="font-size: 13px;" />
                 </ui:VisualElement>
-                <K2UI.K2Compass name="heading" />
+                <SsaUI.SsaCompass name="heading" />
                 <ui:VisualElement name="graph" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); height: 162px; border-left-width: 1px; border-right-width: 1px; border-top-width: 1px; border-bottom-width: 1px; border-left-color: rgb(71, 75, 175); border-right-color: rgb(71, 75, 175); border-top-color: rgb(71, 75, 175); border-bottom-color: rgb(71, 75, 175); border-top-left-radius: 5px; border-bottom-left-radius: 5px; border-top-right-radius: 5px; border-bottom-right-radius: 5px;" />
                 <!-- Roll program: rolls the vessel to a chosen offset from however it spawned on
                      the pad, once past a chosen altitude - part of the launch Profile alongside
@@ -68,29 +68,29 @@
                      launch orientation, not an absolute compass reading). First pass, not yet
                      flight-tested. -->
                 <ui:VisualElement name="guided_roll_settings">
-                <K2UI.K2Toggle label="Roll Program" name="roll_program" tooltip="Roll the vessel to a chosen offset from its launch orientation once it clears the altitude below" />
+                <SsaUI.SsaToggle label="Roll Program" name="roll_program" tooltip="Roll the vessel to a chosen offset from its launch orientation once it clears the altitude below" />
                 <ui:VisualElement name="roll_program_settings">
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="0" value="0.1" max="5" name="roll_program_altitude_km" label="Roll Program Altitude (km)" tooltip="Altitude at which the roll program executes" />
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="-180" value="0" max="180" name="roll_program_angle_deg" label="Roll Program Angle (°)" tooltip="How many degrees to roll from the vessel's launch orientation (not an absolute compass heading)" />
-                    <K2UI.K2Slider label-on-top="true" print-value="true" min="0.5" value="3" max="15" name="roll_program_rate_deg_s" label="Roll Program Rate (°/s)" tooltip="How fast the roll program is allowed to roll the vessel toward its target angle - lower is gentler but takes longer, higher settles faster but risks overshoot" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0" value="0.1" max="5" name="roll_program_altitude_km" label="Roll Program Altitude (km)" tooltip="Altitude at which the roll program executes" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="-180" value="0" max="180" name="roll_program_angle_deg" label="Roll Program Angle (°)" tooltip="How many degrees to roll from the vessel's launch orientation (not an absolute compass heading)" />
+                    <SsaUI.SsaSlider label-on-top="true" print-value="true" min="0.5" value="3" max="15" name="roll_program_rate_deg_s" label="Roll Program Rate (°/s)" tooltip="How fast the roll program is allowed to roll the vessel toward its target angle - lower is gentler but takes longer, higher settles faster but risks overshoot" />
                 </ui:VisualElement>
                 </ui:VisualElement>
             </ui:Foldout>
-            <K2UI.K2Slider name="max_throttle" label="Max Throttle" max="10" print-value="false" label-on-top="false" value="0" min="0.01" />
-            <K2UI.ToggleButton name="run" label="Start" class="big" style="flex-grow: 1; margin-top: 10px; margin-bottom: 10px;" />
+            <SsaUI.SsaSlider name="max_throttle" label="Max Throttle" max="10" print-value="false" label-on-top="false" value="0" min="0.01" />
+            <SsaUI.ToggleButton name="run" label="Start" class="big" style="flex-grow: 1; margin-top: 10px; margin-bottom: 10px;" />
 
             <!-- K2 arrives on the Lift tab: same merged "K2 is talking" element as the Node tab
                  (yellow status line + console read together, next to K2's animated icon) instead
                  of the shared StatusGroup template's plain status_pilot/pilot_console pair. -->
             <ui:VisualElement name="status_progress_group" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); margin-top: 10px; margin-bottom: 12px;">
                 <ui:VisualElement name="k2_status_row" class="k2-status-row">
-                    <K2UI.K2Avatar name="k2_avatar" />
+                    <SsaUI.SsaAvatar name="k2_avatar" />
                     <ui:VisualElement name="k2_status_speech" class="k2-status-speech">
-                        <K2UI.StatusLine tabindex="-1" text="Status Pilot" name="status_pilot" />
-                        <K2UI.Console tabindex="-1" name="pilot_console" text="Console Pilot" />
+                        <SsaUI.StatusLine tabindex="-1" text="Status Pilot" name="status_pilot" />
+                        <SsaUI.Console tabindex="-1" name="pilot_console" text="Console Pilot" />
                     </ui:VisualElement>
                 </ui:VisualElement>
-                <K2UI.K2ProgressBar name="progress" set-label-to-value="false" value="70.27" max="100" label=" " postfix=" %" style="height: 25px;" />
+                <SsaUI.SsaProgressBar name="progress" set-label-to-value="false" value="70.27" max="100" label=" " postfix=" %" style="height: 25px;" />
             </ui:VisualElement>
             <ui:VisualElement name="final_grp" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); flex-direction: column; flex-wrap: wrap; align-self: auto; justify-content: space-between;">
                 <ui:VisualElement style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); flex-direction: row; justify-content: flex-start;">
@@ -114,7 +114,7 @@
                  the global settings-gear toggle) is redundant now that everything it held fits in
                  one inline dropdown here on "page" - collapsed by default so it doesn't compete
                  with the main Ascent controls above. "settings" below is kept only because
-                 K2Page.Init()'s Q<VisualElement>("settings") lookup expects to find it, but it no
+                 SsaPage.Init()'s Q<VisualElement>("settings") lookup expects to find it, but it no
                  longer carries any real controls - the Reset button now lives at the bottom of
                  this ADVANCED foldout instead (see LiftUI.cs's addResetButton call).
 
@@ -125,31 +125,31 @@
             <ui:Foldout text="ADVANCED" value="false" name="advanced_foldout">
                 <ui:VisualElement name="Ascent">
                     <ui:Label text="// ASCENT" class="k2-section-header" />
-                    <K2UI.K2Toggle label="Heading Correction" name="heading_correction" tooltip="Correct the Speed direction to fit wanted heading" />
-                    <K2UI.K2Slider label="Ap Alt Error (%)" name="end_ascent_pc" print-value="true" label-on-top="true" />
+                    <SsaUI.SsaToggle label="Heading Correction" name="heading_correction" tooltip="Correct the Speed direction to fit wanted heading" />
+                    <SsaUI.SsaSlider label="Ap Alt Error (%)" name="end_ascent_pc" print-value="true" label-on-top="true" />
                     <ui:Label tabindex="-1" text="End Ascent Alt. : " display-tooltip-when-elided="true" name="end_ascent_alt" />
                 </ui:VisualElement>
                 <ui:VisualElement name="Coasting">
                     <ui:Label text="// COASTING" class="k2-section-header" />
-                    <K2UI.K2Toggle label="Coasting Warp" name="coasting_warp" tooltip="Auto Warp while waiting for leaving Atm." />
+                    <SsaUI.SsaToggle label="Coasting Warp" name="coasting_warp" tooltip="Auto Warp while waiting for leaving Atm." />
                     <!-- Orbit goal only (hidden for the transfer and rendezvous goals, which always
                          circularize). Off: the run ends once apoapsis is final, after Adjust. -->
-                    <K2UI.K2Toggle label="Circularize Once Ascent Complete" name="auto_circularize" class="long-label" tooltip="Finish the ascent with a circularization burn at apoapsis. Off: the ascent ends once apoapsis is set, and you circularize yourself" />
+                    <SsaUI.SsaToggle label="Circularize Once Ascent Complete" name="auto_circularize" class="long-label" tooltip="Finish the ascent with a circularization burn at apoapsis. Off: the ascent ends once apoapsis is set, and you circularize yourself" />
                     <!-- Greyed while auto_circularize is on (or forced by the goal). -->
-                    <K2UI.K2Toggle label="Pause Leaving Atmosphere" name="pause_on_final" tooltip="When Circularize Once Ascent Complete is off: pause the game once the vessel is out of the atmosphere and apoapsis is set, so you can plan your circularization" />
+                    <SsaUI.SsaToggle label="Pause Leaving Atmosphere" name="pause_on_final" tooltip="When Circularize Once Ascent Complete is off: pause the game once the vessel is out of the atmosphere and apoapsis is set, so you can plan your circularization" />
                 </ui:VisualElement>
                 <ui:VisualElement name="Adjust">
                     <ui:Label text="// ADJUST" class="k2-section-header" />
-                    <K2UI.K2Toggle label="Fine Tuning" name="adjust" tooltip="Auto Warp while waiting for leaving Atm." />
-                    <K2UI.Group name="adjust_group" text="tuning">
-                        <K2UI.K2Slider label="Final Alt Error (%)" name="end_adjust_pc" print-value="true" label-on-top="true" />
+                    <SsaUI.SsaToggle label="Fine Tuning" name="adjust" tooltip="Auto Warp while waiting for leaving Atm." />
+                    <SsaUI.Group name="adjust_group" text="tuning">
+                        <SsaUI.SsaSlider label="Final Alt Error (%)" name="end_adjust_pc" print-value="true" label-on-top="true" />
                         <ui:Label tabindex="-1" text="End Adjust Alt : " display-tooltip-when-elided="true" name="end_adjust_alt" />
-                    </K2UI.Group>
+                    </SsaUI.Group>
                 </ui:VisualElement>
             </ui:Foldout>
         </ui:VisualElement>
         <ui:VisualElement name="settings" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0); display: none;">
             <ui:Label tabindex="-1" text="Lift Settings" display-tooltip-when-elided="true" name="Title" class="unselectedContent" style="display: flex;" />
         </ui:VisualElement>
-    </K2UI.Tabs.TabPage>
+    </SsaUI.Tabs.TabPage>
 </ui:UXML>

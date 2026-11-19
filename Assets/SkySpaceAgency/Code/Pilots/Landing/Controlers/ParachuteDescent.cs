@@ -1,10 +1,10 @@
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing.Braking;
 using KSP.Sim;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Mode.Parachute, the only phase of a parachute landing, without any engine:
     // 1. hold surface retrograde; the time warp stays in the player's hands;
@@ -34,7 +34,7 @@ namespace K2D2.Landing
             too_fast_under_canopy = false;
             no_parachute_left = false;
 
-            var vessel = K2D2_Plugin.Instance.current_vessel?.VesselComponent;
+            var vessel = SkySpaceAgencyPlugin.Instance.current_vessel?.VesselComponent;
             counts = Parachutes.Count(vessel);
             int armed = Parachutes.ArmStowed(vessel);
             logger.LogInfo($"[Landing] parachute: start, {counts}; armed {armed} stowed parachute(s)");
@@ -43,7 +43,7 @@ namespace K2D2.Landing
 
         public override void Update()
         {
-            var current_vessel = K2D2_Plugin.Instance.current_vessel;
+            var current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             var vessel = current_vessel?.VesselComponent;
             if (vessel == null)
                 return;

@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using K2D2.Landing;
+using SkySpaceAgency.Landing;
 using NUnit.Framework;
 
 public class WaypointChoicesTests

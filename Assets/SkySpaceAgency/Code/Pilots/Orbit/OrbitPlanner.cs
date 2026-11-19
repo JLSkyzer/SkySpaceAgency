@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.OrbitPlanning
+namespace SkySpaceAgency.OrbitPlanning
 {
     public enum OrbitPlanError
     {

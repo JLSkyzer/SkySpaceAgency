@@ -1,17 +1,17 @@
 using System;
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.Maneuver;
 using KTools;
-using K2D2.UI;
+using SkySpaceAgency.UI;
 
 // using KTools.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
-using K2D2.Controller;
+using SkySpaceAgency.Controller;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     class BurnManeuverSettings
     {
@@ -39,7 +39,7 @@ namespace K2D2.Node
 
         public BurnManeuver()
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         double start_dt;
@@ -233,7 +233,7 @@ namespace K2D2.Node
                     break;
             }
 
-            if (K2D2Settings.debug_mode.V)
+            if (SkySpaceAgencySettings.debug_mode.V)
             {
                 if (maneuver == null) return;
                 st.Console("-----------------");

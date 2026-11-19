@@ -5,7 +5,7 @@ using KSP.Sim;
 using KSP.Sim.impl;
 using UnityEngine;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // The docking: the port pair, "control from here" and the target port, RCS on, the thruster
     // probe (Translate), then DockingGuidance every frame until the game latches the ports. Always
@@ -336,7 +336,7 @@ namespace K2D2.Rendezvous
             try
             {
                 ICoordinateSystem celestial = vessel.Orbit.referenceBody.SimulationObject.transform.celestialFrame;
-                Rotation now = Rotation.Reframed(K2D2_Plugin.Instance.current_vessel.GetRotation(), celestial);
+                Rotation now = Rotation.Reframed(SkySpaceAgencyPlugin.Instance.current_vessel.GetRotation(), celestial);
                 return DockingReads.ZupFromYup(now.localRotation * new Vector3d(0, 1, 0));
             }
             catch (Exception)

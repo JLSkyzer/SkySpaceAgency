@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.VabTools;
+using SkySpaceAgency.VabTools;
 using KSP.Game;
 using KSP.Modules;
 using KSP.OAB;
@@ -12,9 +12,9 @@ using KTools;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
-    // Reads the open VAB into the plain structures of K2D2.VabTools. Thin on purpose: rounding,
+    // Reads the open VAB into the plain structures of SkySpaceAgency.VabTools. Thin on purpose: rounding,
     // aggregation and every check live in the pure classes, tested in the editor.
     public static class VabReader
     {
@@ -23,7 +23,7 @@ namespace K2D2.KSPService
             var game = GeneralTools.Game;
             if (game == null)
                 return false;
-            // Same access as K2D2_Plugin.CurrentGameState.
+            // Same access as SkySpaceAgencyPlugin.CurrentGameState.
             var gameState = game.GlobalGameState?.GetGameState();
             return gameState != null && gameState.GameState == GameState.VehicleAssemblyBuilder;
         }
@@ -56,7 +56,7 @@ namespace K2D2.KSPService
         {
             string line = $"[VabTools] {what}: {e.GetType().Name}: {e.Message}";
             if (Logged.Add(line))
-                K2D2_Plugin.logger.LogInfo(line);
+                SkySpaceAgencyPlugin.logger.LogInfo(line);
         }
 
         // The game's own JSON of the assembly (SerializedAssembly), parsed losslessly.
@@ -307,7 +307,7 @@ namespace K2D2.KSPService
 
         static string ModVersion()
         {
-            try { return K2D2_Plugin.Instance.SWMetadata.SWInfo.Version; }
+            try { return SkySpaceAgencyPlugin.Instance.SWMetadata.SWInfo.Version; }
             catch (Exception e) { LogOnce("the mod version could not be read", e); return null; }
         }
     }

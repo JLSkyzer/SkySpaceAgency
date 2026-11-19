@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     // The two height readings K2-D2 1.4.0 (IanMealworm) uses for the landing, as pure rules:
     // KSPVessel.GetGlobalGroundAltitudeWithTerrain and GetApproxAltitudeGrounded feed them the

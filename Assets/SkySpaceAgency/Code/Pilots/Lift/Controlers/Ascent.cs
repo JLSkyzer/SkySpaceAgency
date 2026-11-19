@@ -1,14 +1,14 @@
 
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Controller;
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Controller;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     /// <summary>
     /// rotation used for docking
@@ -24,7 +24,7 @@ namespace K2D2.Lift
 
         public Ascent(LiftSettings lift_settings, LiftAscentPath ascent_path)
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             this.settings = lift_settings;
             this.ascent_path = ascent_path;
         }

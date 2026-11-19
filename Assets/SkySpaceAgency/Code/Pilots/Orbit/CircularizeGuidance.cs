@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.OrbitPlanning
+namespace SkySpaceAgency.OrbitPlanning
 {
     /// <summary>
     /// Closed-loop circularization guidance: the velocity change that turns the current state into

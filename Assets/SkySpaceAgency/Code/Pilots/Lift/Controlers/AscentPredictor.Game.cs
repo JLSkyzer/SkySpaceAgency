@@ -3,7 +3,7 @@ using System.Text;
 using KSP.Sim.DeltaV;
 using KSP.Sim.impl;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // The game side of AscentPredictor: the body's air and the stages of the game's delta-v
     // readout (VesselDeltaV.StageInfo), turned into the plain numbers the pure part flies with.

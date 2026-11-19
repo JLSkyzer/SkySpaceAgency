@@ -1,9 +1,9 @@
 using System;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     /// <summary>
     /// A plane change toward the landing target. It does not check the vessel's Δv. Consumers

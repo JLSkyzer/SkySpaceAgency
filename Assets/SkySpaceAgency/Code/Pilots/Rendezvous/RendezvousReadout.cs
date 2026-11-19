@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using K2D2.Transfer;
+using SkySpaceAgency.Transfer;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // The Rendezvous tab's lists and texts (RendezvousUI is the game glue). Pure, tested in EditMode.
     public static class RendezvousReadout

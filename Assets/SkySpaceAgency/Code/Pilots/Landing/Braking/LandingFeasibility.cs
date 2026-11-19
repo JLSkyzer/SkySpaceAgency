@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     public struct FeasibilityResult
     {

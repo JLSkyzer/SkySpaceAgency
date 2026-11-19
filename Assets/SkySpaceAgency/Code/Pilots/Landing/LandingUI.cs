@@ -1,20 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using K2D2.Landing.Braking;
-using K2D2.KSPService;
-using K2D2.UI;
-using K2UI;
-using K2UI.Tabs;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.UI;
+using SsaUI;
+using SsaUI.Tabs;
 using KSP.Game;
 using UnityEngine.UIElements;
 using KTools;
 
 
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
-    class LandingUI : K2Page
+    class LandingUI : SsaPage
     {
         LandingPilot pilot;
         public LandingUI(LandingPilot pilot)
@@ -101,7 +101,7 @@ namespace K2D2.Landing
         // Atmo/Vacuum profile panels (see LandingSettings.cs's class comment) - shown/hidden
         // together every UI tick by UpdateProfilePanels, based on LandingProfile.IsAtmospheric.
         // Each pair is bound once, ever, in onInit() below to its own fixed settings object -
-        // never rebound, since K2Page.onInit() only runs once per game session.
+        // never rebound, since SsaPage.onInit() only runs once per game session.
         VisualElement landing_mode_group_atmo;
         VisualElement landing_mode_group_vac;
         VisualElement atmo_settings_panel;
@@ -137,7 +137,7 @@ namespace K2D2.Landing
 
             // Waypoint picker - one per profile: KSC and the point picked on the map, then whatever
             // the player's already placed on the current body via Redux's own Waypoints window
-            // (K2D2.Landing.ReduxWaypoints, reflection-based since that system is internal), then
+            // (SkySpaceAgency.Landing.ReduxWaypoints, reflection-based since that system is internal), then
             // the game's waypoints. Rebuilt every UI tick for the visible profile (see onUpdateUI()
             // below) rather than via a click listener, since DropdownField opens its own native
             // list on pointer-down instead of dispatching a bubbling ClickEvent - a per-tick
@@ -192,9 +192,9 @@ namespace K2D2.Landing
             // landing_mode_group_vac, a sibling of advanced_foldout - see Landing.uxml).
             // VisualElement.Q<T>() searches the whole subtree under whatever root it's given, so
             // passing the narrower vac_settings_panel/atmo_settings_panel makes
-            // root.Q<K2Toggle>("precision_landing_vac") return null - Bind() on that null throws a
-            // NullReferenceException that unwinds all the way up through K2Page.Init ->
-            // TabbedPage.Init -> K2D2Window.OnUiReload, aborting every other tab's Init() too.
+            // root.Q<SsaToggle>("precision_landing_vac") return null - Bind() on that null throws a
+            // NullReferenceException that unwinds all the way up through SsaPage.Init ->
+            // TabbedPage.Init -> SkySpaceAgencyWindow.OnUiReload, aborting every other tab's Init() too.
             // Passing `panel` everywhere is always safe: Q<T>() finds a uniquely-named element
             // anywhere under it regardless of nesting depth.
             pilot.settings_vac.setupUI(panel);
@@ -206,7 +206,7 @@ namespace K2D2.Landing
             // Reset resets BOTH profiles together, not just whichever panel happens to be showing
             // right now, against two SettingsFile instances instead of the one SettingsFile.
             // Instance the shared addResetButton helper hardcodes (see its own comment in
-            // K2Page.cs - it's shared by Node/Lift/Dock too, so it can't just be changed there).
+            // SsaPage.cs - it's shared by Node/Lift/Dock too, so it can't just be changed there).
             addLandingResetButton(panel.Q<Foldout>("advanced_foldout"));
 
             // Landing with a chosen stage.
@@ -295,7 +295,7 @@ namespace K2D2.Landing
             stage_drop_atmo?.Show(!atmo_parachute);
         }
 
-        // Same idea as K2Page.addResetButton (Node/Lift/Dock's shared helper), but resets the
+        // Same idea as SsaPage.addResetButton (Node/Lift/Dock's shared helper), but resets the
         // land_atmo AND land_vac SettingsFile instances together, since Landing's settings no
         // longer live in the one SettingsFile.Instance that helper hardcodes.
         void addLandingResetButton(VisualElement parent)
@@ -705,7 +705,7 @@ namespace K2D2.Landing
             string reason = null;
             if (!isVisible)
                 reason = "Land tab hidden";
-            else if (!K2D2_Plugin.IsMainWindowOpen)
+            else if (!SkySpaceAgencyPlugin.IsMainWindowOpen)
                 reason = "window closed";
             else if (pilot.isRunning)
                 reason = "landing started";

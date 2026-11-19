@@ -1,5 +1,5 @@
 using System;
-using K2D2.Lift;
+using SkySpaceAgency.Lift;
 using NUnit.Framework;
 
 // The Gravity Turn's throttle and steering rules (K2-D2 1.4.0, GravityTurnControl), flown by

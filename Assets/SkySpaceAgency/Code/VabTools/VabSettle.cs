@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.VabTools
+namespace SkySpaceAgency.VabTools
 {
     // How long the import waits for the VAB to show a loaded rocket. A fixed short wait declared
     // large rockets failed while their parts were still being placed, and the restore then ran on

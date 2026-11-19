@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using K2D2.Transfer;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;
@@ -404,7 +404,7 @@ public class TransferSearchTests
         var r = RotateZ(ike.EpochPosition, turnDeg * Deg);
         var v = RotateZ(ike.EpochVelocity, turnDeg * Deg);
         ike.EpochPosition = r;
-        ike.EpochVelocity = K2D2.OrbitPlanning.OrbitMath.Rotate(v, r.normalized, 90 * Deg);
+        ike.EpochVelocity = SkySpaceAgency.OrbitPlanning.OrbitMath.Rotate(v, r.normalized, 90 * Deg);
         TransferSearch.Trace = line => trace.Add(line);
         var plan = TransferSearch.Find(_s, Request("Kerbin", "Ike", 700_000), CancellationToken.None);
         TransferSearch.Trace = line => TestContext.Out.WriteLine(line);
@@ -483,7 +483,7 @@ public class TransferSearchTests
             var r = RotateZ(ike.EpochPosition, turn * Deg);
             var v = RotateZ(ike.EpochVelocity, turn * Deg);
             ike.EpochPosition = r;
-            ike.EpochVelocity = K2D2.OrbitPlanning.OrbitMath.Rotate(v, r.normalized, 90 * Deg);
+            ike.EpochVelocity = SkySpaceAgency.OrbitPlanning.OrbitMath.Rotate(v, r.normalized, 90 * Deg);
             var q = Request("Kerbin", "Ike", 700_000);
             q.ArrivalPlaneNormal = PlaneN;
             var plan = TransferSearch.Find(_s, q, CancellationToken.None);
@@ -557,7 +557,7 @@ public class TransferSearchTests
         // The lowered orbit really has its periapsis at the low orbit.
         var q = plan.Request;
         KeplerPropagator.Propagate(q.R0, q.V0, _s["Kerbin"].Mu, change.UT - q.UT0, out var r, out var v);
-        var el = K2D2.OrbitPlanning.OrbitMath.Elements(r, v + change.DeltaV, _s["Kerbin"].Mu);
+        var el = SkySpaceAgency.OrbitPlanning.OrbitMath.Elements(r, v + change.DeltaV, _s["Kerbin"].Mu);
         Assert.AreEqual(_s["Kerbin"].LowOrbitRadius, el.PeriapsisRadius, 1000);
     }
 

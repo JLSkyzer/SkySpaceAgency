@@ -1,6 +1,6 @@
 using KTools;
 
-namespace K2D2.OrbitPlanning
+namespace SkySpaceAgency.OrbitPlanning
 {
     // Orbit tab targets. A disabled target keeps the current orbit's value.
     public static class OrbitSettings

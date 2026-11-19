@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     public enum ArrivalKind { Encounter, Orbit }
 

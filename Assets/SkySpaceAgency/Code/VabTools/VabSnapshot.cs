@@ -1,6 +1,6 @@
 using Newtonsoft.Json.Linq;
 
-namespace K2D2.VabTools
+namespace SkySpaceAgency.VabTools
 {
     // A VAB workspace snapshot (OABHistoricalSnapshot as JSON): {"Assemblies": [{"Assembly": ..., "isMainAssembly": ...,
     // "position": ..., "boundsSize": ...}], ...}.

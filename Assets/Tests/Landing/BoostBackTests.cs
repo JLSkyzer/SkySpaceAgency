@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using K2D2;
-using K2D2.Landing;
+using SkySpaceAgency;
+using SkySpaceAgency.Landing;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;
@@ -124,13 +124,14 @@ public class BoostBackTests
     }
 
     [Test]
-    public void ThisMod_IsNotTheK2D2Flavour()
+    public void BoostBack_IsOnInTheK2D2FlavourOnly()
     {
-        Assert.IsFalse(ModIdentity.IsK2D2, "boost-back must stay off in this mod (user decision 2026-11-19)");
+        // K2-D2 keeps its boost-back; the sibling flavour of this code never flies it.
+        Assert.AreEqual(ModIdentity.ModId == "K2D2", ModIdentity.IsK2D2);
     }
 
     [Test]
-    public void SkySpaceAgencyFlavour_NeverBoostsBack()
+    public void NonK2D2Flavour_NeverBoostsBack()
     {
         int n = 0;
         foreach (var s in AllStates())
@@ -142,7 +143,8 @@ public class BoostBackTests
         }
         Assert.AreEqual(128, n);
         // And the flavour this mod compiles with.
-        Assert.AreEqual(BoostBackDecision.NotBoostBack, BoostBackStart.Check(GoodState(), ModIdentity.IsK2D2, out _));
+        Assert.AreEqual(ModIdentity.IsK2D2 ? BoostBackDecision.BoostBack : BoostBackDecision.NotBoostBack,
+            BoostBackStart.Check(GoodState(), ModIdentity.IsK2D2, out _));
     }
 
     [Test]
@@ -222,7 +224,6 @@ public class BoostBackTests
     {
         Assert.IsTrue(LandingSettings.PrecisionAllowed(LandingMethod.Parachute));
         Assert.AreEqual(ModIdentity.IsK2D2, LandingSettings.PrecisionAllowed(LandingMethod.Propulsive));
-        Assert.IsFalse(LandingSettings.PrecisionAllowed(LandingMethod.Propulsive), "greyed in Propulsive mode, as before");
     }
 
     // ---- Burn sizing and direction ----

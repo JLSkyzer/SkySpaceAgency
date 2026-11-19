@@ -1,9 +1,9 @@
 ﻿
-using K2D2.UI;
+using SkySpaceAgency.UI;
 using KSP.Game;
 using UnityEngine.UIElements;
 
-namespace K2D2.Controller
+namespace SkySpaceAgency.Controller
 {
     public class BaseController 
     {
@@ -61,7 +61,7 @@ namespace K2D2.Controller
                 if (!Enabled)
                     return false;
                
-                if (debug_mode_only && !K2D2Settings.debug_mode.V)
+                if (debug_mode_only && !SkySpaceAgencySettings.debug_mode.V)
                     return false;
 
                 return true; 

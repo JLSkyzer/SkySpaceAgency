@@ -3,9 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using K2D2.KSPService;
-using K2D2.Node;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP.Sim.Maneuver;
@@ -13,7 +13,7 @@ using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using UnityEngine;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The flight: one decision per frame (TransferFlight.Next), the warp, the burns, the corrections,
     // the leg re-plans and Prepare only's nodes.
@@ -277,7 +277,7 @@ namespace K2D2.Transfer
                 OwnVesselStop.Apply(vessel_id, false);
                 try
                 {
-                    K2D2_Plugin.Instance?.current_vessel?.SetThrottle(0);
+                    SkySpaceAgencyPlugin.Instance?.current_vessel?.SetThrottle(0);
                 }
                 catch (Exception)
                 {

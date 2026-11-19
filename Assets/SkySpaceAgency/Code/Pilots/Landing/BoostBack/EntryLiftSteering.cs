@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The steering rule of AtmoEntryGuidance (K2-D2 1.4.0, IanMealworm), apart from the game so it
     // is tested with a fake prediction: from Redux's miss (along the flight and across it), the lift

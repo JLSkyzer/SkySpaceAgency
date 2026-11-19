@@ -2,14 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 using Redux.Ecs.Components;
 using Unity.Entities;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     /// <summary>
     /// Game glue: what the transfer pilot logs to settle the 2026-10-25 in-game failures (the Kerbin

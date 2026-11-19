@@ -1,12 +1,12 @@
 using KTools;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Controller;
-using K2D2.Node;
-using K2D2.KSPService;
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.KSPService;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Final ascent phase: circularizes the orbit at apoapsis with the closed-loop CircularizeBurn
     // (no maneuver node). The node-based Turn/Warp/BurnManeuver sequence used before followed the
@@ -27,7 +27,7 @@ namespace K2D2.Lift
 
         public FinalCircularize(LiftPilot lift, LiftSettings lift_settings)
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             this.lift = lift;
             this.lift_settings = lift_settings;
             sub_contollers.Add(circularize);

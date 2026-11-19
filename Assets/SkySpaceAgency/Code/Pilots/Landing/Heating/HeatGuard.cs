@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace K2D2.Landing.Heating
+namespace SkySpaceAgency.Landing.Heating
 {
     public enum HeatGuardEvent { None, Started, Stopped }
 

@@ -5,8 +5,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using K2D2.KSPService;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.OrbitPlanning;
 using KTools;
 using KSP.Sim;
 using KSP.Sim.impl;
@@ -15,7 +15,7 @@ using KSP.Sim.State;
 using UnityEngine;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // Game glue shared by the long pilots (TransferPilot, RendezvousPilot). Main thread only,
     // except the work a PilotJob runs.
@@ -201,12 +201,12 @@ namespace K2D2.Transfer
     internal static class PilotVessel
     {
         // The game's active vessel now. KSPVessel.VesselComponent is refreshed only in
-        // K2D2_Plugin.Update: inside a vessel-change message it may still be the previous vessel.
+        // SkySpaceAgencyPlugin.Update: inside a vessel-change message it may still be the previous vessel.
         public static VesselComponent Active()
         {
             try
             {
-                return K2D2_Plugin.Instance?.current_vessel?.GetActiveSimVessel();
+                return SkySpaceAgencyPlugin.Instance?.current_vessel?.GetActiveSimVessel();
             }
             catch (Exception)
             {
@@ -335,7 +335,7 @@ namespace K2D2.Transfer
             StateUT = stateUT;
             creator.Update();
             Remove();
-            K2D2_Plugin.Instance.StartCoroutine(CreateNextFrame(nodeUT, prograde, normal, radial, stillWanted, onCreated, onFailed));
+            SkySpaceAgencyPlugin.Instance.StartCoroutine(CreateNextFrame(nodeUT, prograde, normal, radial, stillWanted, onCreated, onFailed));
         }
 
         // A node made in the same frame as the removal is not registered (ManeuverCreator).
@@ -370,7 +370,7 @@ namespace K2D2.Transfer
         {
             if (Id == Guid.Empty)
                 return null;
-            var nodes = K2D2_Plugin.Instance.current_vessel.GetManeuverNodes();
+            var nodes = SkySpaceAgencyPlugin.Instance.current_vessel.GetManeuverNodes();
             if (nodes != null)
                 foreach (var n in nodes)
                     if (n != null && n.NodeID.Equals(Id))

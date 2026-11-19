@@ -1,14 +1,14 @@
 using System;
 using System.Globalization;
-using K2D2.Controller;
-using K2D2.KSPService;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Entry guidance after a boost-back (K2-D2 1.4.0, IanMealworm): steers a booster's lift on its
     // way down so Redux's predicted landing point stays on the target. The steering rule itself is
@@ -94,7 +94,7 @@ namespace K2D2.Landing
         public AtmoEntryGuidance(LandingPilot landing)
         {
             this.landing = landing;
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         bool heat_guard_on => !double.IsNaN(heat_guard_throttle);
@@ -427,7 +427,7 @@ namespace K2D2.Landing
 
         public override void UpdateInfoRows(Action<string, string> addRow)
         {
-            if (!in_atmosphere || !K2D2Settings.debug_mode.V)
+            if (!in_atmosphere || !SkySpaceAgencySettings.debug_mode.V)
                 return;
             addRow("Lift Bank", $"{steering.lift_bank_deg:n0}°");
             addRow("Vertical Lift", $"{steering.vertical_lift:n2}");

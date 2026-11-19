@@ -2,17 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using K2D2.KSPService;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Modules;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The parachute precision return (sub-project 3, part 3): Parachute mode with precision on an
     // atmospheric body. The game side of the pure pieces in Precision/ (ReentryPredictor through
@@ -70,7 +70,7 @@ namespace K2D2.Landing
         // Calibration suggestion (LandingUI shows it with an Apply button).
         internal double suggested_drag_scale = double.NaN;
 
-        // Set by K2D2_Plugin around the reset of a VesselChangedMessage (onReset tells it apart
+        // Set by SkySpaceAgencyPlugin around the reset of a VesselChangedMessage (onReset tells it apart
         // from a pilot start, an invalid scene or the mod being disabled).
         internal static bool reset_by_vessel_change = false;
 

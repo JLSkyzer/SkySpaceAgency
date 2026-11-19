@@ -4,7 +4,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace K2D2.VabTools
+namespace SkySpaceAgency.VabTools
 {
     public enum VabImportFormat { ModExport, RawAssembly, WorkspaceSnapshot }
 

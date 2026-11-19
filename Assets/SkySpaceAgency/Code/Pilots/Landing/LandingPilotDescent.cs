@@ -1,16 +1,16 @@
 using System;
 using System.Diagnostics;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Heating;
-using K2D2.Landing.Precision;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Heating;
+using SkySpaceAgency.Landing.Precision;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 using UnityEngine;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The normal (non-precision) landing started with no collision course, or above the atmosphere
     // (spec docs/superpowers/specs/2026-10-30-deorbit-and-reentry-heating-design.md): the start plan

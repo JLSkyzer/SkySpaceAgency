@@ -1,16 +1,16 @@
 
 
-using K2UI;
-using K2UI.Tabs;
+using SsaUI;
+using SsaUI.Tabs;
 using KTools;
 using UnityEngine.UIElements;
 
 
 
 
-namespace K2D2.UI
+namespace SkySpaceAgency.UI
 {
-    public class AboutUI : K2Page
+    public class AboutUI : SsaPage
     {
         public AboutUI()
         {
@@ -20,7 +20,7 @@ namespace K2D2.UI
         public override bool onInit()
         {
             // About no longer gets its own tab button in the bar - it's reached only via the new
-            // info button (K2D2Window.cs: tab_page.Select("about")), same mechanism TabbedPage
+            // info button (SkySpaceAgencyWindow.cs: tab_page.Select("about")), same mechanism TabbedPage
             // already exposes for switching tabs directly regardless of button visibility. Setting
             // enabled=false here hides the button the same way the old
             // GlobalSetting.settings_visible-driven onSettingsChanged used to, just unconditionally
@@ -33,7 +33,7 @@ namespace K2D2.UI
                 label.text = ModIdentity.AboutTitle;
 
             label = panel.Q<Label>("version");
-            label.text = K2D2_Plugin.Instance.SWMetadata.SWInfo.Version;
+            label.text = SkySpaceAgencyPlugin.Instance.SWMetadata.SWInfo.Version;
 
             label = panel.Q<Label>("thanks");
             label.text = @"Thanks to <b>KSP2 Modding Society</b> for the huge help and support. 
@@ -50,7 +50,7 @@ and <b>@Cheese</b> of course for creating the Modding society itself.";
                 SettingsFile.Get("land_atmo")?.Reset();
                 SettingsFile.Get("land_vac")?.Reset();
             });
-            panel.Q<ToggleButton>("debug").Bind(K2D2Settings.debug_mode);
+            panel.Q<ToggleButton>("debug").Bind(SkySpaceAgencySettings.debug_mode);
 
             return true;
         }

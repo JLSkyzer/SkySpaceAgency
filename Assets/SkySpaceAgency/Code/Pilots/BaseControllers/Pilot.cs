@@ -1,7 +1,7 @@
-using K2UI.Tabs;
+using SsaUI.Tabs;
 
 
-namespace K2D2.Controller
+namespace SkySpaceAgency.Controller
 {
 
     // a pilot is a complex controller that can have ui page
@@ -24,9 +24,9 @@ namespace K2D2.Controller
         }
 
         // MUST be build in constructor if an UI is needed
-        protected K2Page _page = null;
+        protected SsaPage _page = null;
 
-        public virtual K2Page page
+        public virtual SsaPage page
         {
             get => _page;
         }

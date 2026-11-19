@@ -1,15 +1,15 @@
 using System;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.UI;
 using KSP.Api;
 using KSP.Sim;
 using KSP.Sim.impl;
-using K2D2.Transfer;
+using SkySpaceAgency.Transfer;
 using UnityEngine.UIElements;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // Flies the docking guidance's command: the wanted velocity relative to the target port with
     // the RCS (through the probed mapping) or the main engine (turn, short burn, turn back), and
@@ -77,7 +77,7 @@ namespace K2D2.Rendezvous
         public void StartProbe(bool rcsUsable)
         {
             base.Start();
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             this.rcsUsable = rcsUsable;
             rcsProbe = new RcsProbeSequence();
             engineProbe = new EngineProbe();

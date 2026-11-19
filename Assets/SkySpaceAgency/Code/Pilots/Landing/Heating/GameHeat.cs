@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace K2D2.Landing.Heating
+namespace SkySpaceAgency.Landing.Heating
 {
     // The game's heat settings for the loaded campaign, as read by DescentContext.ReadGameHeat: the
     // difficulty options (KSP.Game.DifficultyOptionsUtils keys) and the cheat. null = not read.

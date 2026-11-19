@@ -1,11 +1,11 @@
 using System;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Inputs of the pure precision planner (Precision/), read from the live game once. Thin on
     // purpose: every game call is here, in one try/catch, so a failure is a refusal with a reason.

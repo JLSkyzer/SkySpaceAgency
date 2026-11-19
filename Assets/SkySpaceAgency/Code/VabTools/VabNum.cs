@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using Newtonsoft.Json.Linq;
 
-namespace K2D2.VabTools
+namespace SkySpaceAgency.VabTools
 {
     public static class VabNum
     {

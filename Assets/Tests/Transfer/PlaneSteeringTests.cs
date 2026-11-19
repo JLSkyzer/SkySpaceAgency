@@ -1,6 +1,6 @@
 using System;
-using K2D2.Lift;
-using K2D2.Transfer;
+using SkySpaceAgency.Lift;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using NUnit.Framework;
 

@@ -1,12 +1,12 @@
 using System;
 using System.Globalization;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Landing.Braking;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // What Redux itself says about the landing, logged next to ours (K2-D2 1.4.0, IanMealworm):
     // its impact prediction (ReduxImpactPrediction) against compute_real_collision, and the game's

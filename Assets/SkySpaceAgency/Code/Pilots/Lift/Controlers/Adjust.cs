@@ -1,14 +1,14 @@
 
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 // using KSP.Sim.impl;
 // using UnityEngine;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Controller;
-using K2D2.Node;
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.Node;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     /// <summary>
     /// rotation used for docking
@@ -26,7 +26,7 @@ namespace K2D2.Lift
 
         public Adjust(LiftSettings lift_settings, LiftPilot lift)
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             this.lift_settings = lift_settings;
             this.lift = lift;
         }

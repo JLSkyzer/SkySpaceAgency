@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using KSP.Modules;
 using KSP.Sim.impl;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // One part's temperature, as EntryHeatLimit reads it. Key identifies the part from one reading
     // to the next (the PartComponent in game, anything in the tests).

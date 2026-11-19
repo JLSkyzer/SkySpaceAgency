@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
-using K2D2.Transfer;
+using SkySpaceAgency.Transfer;
 using KSP.Api;
 using KSP.Messages;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // Both vessels' states at one UT, around the same body, celestial Zup (as 4.1's VesselSnapshot).
     public struct RendezvousStates
@@ -33,7 +33,7 @@ namespace K2D2.Rendezvous
     //   VesselDockedMessage. Recognise the merged vessel by part ids, never by vessel id.
     public static class RendezvousSnapshot
     {
-        public static VesselComponent Ours => K2D2_Plugin.Instance?.current_vessel?.VesselComponent;
+        public static VesselComponent Ours => SkySpaceAgencyPlugin.Instance?.current_vessel?.VesselComponent;
 
         // The targeted vessel, whether the game's target is the vessel itself or one of its parts.
         public static VesselComponent TargetVessel(VesselComponent ours)
@@ -57,7 +57,7 @@ namespace K2D2.Rendezvous
         {
             if (ours == null) return false;
             bool ok = ours.SetTargetByID(id);
-            K2D2_Plugin.logger.LogInfo($"[Rendezvous] target set to {what}: " + (ok ? "done" : "refused by the game") +
+            SkySpaceAgencyPlugin.logger.LogInfo($"[Rendezvous] target set to {what}: " + (ok ? "done" : "refused by the game") +
                 $", target is now {(ours.TargetObject == null ? "none" : ours.TargetObject.IsPart ? "a part" : ours.TargetObject.IsVessel ? "a vessel" : "another object")}" +
                 $" of {TargetVessel(ours)?.Name ?? "no vessel"}");
             return ok;
@@ -125,7 +125,7 @@ namespace K2D2.Rendezvous
             catch (Exception e)
             {
                 error = $"Cannot read the vessels: {e.GetType().Name}: {e.Message}";
-                K2D2_Plugin.logger.LogInfo("[Rendezvous] " + error);
+                SkySpaceAgencyPlugin.logger.LogInfo("[Rendezvous] " + error);
                 return false;
             }
         }
@@ -203,7 +203,7 @@ namespace K2D2.Rendezvous
             bool ours = DockingReads.DockedIsOurs(PilotVessel.IdOf(one), PilotVessel.IdOf(two),
                 PilotVessel.PartIds(one), PilotVessel.PartIds(two), watchedIds, watchedPortId);
             if (ours) DockedSeen = true;
-            K2D2_Plugin.logger.LogInfo($"[Docking] VesselDockedMessage: {one?.Name ?? "?"} + {two?.Name ?? "?"}, " +
+            SkySpaceAgencyPlugin.logger.LogInfo($"[Docking] VesselDockedMessage: {one?.Name ?? "?"} + {two?.Name ?? "?"}, " +
                 $"{(ours ? "ours" : "not about our vessel or the target: ignored")}, " +
                 $"active vessel {Ours?.Name ?? "none"} ({Ours?.SimulationObject?.PartOwner?.PartCount ?? 0} parts)");
         }

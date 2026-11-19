@@ -1,12 +1,12 @@
 using System;
-using K2D2.Controller;
-using K2D2.Node;
-using K2D2.OrbitPlanning;
-using K2D2.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.Node;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.UI;
 using KTools;
 using UnityEngine.UIElements;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     /// <summary>
     /// One burn of a precision landing (orbit preparation, plane change, deorbit, mid-course

@@ -1,4 +1,4 @@
-using K2D2.Node;
+using SkySpaceAgency.Node;
 using NUnit.Framework;
 
 // The player's burn time warp mode (Node tab, ADVANCED): what each mode lets a burn use.

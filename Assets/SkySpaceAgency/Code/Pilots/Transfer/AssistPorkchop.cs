@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // One point of the assist search: the three dates, the Lambert choices of both legs, and the cost
     // (leave + flyby burn + arrive), with the flyby periapsis and its plane normal (common frame).

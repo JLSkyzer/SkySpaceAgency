@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // Hold50, Approach10 and Hold10 are named after the RCS distances: the real ones are
     // DockLimits.HoldFar and HoldNear (100 m and 20 m with the main engine).

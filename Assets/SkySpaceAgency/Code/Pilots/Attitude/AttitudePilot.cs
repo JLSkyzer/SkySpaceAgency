@@ -1,9 +1,9 @@
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KTools;
 // using KTools.UI;
 
-namespace K2D2.Controller
+namespace SkySpaceAgency.Controller
 {
     class AttitudeSettings
     {
@@ -24,11 +24,11 @@ namespace K2D2.Controller
             _page = new AttitudeUI(this);
 
             // logger.LogMessage("LandingController !");
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
 
             Instance = this;
             debug_mode_only = false;
-            K2D2PilotsMgr.Instance.RegisterPilot("Attitude", this);
+            SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Attitude", this);
         }
 
         public override void onReset()
@@ -48,7 +48,7 @@ namespace K2D2.Controller
                 if (!value)
                 {
                     // stop
-                    // var current_vessel = K2D2_Plugin.Instance.current_vessel;
+                    // var current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
                     // if (current_vessel != null)
                     //     current_vessel.SetThrottle(0);
 
@@ -57,7 +57,7 @@ namespace K2D2.Controller
                 else
                 {
                     // reset controller to desactivate other controllers.
-                    K2D2_Plugin.ResetControllers();
+                    SkySpaceAgencyPlugin.ResetControllers();
                     _active = true;
 
                     var autopilot = current_vessel.Autopilot;
@@ -98,9 +98,9 @@ namespace K2D2.Controller
 
         // public override void onGUI()
         // {
-        //     if (K2D2_Plugin.Instance.settings_visible)
+        //     if (SkySpaceAgencyPlugin.Instance.settings_visible)
         //     {
-        //         K2D2Settings.onGUI();
+        //         SkySpaceAgencySettings.onGUI();
         //         return;
         //     }
 

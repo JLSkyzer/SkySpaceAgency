@@ -1,8 +1,8 @@
 using KTools;
 using UnityEngine.UIElements;
-using K2UI;
+using SsaUI;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // How the boost-back turns the vessel round before its burn (see BoostBackBurn). K2-D2 1.4.0
     // (IanMealworm); the boost-back flies in the K2-D2 flavour only (BoostBackStart).
@@ -125,7 +125,7 @@ namespace K2D2.Landing
         public void setupUI(VisualElement root)
         {
             // TARGET
-            root.Q<K2Toggle>("precision_landing_vac").Bind(precision_landing);
+            root.Q<SsaToggle>("precision_landing_vac").Bind(precision_landing);
             var target_settings = root.Q<VisualElement>("target_settings_vac");
             // Precision-only steering sliders (see PRECISION LANDING below) - shown/hidden
             // alongside target_settings, since neither means anything with precision landing off.
@@ -142,27 +142,27 @@ namespace K2D2.Landing
             target_settings.Q<FloatField>("target_longitude_vac").Bind(target_longitude);
 
             // LEGS
-            root.Q<K2Toggle>("deploy_legs_early_vac").Bind(deploy_legs_early);
+            root.Q<SsaToggle>("deploy_legs_early_vac").Bind(deploy_legs_early);
 
             // WARP
-            root.Q<K2Toggle>("auto_warp_vac").Bind(auto_warp);
+            root.Q<SsaToggle>("auto_warp_vac").Bind(auto_warp);
             var warp_settings = root.Q<VisualElement>("warp_settings_vac");
             auto_warp.listen(v => warp_settings.Show(v));
 
             warp_settings.Q<IntegerField>("rotation_warp_duration_vac").Bind(rotation_warp_duration);
-            warp_settings.Q<K2Slider>("max_rotation_vac").Bind(max_rotation);
+            warp_settings.Q<SsaSlider>("max_rotation_vac").Bind(max_rotation);
 
             // BRAKE
-            root.Q<K2Slider>("burn_before_vac").Bind(burn_before);
+            root.Q<SsaSlider>("burn_before_vac").Bind(burn_before);
 
             // TOUCH DOWN (touch_down_max_angle now bound by TouchDown.SetupFullUI, not here)
-            var el_touchdown_altitude = root.Q<K2Slider>("start_touchdown_altitude_vac").Bind(start_touchdown_altitude);
+            var el_touchdown_altitude = root.Q<SsaSlider>("start_touchdown_altitude_vac").Bind(start_touchdown_altitude);
             start_touchdown_altitude.listen(v =>
                 el_touchdown_altitude.Label = "Start TouchDown Altitude : " + StrTool.DistanceToString(v)
             );
 
-            root.Q<K2Slider>("touch_down_ratio_vac").Bind(touch_down_ratio);
-            root.Q<K2Slider>("touch_down_speed_vac").Bind(touch_down_speed);
+            root.Q<SsaSlider>("touch_down_ratio_vac").Bind(touch_down_ratio);
+            root.Q<SsaSlider>("touch_down_speed_vac").Bind(touch_down_speed);
 
             // PRECISION LANDING - the guidance tilt limit lives on TouchDown (see its SetupFullUI). The
             // plane change is planned by the pilot (Precision/PlaneChange), no trim slider.
@@ -178,7 +178,7 @@ namespace K2D2.Landing
             // precision return); in Propulsive mode it is disabled and kept off. LandingUI also
             // forces it off every tick in Propulsive mode, in case a saved file turns it back on.
             // K2-D2 flavour only (ModIdentity.IsK2D2): Propulsive precision is the boost-back.
-            var precision_toggle = root.Q<K2Toggle>("precision_landing_atmo").Bind(precision_landing);
+            var precision_toggle = root.Q<SsaToggle>("precision_landing_atmo").Bind(precision_landing);
             mode.listen(m =>
             {
                 precision_toggle.SetEnabled(PrecisionAllowed(m));
@@ -195,32 +195,32 @@ namespace K2D2.Landing
 
             // LANDING MODE (this is the atmo profile, so mode is not null)
             root.Q<InlineEnum>("land_mode_atmo").Bind(mode);
-            root.Q<K2Toggle>("deploy_legs_early_atmo").Bind(deploy_legs_early);
+            root.Q<SsaToggle>("deploy_legs_early_atmo").Bind(deploy_legs_early);
 
-            root.Q<K2Toggle>("auto_warp_atmo").Bind(auto_warp);
+            root.Q<SsaToggle>("auto_warp_atmo").Bind(auto_warp);
             var warp_settings = root.Q<VisualElement>("warp_settings_atmo");
             auto_warp.listen(v => warp_settings.Show(v));
 
             warp_settings.Q<IntegerField>("rotation_warp_duration_atmo").Bind(rotation_warp_duration);
-            warp_settings.Q<K2Slider>("max_rotation_atmo").Bind(max_rotation);
+            warp_settings.Q<SsaSlider>("max_rotation_atmo").Bind(max_rotation);
 
-            root.Q<K2Slider>("burn_before_atmo").Bind(burn_before);
+            root.Q<SsaSlider>("burn_before_atmo").Bind(burn_before);
 
-            var el_touchdown_altitude = root.Q<K2Slider>("start_touchdown_altitude_atmo").Bind(start_touchdown_altitude);
+            var el_touchdown_altitude = root.Q<SsaSlider>("start_touchdown_altitude_atmo").Bind(start_touchdown_altitude);
             start_touchdown_altitude.listen(v =>
                 el_touchdown_altitude.Label = "Start TouchDown Altitude : " + StrTool.DistanceToString(v)
             );
 
-            root.Q<K2Slider>("touch_down_ratio_atmo").Bind(touch_down_ratio);
-            root.Q<K2Slider>("touch_down_speed_atmo").Bind(touch_down_speed);
+            root.Q<SsaSlider>("touch_down_ratio_atmo").Bind(touch_down_ratio);
+            root.Q<SsaSlider>("touch_down_speed_atmo").Bind(touch_down_speed);
 
             // PRECISION RETURN
-            root.Q<K2Slider>("reentry_drag_scale_atmo").Bind(reentry_drag_scale);
+            root.Q<SsaSlider>("reentry_drag_scale_atmo").Bind(reentry_drag_scale);
 
             // BOOST-BACK (K2-D2 flavour only: the panel PrecisionLanding_atmo is shown by LandingUI
             // when ModIdentity.IsK2D2, never in this mod). Upstream element names.
-            root.Q<K2Slider>("entry_angle_of_attack_atmo").Bind(entry_angle_of_attack);
-            root.Q<K2Slider>("entry_flight_path_angle_atmo").Bind(entry_flight_path_angle);
+            root.Q<SsaSlider>("entry_angle_of_attack_atmo").Bind(entry_angle_of_attack);
+            root.Q<SsaSlider>("entry_flight_path_angle_atmo").Bind(entry_flight_path_angle);
             root.Q<InlineEnum>("boost_back_flip_atmo").Bind(boost_back_flip);
         }
 

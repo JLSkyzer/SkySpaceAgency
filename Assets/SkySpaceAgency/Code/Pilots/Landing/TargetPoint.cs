@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     /// <summary>
     /// Checks on a point picked on the map: coordinates sane and normalized, body the one the

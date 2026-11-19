@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>
     /// Aligning before warping to a burn (TargetOrbitBurn). On rails warp the vessel cannot turn

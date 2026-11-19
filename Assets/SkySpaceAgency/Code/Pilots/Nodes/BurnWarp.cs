@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>
     /// Timing, warp and throttle formulas of the closed-loop burns (TargetOrbitBurn): how long

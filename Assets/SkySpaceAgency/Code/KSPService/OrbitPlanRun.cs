@@ -1,6 +1,6 @@
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     /// <summary>
     /// The Orbit tab plan in progress, in memory only. The Orbit tab starts it with the node of

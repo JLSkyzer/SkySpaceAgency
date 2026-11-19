@@ -1,9 +1,9 @@
 ﻿using UnityEngine;
 using UnityEngine.UIElements;
 
-using K2UI;
+using SsaUI;
 using KTools;
-namespace K2D2.UI
+namespace SkySpaceAgency.UI
 {
     /// <summary>
     /// A manipulator to make UI Toolkit elements draggable within the screen bounds.
@@ -234,8 +234,8 @@ namespace K2D2.UI
             if (checkTargetType<IntegerField>(target)) return;
             if (checkTargetType<FloatField>(target)) return;
             if (checkTargetType<TextField>(target)) return;
-            if (checkTargetType<K2Toggle>(target)) return;
-            if (checkTargetType<K2Compass>(target)) return;
+            if (checkTargetType<SsaToggle>(target)) return;
+            if (checkTargetType<SsaCompass>(target)) return;
             // Redux's resize handle: dragging it resizes the window, so it mustn't move it too.
             if (checkTargetClass(target, "window-resize-handle")) return;
 

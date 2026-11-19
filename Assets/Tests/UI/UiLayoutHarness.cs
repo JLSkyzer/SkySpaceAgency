@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using K2UI;
+using SsaUI;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -88,8 +88,8 @@ public static class UiLayoutHarness
     // As 14.png: Ap and Pe ticked, Inclination unticked (OrbitUI disables its field).
     static void SetupOrbit(VisualElement page)
     {
-        page.Q<K2Toggle>("ap_enabled").SetValueWithoutNotify(true);
-        page.Q<K2Toggle>("pe_enabled").SetValueWithoutNotify(true);
+        page.Q<SsaToggle>("ap_enabled").SetValueWithoutNotify(true);
+        page.Q<SsaToggle>("pe_enabled").SetValueWithoutNotify(true);
         page.Q<FloatField>("ap_km").SetValueWithoutNotify(200);
         page.Q<FloatField>("pe_km").SetValueWithoutNotify(200);
         page.Q<FloatField>("inc_deg").SetValueWithoutNotify(0.43f);
@@ -100,10 +100,10 @@ public static class UiLayoutHarness
     static void SetupOrbitCapture(VisualElement page)
     {
         SetupOrbit(page);
-        var capture = new K2D2.OrbitPlanning.CaptureInfo { AtPeriapsis = true, Radius = 370000, DeltaV = 254 };
+        var capture = new SkySpaceAgency.OrbitPlanning.CaptureInfo { AtPeriapsis = true, Radius = 370000, DeltaV = 254 };
         page.Q<Label>("summary").text =
             string.Join("\n",
-                K2D2.OrbitPlanning.OrbitUI.CaptureLine(capture, "Mun", 200000),
+                SkySpaceAgency.OrbitPlanning.OrbitUI.CaptureLine(capture, "Mun", 200000),
                 "1. T+00:42:10  Capture at periapsis (170.0 km): 254.0 m/s",
                 "2. T+01:20:05  Set Pe 100.0 km at apoapsis: 61.3 m/s",
                 "Total Δv: 315.3 m/s",
@@ -238,7 +238,7 @@ public static class UiLayoutHarness
         foreach (var child in content.Children())
             child.Show(child.name == scenario.Tab);
         var tab = content.Children().First(c => c.name == scenario.Tab);
-        // As K2Page: the main page is shown, the settings page hidden.
+        // As SsaPage: the main page is shown, the settings page hidden.
         w.Page = tab.Q("page") ?? tab;
         tab.Q("settings")?.Show(false);
         w.Page.Show(true);
@@ -286,20 +286,20 @@ public static class UiLayoutHarness
         {
             // The AppShell title bar: the dashes label is a long run of dashes cut by its container.
             if (v.name == "header") return true;
-            // The inside of a text input (its scrolling text) and the knob of a K2Toggle, which
-            // slides over the track's edges by design (K2Toggle.uss).
+            // The inside of a text input (its scrolling text) and the knob of a SsaToggle, which
+            // slides over the track's edges by design (SsaToggle.uss).
             if (v.ClassListContains("unity-text-element--inner-input-field-component")) return true;
-            if (v.ClassListContains(K2Toggle.inputKnobUssClassName)) return true;
+            if (v.ClassListContains(SsaToggle.inputKnobUssClassName)) return true;
             if (v != e && v.ClassListContains("unity-base-text-field__input")) return true;
             // The ScrollView's scrollers and viewport machinery.
             if (v.ClassListContains("unity-scroller")) return true;
             // The dropdown arrow: KerbalUI.uss (the game's theme) pulls it 7 px right with a
             // negative margin, past the input's edge, on every dropdown of the game.
             if (v.ClassListContains("unity-base-popup-field__arrow")) return true;
-            // K2Compass places its graduation labels itself, on zero-size anchors.
+            // SsaCompass places its graduation labels itself, on zero-size anchors.
             if (v.ClassListContains("k2compas")) return true;
-            // K2Slider's min/max labels are pulled 2 px up towards the track on purpose
-            // (K2Slider.uss, ".k2-slider-main #min_max_bar Label").
+            // SsaSlider's min/max labels are pulled 2 px up towards the track on purpose
+            // (SsaSlider.uss, ".k2-slider-main #min_max_bar Label").
             if (v.name == "min_max_bar") return true;
         }
         return false;
@@ -398,7 +398,7 @@ public static class UiLayoutHarness
 
     static bool IsControl(VisualElement e) =>
         e is Button
-        || e.ClassListContains(K2Toggle.inputUssClassName)
+        || e.ClassListContains(SsaToggle.inputUssClassName)
         || e.ClassListContains("unity-toggle__input")
         || e.ClassListContains("unity-base-field__input");
 

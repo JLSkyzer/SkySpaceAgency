@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Landing.Precision
+namespace SkySpaceAgency.Landing.Precision
 {
     // TerminalGuidance's local frame at the target, in the body-relative inertial Zup frame:
     // Up = the target direction, East = the direction of growing longitude (LonSign · ẑ × Up,

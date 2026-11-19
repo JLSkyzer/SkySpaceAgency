@@ -9,11 +9,11 @@
     <ui:Template name="About" src="project://database/Assets/UI/K2D2_UI/about.uxml?fileID=9197481963319205126&amp;guid=16d4c53a22570084499af3b95b5a9aa6&amp;type=3#about" />
     <Style src="project://database/Assets/UI/K2D2_UI/K2D2.uss?fileID=7433441132597879392&amp;guid=f49119c0dc6aec7469a0374f7f606ceb&amp;type=3#K2D2" />
     <Style src="project://database/Packages/uitkforksp2.controls/Assets/Theme/KerbalUI.uss?fileID=7433441132597879392&amp;guid=48c501354e05fdc41b817de07ca2a1b8&amp;type=3#KerbalUI" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2UI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#K2UI" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/ToggleButton.uss?fileID=7433441132597879392&amp;guid=1b6a73cd9e0a617469e5d501d696c7be&amp;type=3#ToggleButton" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Toggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#K2Toggle" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Slider.uss?fileID=7433441132597879392&amp;guid=3d8e4d9f1386ac94c97e6381ad01c59b&amp;type=3#K2Slider" />
-    <Style src="project://database/Assets/Runtime/K2UI/USS/K2Tabs.uss?fileID=7433441132597879392&amp;guid=51945eb7b64f1ab4986c6d98dc37254e&amp;type=3#K2Tabs" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaUI.uss?fileID=7433441132597879392&amp;guid=d70a8288b6b3eee4a900aa2727eb7499&amp;type=3#SsaUI" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/ToggleButton.uss?fileID=7433441132597879392&amp;guid=1b6a73cd9e0a617469e5d501d696c7be&amp;type=3#ToggleButton" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaToggle.uss?fileID=7433441132597879392&amp;guid=a6dc5024ba8ad204e9099eca78c0703f&amp;type=3#SsaToggle" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaSlider.uss?fileID=7433441132597879392&amp;guid=3d8e4d9f1386ac94c97e6381ad01c59b&amp;type=3#SsaSlider" />
+    <Style src="project://database/Assets/Runtime/SsaUI/USS/SsaTabs.uss?fileID=7433441132597879392&amp;guid=51945eb7b64f1ab4986c6d98dc37254e&amp;type=3#SsaTabs" />
     <!-- width/height are now an explicit starting size instead of width-only/auto-height - a
          fixed height is what lets the ScrollView below actually have a bounded viewport to
          scroll within instead of just growing forever with its content. min-width/min-height
@@ -24,7 +24,7 @@
              footer row stays pinned in place and only the tab body scrolls, matching how stock
              KSP2 panels keep their own footer controls fixed while the list above scrolls. -->
         <ui:ScrollView name="tab-scroll-view" style="flex-grow: 1;">
-            <K2UI.Tabs.TabbedPage selected-tab-Name="controls">
+            <SsaUI.Tabs.TabbedPage selected-tab-Name="controls">
                 <ui:Instance template="NodeEx" name="node" style="display: none;" />
                 <ui:Instance template="Orbit" name="orbit" style="display: none;" />
                 <ui:Instance template="Transfer" name="transfer" style="display: none;" />
@@ -33,7 +33,7 @@
                 <ui:Instance template="Dock" name="dock" style="display: none;" />
                 <ui:Instance template="attitude" name="attitude" style="display: none;" />
                 <ui:Instance template="About" name="about" />
-            </K2UI.Tabs.TabbedPage>
+            </SsaUI.Tabs.TabbedPage>
         </ui:ScrollView>
         <!-- Settings/auto-staging controls, moved from the top toolbar to a footer row below the
              tab content. Auto-staging is now a labeled checkbox (a small LED-style square that
@@ -43,13 +43,13 @@
              constructor, so row-reverse is what puts this icon on the left of the label instead
              of after it). -->
         <ui:VisualElement name="toolbar" style="flex-direction: row; align-items: center; justify-content: space-between; margin-top: 6px;">
-            <K2UI.ToggleButton label="Auto-staging" name="staging-toggle" value="false" class="auto-staging-toggle">
+            <SsaUI.ToggleButton label="Auto-staging" name="staging-toggle" value="false" class="auto-staging-toggle">
                 <ui:VisualElement name="icon" />
-            </K2UI.ToggleButton>
+            </SsaUI.ToggleButton>
             <ui:Button text="i" name="info-toggle" tooltip="About" style="width: 25px; height: 25px;" />
         </ui:VisualElement>
         <!-- Redux's resize handle: it adds UitkForKsp2's resize manipulator to MainFrame.
-             K2D2Window.cs saves the size (WindowSizeSaver). -->
+             SkySpaceAgencyWindow.cs saves the size (WindowSizeSaver). -->
         <UitkForKsp2.Controls.WindowResizeHandle target-name="MainFrame" min-width="300" min-height="250" />
     </UitkForKsp2.Controls.AppShell>
 </ui:UXML>

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     public enum BrakeStatus
     {

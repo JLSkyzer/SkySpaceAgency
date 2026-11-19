@@ -1,4 +1,4 @@
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using NUnit.Framework;
 
 public class AltitudeReadingTests

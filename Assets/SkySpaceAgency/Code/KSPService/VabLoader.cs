@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.VabTools;
+using SkySpaceAgency.VabTools;
 using KSP.IO;
 using KSP.OAB;
 using KSP.Sim;
 using KTools;
 using Newtonsoft.Json.Linq;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     // The game calls of the import (see the plan's loader table). Every deserialization is checked
     // against the JSON's part count, so a silently misread file can never clear the workspace.
@@ -136,7 +136,7 @@ namespace K2D2.KSPService
             if (_reported)
                 return;
             _reported = true;
-            K2D2_Plugin.logger.LogInfo($"[VabTools] import: {where} could not read the VAB state: {e.Message}");
+            SkySpaceAgencyPlugin.logger.LogInfo($"[VabTools] import: {where} could not read the VAB state: {e.Message}");
         }
     }
 }

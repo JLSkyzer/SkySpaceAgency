@@ -1,6 +1,6 @@
 using KTools;
 
-namespace K2D2
+namespace SkySpaceAgency
 {
     public class GlobalSetting
     {

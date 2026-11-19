@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Landing.Braking;
 using KSP.Sim.DeltaV;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Landing with a chosen stage (powered braking only, parachute mode is unchanged): the lower
     // stages brake first and are dropped when dry or at the drop height (StagedBrakePlan), then

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The body hierarchy and its ephemeris: each body moves on a two-body Kepler orbit around its
     // parent, propagated from its epoch state. Pure code: no game API, safe on a worker thread.

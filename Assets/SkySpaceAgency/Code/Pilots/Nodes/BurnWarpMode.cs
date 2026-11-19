@@ -1,6 +1,6 @@
 using KTools;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>
     /// The time warp a closed-loop burn (TargetOrbitBurn) may use while the engines push. The warp

@@ -8,7 +8,7 @@ using KSP2FlightAssistant.MathLibrary;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     public enum TransferPhase { Planned, WaitWindow, PlaneChange, OrbitChange, Injection, Escape, Correction, Coast, Capture, Flyby, Done, Failed }
 
@@ -300,7 +300,7 @@ namespace K2D2.Transfer
                         RendezvousDeltaV = Dbl(c, "rendezvousDeltaV"),
                         DockReserve = Dbl(c, "dockReserve"),
                     };
-                    if (!System.Enum.TryParse(saved.Chain.Mode, false, out K2D2.Rendezvous.RvMode _) || int.TryParse(saved.Chain.Mode, out _))
+                    if (!System.Enum.TryParse(saved.Chain.Mode, false, out SkySpaceAgency.Rendezvous.RvMode _) || int.TryParse(saved.Chain.Mode, out _))
                         throw new FormatException($"the field 'chain.mode' ({saved.Chain.Mode}) is not a rendezvous mode");
                 }
                 bool rendezvous = saved.Kind == SavedPlan.KindRendezvous;

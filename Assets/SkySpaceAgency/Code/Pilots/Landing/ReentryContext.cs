@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Modules;
 using KSP.Sim.impl;
 using UnityEngine;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Inputs of the reentry predictor (Precision/ReentryPredictor) read from the live game once:
     // the PrecisionContext (state, body, rotation sign, reference, target, terrain), the

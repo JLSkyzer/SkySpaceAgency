@@ -1,6 +1,6 @@
 using System;
-using K2D2.OrbitPlanning;
-using K2D2.Rendezvous;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Rendezvous;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;

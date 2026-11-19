@@ -1,11 +1,11 @@
 using System;
 using System.Globalization;
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The landing burn of a vessel already falling inside the air, on a regular propulsive landing
     // (K2-D2 1.4.0, IanMealworm; plan 2026-11-19 item L4). The braking simulation

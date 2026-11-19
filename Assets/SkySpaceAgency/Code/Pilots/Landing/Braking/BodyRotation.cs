@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     // Body rotation in the game's Zup frame (z = rotation axis). The direction of rotation along z
     // is not documented, so the sign is calibrated against the surface speed the game measures.

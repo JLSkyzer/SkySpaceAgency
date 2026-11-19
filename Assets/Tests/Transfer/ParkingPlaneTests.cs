@@ -1,6 +1,6 @@
 using System;
 using System.Threading;
-using K2D2.Transfer;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using NUnit.Framework;
 

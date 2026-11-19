@@ -1,9 +1,9 @@
 using System;
-using K2D2.OrbitPlanning;
-using K2D2.Transfer;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>
     /// What a closed-loop burn (TargetOrbitBurn) steers along: the velocity change still to make

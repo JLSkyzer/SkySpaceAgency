@@ -1,14 +1,14 @@
 
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 // using UnityEngine;
 using UnityEngine.UIElements;
-using K2D2.UI;
-using K2D2.Controller;
-using K2D2.Node;
-namespace K2D2.Lift
+using SkySpaceAgency.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.Node;
+namespace SkySpaceAgency.Lift
 {
     // Coasting from engine cut-off to the edge of the atmosphere, holding surface prograde and
     // (with Coasting Warp on) warping toward the edge.
@@ -22,7 +22,7 @@ namespace K2D2.Lift
 
         public Coasting(LiftPilot lift, LiftSettings lift_settings)
         {
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             this.lift = lift;
             this.lift_settings = lift_settings;
         }

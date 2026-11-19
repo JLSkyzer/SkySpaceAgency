@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // Lambert's problem: the orbit that goes from r1 to r2 in a given time. Universal variables
     // (Curtis, "Orbital Mechanics for Engineering Students", algorithm 5.2), extended to several

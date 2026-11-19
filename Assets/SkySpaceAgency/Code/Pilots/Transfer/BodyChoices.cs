@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The entries of a body dropdown: every body, grouped by parent. Depth first from each root
     // (in index order); a body's children come right after it, nearest orbit first (orbital period,

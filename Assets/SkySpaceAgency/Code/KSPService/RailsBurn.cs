@@ -7,7 +7,7 @@ using KSP.Sim.impl;
 using KSP.Sim.Maneuver;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     /// <summary>
     /// Drives the game's native rails warp during a burn, as decided by RailsBurnPolicy, checks
@@ -85,7 +85,7 @@ namespace K2D2.KSPService
         }
 
         /// <summary>The warp is still on rails: entered, above the physics range, physics mode off.</summary>
-        public bool OnRails => Entered && TimeWarpTools.CurrentRateIndex > K2D2.Node.PhysicsWarpPolicy.MaxPhysicsIndex && !PhysicsMode;
+        public bool OnRails => Entered && TimeWarpTools.CurrentRateIndex > SkySpaceAgency.Node.PhysicsWarpPolicy.MaxPhysicsIndex && !PhysicsMode;
 
         /// <summary>
         /// Switches physics mode off and asks the game for index (instant, so the vessel goes
@@ -149,7 +149,7 @@ namespace K2D2.KSPService
         public bool StepDown(int index)
         {
             TimeWarp tw = Tw;
-            if (tw == null || !Entered || index <= K2D2.Node.PhysicsWarpPolicy.MaxPhysicsIndex)
+            if (tw == null || !Entered || index <= SkySpaceAgency.Node.PhysicsWarpPolicy.MaxPhysicsIndex)
                 return false;
             try { tw.SetRateIndex(index, true); }
             catch (Exception e) { logger?.LogWarning($"{Prefix} step down failed: {e.GetType().Name}: {e.Message}"); }

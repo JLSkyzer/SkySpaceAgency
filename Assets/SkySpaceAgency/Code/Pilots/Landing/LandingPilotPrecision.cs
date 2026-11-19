@@ -1,16 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Api;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
 using KTools;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // The precision landing on an airless body (sub-project 3, part 2): the game side of the pure
     // planner in Precision/. Start: PrecisionStart.Plan from PrecisionContext, refused with the

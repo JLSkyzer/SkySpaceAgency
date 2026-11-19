@@ -1,11 +1,11 @@
 
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KTools;
-using K2D2.Controller;
-using K2D2.Node;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.Node;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     public class LiftPilot : Pilot
     {
@@ -75,7 +75,7 @@ namespace K2D2.Lift
             ascent_path = new LiftAscentPath(settings);
             _page = new LiftUI(this);
 
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
        
             ascent_guided = new Ascent(settings, ascent_path);
             ascent_gravity_turn = new ReactiveAscent(settings);
@@ -90,15 +90,15 @@ namespace K2D2.Lift
 
             debug_mode_only = false;
 
-            K2D2PilotsMgr.Instance.RegisterPilot("Lift", this);
+            SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Lift", this);
         }
 
-        // The cause of a reset that stops the run (K2D2_Plugin.ResetControllers); null for Stop.
+        // The cause of a reset that stops the run (SkySpaceAgencyPlugin.ResetControllers); null for Stop.
         ResetCause? stop_cause;
 
         public override void onReset()
         {
-            stop_cause = K2D2_Plugin.CurrentResetCause;
+            stop_cause = SkySpaceAgencyPlugin.CurrentResetCause;
             try
             {
                 isRunning = false;
@@ -204,7 +204,7 @@ namespace K2D2.Lift
                 else
                 {
                     // reset controller to desactivate other controllers.
-                    K2D2_Plugin.ResetControllers();
+                    SkySpaceAgencyPlugin.ResetControllers();
                     OnStartController();
                 }
 
@@ -366,7 +366,7 @@ namespace K2D2.Lift
             {
                 ending = false;
             }
-            var rv = K2D2.Rendezvous.RendezvousPilot.Instance;
+            var rv = SkySpaceAgency.Rendezvous.RendezvousPilot.Instance;
             bool started = false;
             string why;
             if (rv == null)
@@ -375,7 +375,7 @@ namespace K2D2.Lift
                 why = "No target vessel.";
             else
             {
-                started = rv.Start(dock ? K2D2.Rendezvous.RvMode.RendezvousAndDock : K2D2.Rendezvous.RvMode.RendezvousOnly, id, false);
+                started = rv.Start(dock ? SkySpaceAgency.Rendezvous.RvMode.RendezvousAndDock : SkySpaceAgency.Rendezvous.RvMode.RendezvousOnly, id, false);
                 why = rv.Status;
             }
             logger.LogInfo("[Lift] rendezvous: hand-over " + (started ? "started" : "refused: " + why));

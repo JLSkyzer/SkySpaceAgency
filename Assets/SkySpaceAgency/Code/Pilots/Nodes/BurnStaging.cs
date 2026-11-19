@@ -1,18 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.Landing;
-using K2D2.Landing.Precision;
-using K2D2.Transfer;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing;
+using SkySpaceAgency.Landing.Precision;
+using SkySpaceAgency.Transfer;
 using KSP.Game;
 using KSP.Modules;
 using KSP.Sim.DeltaV;
 using KSP.Sim.impl;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>
     /// Game glue: staging during a closed-loop burn that ran dry, for the callers that opt in

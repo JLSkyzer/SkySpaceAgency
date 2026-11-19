@@ -1,6 +1,6 @@
 using System;
-using K2D2.OrbitPlanning;
-using K2D2.Transfer;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;

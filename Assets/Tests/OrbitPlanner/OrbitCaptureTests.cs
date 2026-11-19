@@ -1,5 +1,5 @@
 using System;
-using K2D2.OrbitPlanning;
+using SkySpaceAgency.OrbitPlanning;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;
@@ -78,7 +78,7 @@ public class OrbitCaptureTests
         AssertRelative(rp, rAtPe.magnitude, 1e-6, "radius at the time to periapsis");
         AssertRelative(rp, plan.Capture.Radius, 1e-6, "capture radius");
 
-        AssertRelative(K2D2.Transfer.Hyperbola.CaptureDeltaV(vInf, rp, rp, Mu), plan.Capture.DeltaV, 1e-4, "capture dv");
+        AssertRelative(SkySpaceAgency.Transfer.Hyperbola.CaptureDeltaV(vInf, rp, rp, Mu), plan.Capture.DeltaV, 1e-4, "capture dv");
         Assert.AreEqual(plan.Capture.DeltaV, plan.Burns[0].DeltaV.magnitude, 1e-9);
         Assert.Less(plan.Burns[0].Prograde, 0, "a retrograde burn");
         Assert.AreEqual(0, plan.Burns[0].Radial, 1e-3 * plan.Capture.DeltaV, "tangential at the periapsis");

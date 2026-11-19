@@ -1,7 +1,7 @@
 
 using UnityEngine;
 
-using K2D2.KSPService;
+using SkySpaceAgency.KSPService;
 using KSP.Sim;
 // using KTools.UI;
 using KTools;
@@ -10,7 +10,7 @@ using ILogger = SpaceWarp2.API.Logging.ILogger;
 // using KSP.Tools;
 // using KSP.UI.Binding;
 
-namespace K2D2.Controller
+namespace SkySpaceAgency.Controller
 {
     public class DroneSettings
     {
@@ -58,10 +58,10 @@ namespace K2D2.Controller
         public DronePilot()
         {
             debug_mode_only = false;
-            K2D2PilotsMgr.Instance.RegisterPilot("Drone", this);
+            SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Drone", this);
 
             sub_contollers.Add(burn_dV);
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
 
             Instance = this;
         }
@@ -83,7 +83,7 @@ namespace K2D2.Controller
                 if (!value)
                 {
                     // stop
-                    var current_vessel = K2D2_Plugin.Instance.current_vessel;
+                    var current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
                     if (current_vessel != null)
                         current_vessel.SetThrottle(0);
 
@@ -92,7 +92,7 @@ namespace K2D2.Controller
                 else
                 {
                     // reset controller to desactivate other controllers.
-                    K2D2_Plugin.ResetControllers();
+                    SkySpaceAgencyPlugin.ResetControllers();
                     _active = true;
                     changeSASMode( SASMode.SurfaceUp );
                     changeVSpeedMode(VSpeedMode.Direct);
@@ -475,9 +475,9 @@ namespace K2D2.Controller
 
         // public override void onGUI()
         // {
-        //     if (K2D2_Plugin.Instance.settings_visible)
+        //     if (SkySpaceAgencyPlugin.Instance.settings_visible)
         //     {
-        //         K2D2Settings.onGUI();
+        //         SkySpaceAgencySettings.onGUI();
         //         settings.onGUI();
         //         return;
         //     }
@@ -526,7 +526,7 @@ namespace K2D2.Controller
         //     if (settings.show_details)
         //         drawDetails();
 
-        //     if (K2D2Settings.debug_mode)
+        //     if (SkySpaceAgencySettings.debug_mode)
         //     {
         //         debugInfos();
         //     }

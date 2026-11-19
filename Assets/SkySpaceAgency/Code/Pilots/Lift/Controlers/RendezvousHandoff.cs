@@ -1,9 +1,9 @@
 using System;
 using System.Globalization;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.Rendezvous;
-using K2D2.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Rendezvous;
+using SkySpaceAgency.UI;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KSP2FlightAssistant.MathLibrary;
@@ -11,7 +11,7 @@ using KTools;
 using UnityEngine.UIElements;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Rendezvous goal (4.4), after the circularisation: no Lift plane trim (the Rendezvous pilot's
     // plane match does it, above 0.05°). Logs the orbit reached against the prediction, then ends the
@@ -28,14 +28,14 @@ namespace K2D2.Lift
         public RendezvousHandoff(LiftPilot lift)
         {
             this.lift = lift;
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
         }
 
         // Never ends the pilot here: Start runs inside LiftPilot's status setter.
         public override void Start()
         {
             base.Start();
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             status_line = "In the parking orbit: handing over to the Rendezvous pilot";
             logger.LogInfo("[Lift] rendezvous: circularized, handing over");
         }
@@ -82,7 +82,7 @@ namespace K2D2.Lift
             double now = GeneralTools.Current_UT;
             Vector3d r = orbit.GetRelativePositionAtUTZup(now);
             Vector3d v = orbit.GetOrbitalVelocityAtUTZup(now);
-            var el = K2D2.OrbitPlanning.OrbitMath.Elements(r, v, p.Mu);
+            var el = SkySpaceAgency.OrbitPlanning.OrbitMath.Elements(r, v, p.Mu);
             string mode = p.Dock ? "rendezvous + docking" : "rendezvous only";
             VesselComponent target = RendezvousSnapshot.FindVessel(p.TargetId);
             IKeplerPatch to = target?.Orbit;

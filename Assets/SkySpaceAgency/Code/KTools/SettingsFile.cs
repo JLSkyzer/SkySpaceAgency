@@ -49,7 +49,7 @@ namespace KTools
         }
 
         // Plain lookup, for code that just needs whatever named file was already set up
-        // elsewhere (see K2D2_Plugin.OnInitialized()) and doesn't have a MonoBehaviour/path handy
+        // elsewhere (see SkySpaceAgencyPlugin.OnInitialized()) and doesn't have a MonoBehaviour/path handy
         // to create one itself - e.g. LandingPilot's constructor, which runs after OnInitialized
         // has already called GetOrCreate for "land_atmo"/"land_vac". Null if nothing registered
         // that name yet - callers should only use this for a name they know was already created.
@@ -82,7 +82,7 @@ namespace KTools
         bool needSave = false;
 
         // One-time migration support - added for Landing's Atmo/Vacuum profile split (see
-        // K2D2_Plugin.OnInitialized(), which calls this right after creating land_vac). Copies
+        // SkySpaceAgencyPlugin.OnInitialized(), which calls this right after creating land_vac). Copies
         // every RAW string value whose key starts with keyPrefix from `source` into THIS file,
         // but only for keys this file doesn't already have - so whatever's already been tuned
         // here (e.g. by the player, on a later launch) never gets clobbered by an old value from

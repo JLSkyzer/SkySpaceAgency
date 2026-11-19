@@ -1,5 +1,5 @@
 using System;
-using K2D2.Landing;
+using SkySpaceAgency.Landing;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;

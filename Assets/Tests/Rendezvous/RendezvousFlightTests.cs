@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using K2D2.OrbitPlanning;
-using K2D2.Rendezvous;
-using K2D2.Transfer;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Rendezvous;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using Newtonsoft.Json.Linq;

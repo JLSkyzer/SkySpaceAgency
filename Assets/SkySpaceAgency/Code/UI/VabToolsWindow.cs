@@ -2,14 +2,14 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using K2D2.KSPService;
-using K2UI;
+using SkySpaceAgency.KSPService;
+using SsaUI;
 using KSP.UI.Binding;
 using UitkForKsp2.API;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace K2D2.UI
+namespace SkySpaceAgency.UI
 {
     /// <summary>
     /// The VAB tools window (title ModIdentity.VabWindowTitle): export, import, parts dump, open folder, status line.
@@ -59,7 +59,7 @@ namespace K2D2.UI
             bool styled = false;
             if (styleSource != null)
             {
-                // Unity API (VisualTreeAsset.stylesheets): K2D2.uss, KerbalUI.uss, K2UI*.uss.
+                // Unity API (VisualTreeAsset.stylesheets): K2D2.uss, KerbalUI.uss, SsaUI*.uss.
                 foreach (StyleSheet sheet in styleSource.stylesheets)
                 {
                     if (sheet == null)
@@ -172,7 +172,7 @@ namespace K2D2.UI
                     return;   // also ends the AppBar toggle -> callback -> setter loop
                 _isOpen = value;
                 _window?.Show(value);
-                GameObject.Find(K2D2_Plugin.ToolbarOabButtonID)
+                GameObject.Find(SkySpaceAgencyPlugin.ToolbarOabButtonID)
                     ?.GetComponent<UIValue_WriteBool_Toggle>()
                     ?.SetValue(value);
                 if (value)
@@ -182,7 +182,7 @@ namespace K2D2.UI
 
         void Update()
         {
-            if (_isOpen && (!VabReader.InVab() || K2D2_Plugin.Instance == null || !K2D2_Plugin.Instance.Enabled))
+            if (_isOpen && (!VabReader.InVab() || SkySpaceAgencyPlugin.Instance == null || !SkySpaceAgencyPlugin.Instance.Enabled))
                 IsWindowOpen = false;
         }
 
@@ -207,7 +207,7 @@ namespace K2D2.UI
             try { choices = VabActions.ImportChoices(); }
             catch (Exception e)
             {
-                K2D2_Plugin.logger.LogError("[VabTools] cannot list the import files: " + e.Message);
+                SkySpaceAgencyPlugin.logger.LogError("[VabTools] cannot list the import files: " + e.Message);
                 choices = new List<string>();
             }
             string previous = _files.value;
@@ -274,7 +274,7 @@ namespace K2D2.UI
                     }
                     catch (Exception e)
                     {
-                        K2D2_Plugin.logger.LogError("[VabTools] import: stopped by an unexpected error: " + e);
+                        SkySpaceAgencyPlugin.logger.LogError("[VabTools] import: stopped by an unexpected error: " + e);
                         SetStatus($"Import stopped by an unexpected error ({e.GetType().Name}: {e.Message}). " +
                                   "See the log. If the rocket changed, import the newest before_import file from vab/exports.");
                         break;

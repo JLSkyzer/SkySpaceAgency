@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using K2D2.VabTools;
+using SkySpaceAgency.VabTools;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
@@ -40,7 +40,7 @@ public class VabDumpTests
     public void Build_SortsPartsAndCountsUnlocked()
     {
         JObject dump = Build(new[] { Tank("zeta", true), Tank("alpha", false), Tank("mid", true) });
-        Assert.AreEqual(K2D2.ModIdentity.VabFormatPrefix + ".PartsDump", (string)dump["format"]);
+        Assert.AreEqual(SkySpaceAgency.ModIdentity.VabFormatPrefix + ".PartsDump", (string)dump["format"]);
         Assert.AreEqual(1, (int)dump["version"]);
         Assert.AreEqual("2026-10-16T05:07:09", (string)dump["exported_at"]);
         CollectionAssert.AreEqual(new[] { "alpha", "mid", "zeta" },

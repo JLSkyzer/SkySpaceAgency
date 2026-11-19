@@ -5,7 +5,7 @@ using KSP.Modules;
 using KSP.OAB;
 using KSP.Sim;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // One docking port's capture limits, from its Data_DockingNode.
     public struct PortCapture

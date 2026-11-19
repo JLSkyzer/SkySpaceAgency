@@ -4,7 +4,7 @@ using KSP.Sim.impl;
 
 using KTools;
 
-namespace K2D2
+namespace SkySpaceAgency
 {
     public class SASTool
     {
@@ -17,12 +17,12 @@ namespace K2D2
 
         public static VesselAutopilot currentAutoPilot()
         {
-            return K2D2_Plugin.Instance.current_vessel?.VesselComponent?.Autopilot;
+            return SkySpaceAgencyPlugin.Instance.current_vessel?.VesselComponent?.Autopilot;
         }
 
         public static VesselSAS currentSas()
         {
-            return K2D2_Plugin.Instance.current_vessel?.VesselComponent?.Autopilot?.SAS;
+            return SkySpaceAgencyPlugin.Instance.current_vessel?.VesselComponent?.Autopilot?.SAS;
         }
 
         public static double getSasResponsePC()

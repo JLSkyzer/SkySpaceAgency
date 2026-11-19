@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Precision;
 using NUnit.Framework;
 
 public class JettisonPlanTests

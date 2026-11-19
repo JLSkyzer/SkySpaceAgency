@@ -1,10 +1,10 @@
-using K2UI;
+using SsaUI;
 using KSP.Sim.impl;
 using KTools;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     public class FlightPlanCall
     {
@@ -15,7 +15,7 @@ namespace K2D2.Node
 
         public static PatchedConicsOrbit getOrbit()
         {
-            var current_vessel = K2D2_Plugin.Instance.current_vessel;
+            var current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             if (current_vessel == null)
             {
                 // UI_Tools.Error("no vessel");
@@ -38,7 +38,7 @@ namespace K2D2.Node
         public bool Circularize(double burnUT, double burnOffsetFactor = -0.5)
         {
             /* TODO: Other mod interfacing once those other mods are complete with porting
-            if (K2D2OtherModsInterface.instance.Circularize(burnUT, burnOffsetFactor))
+            if (SkySpaceAgencyOtherModsInterface.instance.Circularize(burnUT, burnOffsetFactor))
             {
                 return true;
             }
@@ -101,7 +101,7 @@ namespace K2D2.Node
             if (no_maneuver)
             {
                 // TODO: Other mods interfacing
-                var fpLoaded = false; /*K2D2OtherModsInterface.fpLoaded*/;
+                var fpLoaded = false; /*SkySpaceAgencyOtherModsInterface.fpLoaded*/;
                 please_install_fp.Show(!fpLoaded);
                 add_node_buttons_group.Show(fpLoaded);
             }

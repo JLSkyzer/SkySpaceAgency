@@ -6,7 +6,7 @@ using KSP.Sim.impl;
 using KTools;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     // Landing legs. A leg is a part with a deployable module that is bound to the Gear action
     // group (Data_Deployable.DefaultActionGroup) or also carries a wheel/suspension module

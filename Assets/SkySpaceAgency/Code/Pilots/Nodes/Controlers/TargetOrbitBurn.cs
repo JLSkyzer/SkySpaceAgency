@@ -1,8 +1,8 @@
 using System;
-using K2D2.Controller;
-using K2D2.KSPService;
-using K2D2.OrbitPlanning;
-using K2D2.UI;
+using SkySpaceAgency.Controller;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.UI;
 using KSP.Api;
 using KSP.Sim;
 using KSP.Sim.impl;
@@ -12,7 +12,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>
     /// Closed-loop burn toward a target orbit (apsis radii and plane), without following any
@@ -308,7 +308,7 @@ namespace K2D2.Node
             prev_align_angle = double.NaN;
             late_logged = false;
 
-            current_vessel = K2D2_Plugin.Instance.current_vessel;
+            current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
             if (current_vessel?.VesselComponent == null)
             {
                 Refuse("No active vessel.");
@@ -1328,7 +1328,7 @@ namespace K2D2.Node
             }
             st.Console(status_line);
 
-            if (K2D2Settings.debug_mode.V)
+            if (SkySpaceAgencySettings.debug_mode.V)
             {
                 st.Console(DebugLine(GeneralTools.Current_UT));
                 st.Console($"angle {angle:n2}° throttle {throttle:n2}, turn {turn_rate:n2}°/s, lead {align_lead:n1} s, " +

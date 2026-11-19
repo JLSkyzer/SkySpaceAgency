@@ -1,6 +1,6 @@
 using System;
 
-namespace K2D2.Node
+namespace SkySpaceAgency.Node
 {
     /// <summary>
     /// When a closed-loop burn should stage: the engines have given no thrust for DryDelay seconds

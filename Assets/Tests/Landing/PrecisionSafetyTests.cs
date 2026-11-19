@@ -1,6 +1,6 @@
 using System;
-using K2D2.Landing.Braking;
-using K2D2.Landing.Precision;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.Landing.Precision;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 using NUnit.Framework;
@@ -213,6 +213,6 @@ public class PrecisionSafetyTests
     public void PlaneChange_LeadIsThePlanLead()
     {
         Assert.AreEqual(PrecisionPhases.PlanLead, PlaneChange.MinLead, 1e-12);
-        Assert.GreaterOrEqual(PlaneChange.MinLead, K2D2.Node.BurnWarp.MaxLead);
+        Assert.GreaterOrEqual(PlaneChange.MinLead, SkySpaceAgency.Node.BurnWarp.MaxLead);
     }
 }

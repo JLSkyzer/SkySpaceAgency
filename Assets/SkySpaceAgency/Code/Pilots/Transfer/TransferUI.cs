@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
-using K2D2.KSPService;
-using K2D2.OrbitPlanning;
-using K2D2.UI;
-using K2UI;
-using K2UI.Tabs;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.UI;
+using SsaUI;
+using SsaUI.Tabs;
 using KTools;
 using UnityEngine.UIElements;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     // The Transfer tab's choices, kept between sessions.
     public static class TransferSettings
@@ -27,7 +27,7 @@ namespace K2D2.Transfer
 
     // Transfer tab (spec 4.1): the choices, the buttons, and the plan of TransferPilot (case, dates,
     // steps, Δv per stage, warnings). The texts and tables come from TransferReadout (pure).
-    public class TransferUI : K2Page
+    public class TransferUI : SsaPage
     {
         // Every element this page looks up, by name (checked by the UI tests against the window).
         public static readonly string[] Elements =
@@ -75,7 +75,7 @@ namespace K2D2.Transfer
             foreach (string name in Elements)
                 if (panel.Q(name) == null)
                 {
-                    K2D2_Plugin.logger.LogError($"[Transfer] the Transfer tab has no element named {name}");
+                    SkySpaceAgencyPlugin.logger.LogError($"[Transfer] the Transfer tab has no element named {name}");
                     return false;
                 }
 
@@ -87,7 +87,7 @@ namespace K2D2.Transfer
                     TransferSettings.target_body.V = entries[i].Name;
             });
             panel.Q<InlineEnum>("arrival").Bind(TransferSettings.arrival, "Encounter;Orbit");
-            panel.Q<K2Toggle>("low_circular").Bind(TransferSettings.low_circular);
+            panel.Q<SsaToggle>("low_circular").Bind(TransferSettings.low_circular);
             // Unticking starts the fields from the target's low orbit.
             TransferSettings.low_circular.listeners -= OnLowCircular; // once, even after a re-init
             TransferSettings.low_circular.listeners += OnLowCircular;
@@ -97,11 +97,11 @@ namespace K2D2.Transfer
             pe_field = panel.Q<FloatField>("pe_km").Bind(TransferSettings.pe_km);
             ap_field = panel.Q<FloatField>("ap_km").Bind(TransferSettings.ap_km);
             inc_field = panel.Q<FloatField>("inc_deg").Bind(TransferSettings.inc_deg);
-            panel.Q<K2Toggle>("inc_enabled").Bind(TransferSettings.inc_enabled);
-            panel.Q<K2Toggle>("prepare_only").Bind(TransferSettings.prepare_only);
+            panel.Q<SsaToggle>("inc_enabled").Bind(TransferSettings.inc_enabled);
+            panel.Q<SsaToggle>("prepare_only").Bind(TransferSettings.prepare_only);
 
             // Gravity assists (4.6): the search also tries one flyby; the plan offers the choice.
-            panel.Q<K2Toggle>("gravity_assist").Bind(TransferSettings.gravity_assist);
+            panel.Q<SsaToggle>("gravity_assist").Bind(TransferSettings.gravity_assist);
 
             var max_trip = panel.Q<TextField>("max_trip_days");
             max_trip.isDelayed = true;
@@ -170,11 +170,11 @@ namespace K2D2.Transfer
                 {
                     s = GameBodySystem.Build(GeneralTools.Current_UT, out string error);
                     if (s == null)
-                        K2D2_Plugin.logger.LogInfo($"[Transfer] tab: no body list yet ({error})");
+                        SkySpaceAgencyPlugin.logger.LogInfo($"[Transfer] tab: no body list yet ({error})");
                 }
                 catch (Exception e)
                 {
-                    K2D2_Plugin.logger.LogInfo($"[Transfer] tab: no body list yet ({e.GetType().Name}: {e.Message})");
+                    SkySpaceAgencyPlugin.logger.LogInfo($"[Transfer] tab: no body list yet ({e.GetType().Name}: {e.Message})");
                 }
             }
             if (s == null || s == list_system)
@@ -410,12 +410,12 @@ namespace K2D2.Transfer
         {
             try
             {
-                var staging = K2D2_Plugin.Instance?.current_vessel?.VesselComponent?.SimulationObject?.Staging;
+                var staging = SkySpaceAgencyPlugin.Instance?.current_vessel?.VesselComponent?.SimulationObject?.Staging;
                 if (staging == null)
                     return null;
                 int count = staging.StageCount;
                 bool lastActive = count > 0 && staging.AvailableStages[count - 1].IsActive;
-                return K2D2.Landing.Precision.JettisonPlan.NextStage(count, lastActive);
+                return SkySpaceAgency.Landing.Precision.JettisonPlan.NextStage(count, lastActive);
             }
             catch (Exception)
             {

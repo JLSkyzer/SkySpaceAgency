@@ -1,5 +1,5 @@
 using System;
-using K2D2.Landing;
+using SkySpaceAgency.Landing;
 using NUnit.Framework;
 
 // AtmoBurnPlanner (K2-D2 1.4.0): the last moment a landing burn in air still ends at the gate.

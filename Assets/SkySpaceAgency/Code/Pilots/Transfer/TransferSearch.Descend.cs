@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using KSP.Sim;
 
-namespace K2D2.Transfer
+namespace SkySpaceAgency.Transfer
 {
     public static partial class TransferSearch
     {

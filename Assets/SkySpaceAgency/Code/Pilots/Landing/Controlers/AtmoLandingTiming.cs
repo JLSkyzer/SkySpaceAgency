@@ -2,7 +2,7 @@ using System;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // When to start the regular (not precision) landing burn on a body with an atmosphere, for a
     // vessel already falling in the air (K2-D2 1.4.0, IanMealworm).

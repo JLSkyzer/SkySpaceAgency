@@ -1,7 +1,7 @@
 using System;
 using KSP.Sim;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // Which vessel axis each RCS input (FlightCtrlState X, Y, Z) really moves the vessel along,
     // measured by a probe that pulses each input and reads the velocity change. Never assumed:

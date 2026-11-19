@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
 
-namespace K2D2.Landing
+namespace SkySpaceAgency.Landing
 {
     // Drives Redux's own click-to-place flow (PlayerWaypointManager.BeginPlacement(), reached by
     // reflection like ReduxWaypoints, the type being internal) so the Land tab can use it as a
@@ -119,7 +119,7 @@ namespace K2D2.Landing
             {
                 _on_picked = onPicked;
                 _on_failed = onFailed;
-                _body_at_begin = K2D2_Plugin.Instance?.current_vessel?.currentBody()?.Name;
+                _body_at_begin = SkySpaceAgencyPlugin.Instance?.current_vessel?.currentBody()?.Name;
                 _count_before = CountPlayerWaypoints();
 
                 _completed_handler = OnCompleted;
@@ -136,14 +136,14 @@ namespace K2D2.Landing
                 AddHandler(_failed_event, manager, _failed_handler);
 
                 _begin_method.Invoke(manager, null);
-                K2D2_Plugin.logger.LogInfo($"[Landing] target: placement started (player waypoints on {_body_at_begin ?? "all bodies"}: {_count_before}).");
+                SkySpaceAgencyPlugin.logger.LogInfo($"[Landing] target: placement started (player waypoints on {_body_at_begin ?? "all bodies"}: {_count_before}).");
                 return true;
             }
             catch (Exception e)
             {
                 var failed = _on_failed;
                 string message = (e is TargetInvocationException tie && tie.InnerException != null ? tie.InnerException : e).Message;
-                K2D2_Plugin.logger.LogWarning($"[Landing] target: BeginPlacement failed: {e.GetType().Name}: {message}");
+                SkySpaceAgencyPlugin.logger.LogWarning($"[Landing] target: BeginPlacement failed: {e.GetType().Name}: {message}");
                 Cleanup();
                 SafeCall(() => failed?.Invoke("Map picking failed: " + message));
                 return true;
@@ -209,7 +209,7 @@ namespace K2D2.Landing
                     Cleanup();
                     CancelIfActive(manager);
                     string message = (e is TargetInvocationException tie && tie.InnerException != null ? tie.InnerException : e).Message;
-                    K2D2_Plugin.logger.LogWarning($"[Landing] target: could not read IsPlacementActive, pick abandoned: {e.GetType().Name}: {message}");
+                    SkySpaceAgencyPlugin.logger.LogWarning($"[Landing] target: could not read IsPlacementActive, pick abandoned: {e.GetType().Name}: {message}");
                     SafeCall(() => on_failed?.Invoke("Map picking failed: could not read the placement state (" + message + ")."));
                     return;
                 }
@@ -219,7 +219,7 @@ namespace K2D2.Landing
 
             var failed = _on_failed;
             Cleanup();
-            K2D2_Plugin.logger.LogInfo("[Landing] target: placement ended without a point (cancelled).");
+            SkySpaceAgencyPlugin.logger.LogInfo("[Landing] target: placement ended without a point (cancelled).");
             SafeCall(() => failed?.Invoke("cancelled"));
         }
 
@@ -232,7 +232,7 @@ namespace K2D2.Landing
             try
             {
                 int after = CountPlayerWaypoints();
-                K2D2_Plugin.logger.LogInfo($"[Landing] target: placement completed raw ({a}, {b:R}, {c:R}), player waypoints {before} -> {after}");
+                SkySpaceAgencyPlugin.logger.LogInfo($"[Landing] target: placement completed raw ({a}, {b:R}, {c:R}), player waypoints {before} -> {after}");
             }
             catch (Exception e)
             {
@@ -249,7 +249,7 @@ namespace K2D2.Landing
             Cleanup();
             // Redux may leave placement active after a failure.
             CancelIfActive(manager);
-            K2D2_Plugin.logger.LogWarning($"[Landing] target: placement failed: {message}");
+            SkySpaceAgencyPlugin.logger.LogWarning($"[Landing] target: placement failed: {message}");
             SafeCall(() => failed?.Invoke(message));
         }
 
@@ -297,7 +297,7 @@ namespace K2D2.Landing
         static void SafeCall(Action action)
         {
             try { action(); }
-            catch (Exception e) { K2D2_Plugin.logger.LogWarning($"[Landing] target: pick callback threw: {e.GetType().Name}: {e.Message}"); }
+            catch (Exception e) { SkySpaceAgencyPlugin.logger.LogWarning($"[Landing] target: pick callback threw: {e.GetType().Name}: {e.Message}"); }
         }
     }
 }

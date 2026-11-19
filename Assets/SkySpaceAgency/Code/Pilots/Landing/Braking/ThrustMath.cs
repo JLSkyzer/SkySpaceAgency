@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace K2D2.Landing.Braking
+namespace SkySpaceAgency.Landing.Braking
 {
     // Engine arithmetic shared by BurndV and the braking simulation. Thrust in kN and mass in t,
     // so thrust / mass is in m/s², like the rest of the mod.

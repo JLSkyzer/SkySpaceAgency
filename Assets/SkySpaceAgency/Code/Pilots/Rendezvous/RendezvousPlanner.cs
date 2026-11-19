@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
-using K2D2.OrbitPlanning;
-using K2D2.Transfer;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP2FlightAssistant.MathLibrary;
 
-namespace K2D2.Rendezvous
+namespace SkySpaceAgency.Rendezvous
 {
     // PlaneMatch: a burn at the relative node that puts our orbit in the target's plane.
     // Phasing: the intercept burn when the intercept takes one or more full revolutions, on a lower

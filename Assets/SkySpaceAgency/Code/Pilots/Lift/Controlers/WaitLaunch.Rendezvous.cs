@@ -2,16 +2,16 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using K2D2.KSPService;
-using K2D2.Landing.Braking;
-using K2D2.OrbitPlanning;
-using K2D2.Rendezvous;
-using K2D2.Transfer;
+using SkySpaceAgency.KSPService;
+using SkySpaceAgency.Landing.Braking;
+using SkySpaceAgency.OrbitPlanning;
+using SkySpaceAgency.Rendezvous;
+using SkySpaceAgency.Transfer;
 using KSP.Sim;
 using KSP.Sim.impl;
 using KTools;
 
-namespace K2D2.Lift
+namespace SkySpaceAgency.Lift
 {
     // Rendezvous goal (LiftGoal.Rendezvous, sub-project 4.4), before the ascent: reads the site, the
     // target and the body on the main thread, then RendezvousLaunch.Plan on a worker thread scores the

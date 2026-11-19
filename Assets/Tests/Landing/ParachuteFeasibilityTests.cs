@@ -1,4 +1,4 @@
-using K2D2.Landing.Braking;
+using SkySpaceAgency.Landing.Braking;
 using NUnit.Framework;
 
 public class ParachuteFeasibilityTests

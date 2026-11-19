@@ -1,12 +1,12 @@
 using System;
-using K2D2.Node;
+using SkySpaceAgency.Node;
 using KSP.Game;
 using KSP.Sim;
 using KSP.Sim.impl;
 using UnityEngine;
 using ILogger = SpaceWarp2.API.Logging.ILogger;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     /// <summary>
     /// Drives the game's physics time warp for a burn, as decided by PhysicsWarpPolicy, and gives

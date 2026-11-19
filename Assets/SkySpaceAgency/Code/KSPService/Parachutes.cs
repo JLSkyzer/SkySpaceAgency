@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using KSP.Modules;
 using KSP.Sim.impl;
 
-namespace K2D2.KSPService
+namespace SkySpaceAgency.KSPService
 {
     public struct ParachuteCounts
     {
