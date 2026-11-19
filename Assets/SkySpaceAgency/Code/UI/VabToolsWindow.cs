@@ -40,6 +40,7 @@ namespace K2D2.UI
                 WindowId = WindowId,
                 Parent = null,
                 IsHidingEnabled = true,
+                UseStockScale = true,      // follows the game's UI Scale, as the main window
                 DisableGameInputForTextFields = true,
                 MoveOptions = new MoveOptions
                 {

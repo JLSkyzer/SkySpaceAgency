@@ -26,8 +26,9 @@ public static class UiLayoutHarness
     public const string WindowPath = "Assets/UI/K2D2_UI/K2D2_Window.uxml";
     public const string ThemePath = "Packages/ksp2redux.sdk/Controls/Assets/Theme/KerbalUI.tss";
 
-    // K2D2_Window.uxml: the AppShell is 350 px wide (ResizeManipulator never changes the width) and
-    // 500 px high by default, resizable up to 900 px.
+    // K2D2_Window.uxml: the AppShell is 350 x 500 px by default. Redux's resize handle and the saved
+    // size can change both in game; the harness keeps the default width and sets the height (500 and
+    // 900 px, a tall window).
     public const float WindowWidth = 350;
     public const float WindowHeight = 500;
     public const float TallWindowHeight = 900;

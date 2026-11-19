@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 // Lays out every tab of the window at its real size (UiLayoutHarness) and fails on overlapping
 // siblings, squeezed controls, clipped labels and elements outside their parent.
@@ -17,6 +18,16 @@ public class UiLayoutTests
     public void Theme_IsTheSdkKerbalUiTheme()
     {
         Assert.IsNotNull(UiLayoutHarness.LoadTheme(), UiLayoutHarness.ThemePath);
+    }
+
+    [Test]
+    public void Window_HasReduxResizeHandleOnMainFrame()
+    {
+        using var w = UiLayoutHarness.Open(UiLayoutHarness.Scenarios[0], UiLayoutHarness.WindowHeight);
+        var handle = w.Shell.Q(className: "window-resize-handle");
+        Assert.IsNotNull(handle, "WindowResizeHandle missing from K2D2_Window.uxml");
+        Assert.AreEqual("UitkForKsp2.Controls.WindowResizeHandle", handle.GetType().FullName);
+        Assert.AreEqual("MainFrame", handle.GetType().GetProperty("TargetName")?.GetValue(handle));
     }
 
     [TestCaseSource(nameof(Cases))]

@@ -18,8 +18,7 @@
          fixed height is what lets the ScrollView below actually have a bounded viewport to
          scroll within instead of just growing forever with its content. min-width/min-height
          keep the window from being crushed smaller than its own header/toolbar can fit;
-         ResizeManipulator (see resize-handle below and K2D2Window.cs) additionally clamps against
-         its own Max/MinWidth/MaxHeight and the screen edges at drag time. -->
+         the WindowResizeHandle below uses the same minimum and keeps the window on screen. -->
     <UitkForKsp2.Controls.AppShell name="MainFrame" title="SkySpaceAgency" close-button-name="close-button" icon-texture="project://database/Assets/Images/cropped_40px.png?fileID=2800000&amp;guid=6a5fd6f51e722db49a3b2c207a7e7a73&amp;type=3#cropped_40px" style="position: absolute; left: 11px; top: 36px; width: 350px; height: 500px; min-width: 300px; min-height: 250px;">
         <!-- Wraps only the tab content, not the toolbar below - so the Start/Auto-staging/gear
              footer row stays pinned in place and only the tab body scrolls, matching how stock
@@ -49,15 +48,8 @@
             </K2UI.ToggleButton>
             <ui:Button text="i" name="info-toggle" tooltip="About SkySpaceAgency" style="width: 25px; height: 25px;" />
         </ui:VisualElement>
-        <!-- Stock drag-to-resize handle: reuses Redux's own ".window-resize-handle"/
-             ".window-resize-handle-icon" CSS and resize-handle.png (KerbalUI.uss) rather than
-             inventing new art - see ResizeManipulator.cs, wired to this element by name in
-             K2D2Window.cs, for the actual drag behavior (Redux ships the styling but no working
-             C# for it anywhere in the package). picking-mode="Position" on the outer element so
-             it actually receives pointer events; the icon graphic itself is picking-mode="Ignore"
-             so it doesn't steal the pointer-down from its parent. -->
-        <ui:VisualElement name="resize-handle" class="window-resize-handle" picking-mode="Position">
-            <ui:VisualElement name="resize-handle-icon" class="window-resize-handle-icon" picking-mode="Ignore" />
-        </ui:VisualElement>
+        <!-- Redux's resize handle: it adds UitkForKsp2's resize manipulator to MainFrame.
+             K2D2Window.cs saves the size (WindowSizeSaver). -->
+        <UitkForKsp2.Controls.WindowResizeHandle target-name="MainFrame" min-width="300" min-height="250" />
     </UitkForKsp2.Controls.AppShell>
 </ui:UXML>

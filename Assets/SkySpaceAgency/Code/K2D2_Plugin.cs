@@ -254,6 +254,9 @@ namespace K2D2
                 Parent = null,
                 // Whether or not the window can be hidden with F2.
                 IsHidingEnabled = true,
+                // Follow the game's UI Scale setting like Redux's own windows. Off, the window
+                // stays the same size whatever the player sets.
+                UseStockScale = true,
                 // Whether to disable game input when typing into text fields.
                 DisableGameInputForTextFields = true,
                 MoveOptions = new MoveOptions

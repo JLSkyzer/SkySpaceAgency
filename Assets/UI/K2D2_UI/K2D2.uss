@@ -666,7 +666,7 @@ Label {
     border-bottom-color: rgb(150, 205, 250);
 }
 
-/* Clears room for the bottom-right resize handle (see ResizeManipulator.cs/K2D2_Window.uxml) so
+/* Clears room for the bottom-right resize handle (WindowResizeHandle in K2D2_Window.uxml) so
    it doesn't sit directly on top of the toolbar's rightmost button. Both are absolutely
    positioned at right:0/bottom:0 of the same containing box (the AppShell content area - the
    toolbar row is its last in-flow child, so its bottom-right corner IS that box's bottom-right
