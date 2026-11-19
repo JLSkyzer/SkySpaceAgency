@@ -173,7 +173,7 @@ public static class UiLayoutHarness
         }
     }
 
-    static object Invoke(object target, string method)
+    public static object Invoke(object target, string method)
     {
         var m = target.GetType().GetMethod(method, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
         if (m == null)
@@ -186,7 +186,7 @@ public static class UiLayoutHarness
     // In the editor, PanelSettings.Reset (run by CreateInstance) asks the internal
     // GetOrCreateDefaultTheme hook for a theme, which writes "Assets/UI Toolkit/UnityThemes" into
     // the project. The hook is pointed at the SDK theme for the time of the call.
-    static PanelSettings CreatePanelSettings()
+    public static PanelSettings CreatePanelSettings()
     {
         var hook = typeof(PanelSettings).GetField("GetOrCreateDefaultTheme", BindingFlags.Static | BindingFlags.NonPublic);
         object saved = hook?.GetValue(null);

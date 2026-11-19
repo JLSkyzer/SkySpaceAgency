@@ -15,6 +15,11 @@ MonoBehaviour:
   m_GroupName: addressables_SkySpaceAgency_all
   m_GUID: fc6737feaf014454aa3d1b787eca5c0a
   m_SerializeEntries:
+  - m_GUID: 7ed8a2d729da4834486063feba5d80eb
+    m_Address: Assets/UI/SkySpaceAgency_UI/App/SkySpaceAgency_App.uxml
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8f86a98a35fea6949a9ac5af3fd14436
     m_Address: Assets/UI/SkySpaceAgency_UI/SkySpaceAgency_Window.uxml
     m_ReadOnly: 0

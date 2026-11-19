@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" engine="UnityEngine.UIElements" editor-extension-mode="False">
+    <!-- The new wide window (preview). This file only carries the style sheet into the Addressables build
+         and a full-screen host that lets clicks through to the game: AppUI/AppWindow.cs builds the window
+         in code (plan docs/superpowers/plans/2026-11-19-new-ui-foundations.md). -->
+    <Style src="SsaApp.uss" />
+    <ui:VisualElement name="ssa-app-host" picking-mode="Ignore" style="position: absolute; left: 0; top: 0; right: 0; bottom: 0;" />
+</ui:UXML>

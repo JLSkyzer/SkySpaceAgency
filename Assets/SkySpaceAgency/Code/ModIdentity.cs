@@ -39,6 +39,15 @@ namespace SkySpaceAgency
         public const string MainWindowUxml = ModId + "_Window.uxml";
         public const string MainWindowAddress = UiFolder + MainWindowUxml;
 
+        // The new wide window (preview, docs/superpowers/plans/2026-11-19-new-ui-foundations.md): a second
+        // Addressables entry, which carries the new style sheet; the window itself is built in code.
+        public const string AppWindowId = "SkySpaceAgencyApp";
+        public const string AppWindowUxml = "App/" + ModId + "_App.uxml";
+        public const string AppWindowAddress = UiFolder + AppWindowUxml;
+
+        /// <summary>The slogan under the title of the new window (docs/design/branding).</summary>
+        public const string Slogan = "Fly further";
+
         // Default shortcut of the main window in flight (rebindable in Redux's mod settings). K2-D2
         // uses Alt+O; Alt+Y is free in flight and on the map (Alt+S, Alt+W... are trim keys, Alt+K
         // is KERNEL, Alt+P is FlightPlanRedux: docs/superpowers/notes/2026-11-19-coexistence-with-k2d2.md).

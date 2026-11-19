@@ -42,6 +42,12 @@ namespace SkySpaceAgency.UI
         public bool AllowDraggingOffScreen { get; set; }
 
         /// <summary>
+        /// Optional filter on the element pressed: a drag starts only where it returns true (the new
+        /// window drags by its header). Null, the whole window drags, as before.
+        /// </summary>
+        public System.Func<VisualElement, bool> CanStart { get; set; }
+
+        /// <summary>
         /// The target element that will be made draggable.
         /// </summary>
         public VisualElement target
@@ -238,6 +244,7 @@ namespace SkySpaceAgency.UI
             if (checkTargetType<SsaCompass>(target)) return;
             // Redux's resize handle: dragging it resizes the window, so it mustn't move it too.
             if (checkTargetClass(target, "window-resize-handle")) return;
+            if (CanStart != null && !CanStart(target)) return;
 
             // Placing the window by hand replaces any saved position still waiting to be applied.
             if (_defaultPositionPending)

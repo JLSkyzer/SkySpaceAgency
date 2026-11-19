@@ -46,6 +46,7 @@
             <SsaUI.ToggleButton label="Auto-staging" name="staging-toggle" value="false" class="auto-staging-toggle">
                 <ui:VisualElement name="icon" />
             </SsaUI.ToggleButton>
+            <ui:Button text="New UI (preview)" name="new-ui-button" tooltip="Open the new interface (preview: nothing flies from it yet)" style="height: 25px; flex-shrink: 1;" />
             <ui:Button text="i" name="info-toggle" tooltip="About" style="width: 25px; height: 25px;" />
         </ui:VisualElement>
         <!-- Redux's resize handle: it adds UitkForKsp2's resize manipulator to MainFrame.

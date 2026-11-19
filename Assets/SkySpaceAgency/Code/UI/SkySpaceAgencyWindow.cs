@@ -235,6 +235,13 @@ namespace SkySpaceAgency.UI
             // toggle's original apparent intent.
             staging_toggle?.Bind(StagingSettings.auto_staging);
 
+            // Opens the new wide window (preview of the new interface, docs/design/ui).
+            var new_ui_button = title_bar.Q<Button>("new-ui-button");
+            if (new_ui_button == null)
+                L.Log("MainWindow.OnUiReload: title_bar.Q<Button>(\"new-ui-button\") returned null.");
+            else
+                new_ui_button.clicked += () => SkySpaceAgencyPlugin.Instance?.ToggleAppWindow();
+
             _rootElement.Query<IntegerField>().ForEach(field => field.DisableGameInputOnFocus());
             _rootElement.Query<FloatField>().ForEach(field => field.DisableGameInputOnFocus());
             _rootElement.Query<RepeatButton>().ForEach(field => field.DisableGameInputOnFocus());

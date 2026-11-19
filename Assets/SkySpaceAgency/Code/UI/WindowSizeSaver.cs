@@ -26,6 +26,9 @@ namespace SkySpaceAgency.UI
         IVisualElementScheduledItem _pendingSave;
         bool _clampedToPanel;
 
+        /// <summary>While true, size changes are not saved (the new window, minimised to its header).</summary>
+        public bool Paused { get; set; }
+
         public WindowSizeSaver(VisualElement target, string heightKey, string widthKey, Vector2 minSize)
         {
             _target = target;
@@ -65,6 +68,8 @@ namespace SkySpaceAgency.UI
 
         void OnGeometryChanged(GeometryChangedEvent evt)
         {
+            if (Paused)
+                return;
             Vector2 current = evt.newRect.size;
             if (current.x <= 0 || current.y <= 0)
                 return;
@@ -96,6 +101,8 @@ namespace SkySpaceAgency.UI
 
         void Save()
         {
+            if (Paused)
+                return;
             Vector2 current = _target.layout.size;
             if (!ShouldSave(new Vector2(_width.V, _height.V), current))
                 return;

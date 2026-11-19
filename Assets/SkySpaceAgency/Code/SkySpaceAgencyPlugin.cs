@@ -95,6 +95,10 @@ namespace SkySpaceAgency
 
         VabToolsWindow vab_window = null;
 
+        // The new wide window (preview), opened from the classic window's "New UI (preview)" button. It
+        // flies nothing yet: the tabs move to it one by one (Design plan, step 2).
+        SkySpaceAgency.AppUI.AppWindow app_window = null;
+
         // The shortcut that opens and closes the main window in flight. Bound in the mod's Space Warp
         // configuration (<mod folder>/<mod id>-config.json, section "Keybinds"), so Redux's mod
         // settings can rebind it. Default Alt+Y: K2-D2 keeps Alt+O, and Y has no flight or map binding.
@@ -252,6 +256,8 @@ namespace SkySpaceAgency
         {
             if (main_window != null)
                 main_window.IsWindowOpen = false;
+            if (app_window != null)
+                app_window.IsWindowOpen = false;
             window_hidden_by_scene = false;
             if (in_flight)
             {
@@ -303,6 +309,36 @@ namespace SkySpaceAgency
             main_window = k2d2_window.gameObject.AddComponent<SkySpaceAgencyWindow>();
 
             return true;
+        }
+
+        // Creates the new window on first use, from its own Addressables uxml (same caveat as EnsureWindow).
+        private bool EnsureAppWindow()
+        {
+            if (app_window != null) return true;
+            var uxml = AssetsLoader.LoadUxml(ModIdentity.AppWindowUxml);
+            if (uxml == null)
+            {
+                logger.LogWarning($"[Plugin] New window not created yet (mod enabled: {Enabled}).");
+                return false;
+            }
+            app_window = SkySpaceAgency.AppUI.AppWindow.Create(uxml);
+            SkySpaceAgency.AppUI.AppWindow.OpenClassicWindow -= OpenClassicFromApp;
+            SkySpaceAgency.AppUI.AppWindow.OpenClassicWindow += OpenClassicFromApp;
+            return true;
+        }
+
+        void OpenClassicFromApp()
+        {
+            if (window_allowed && EnsureWindow())
+                main_window.IsWindowOpen = true;
+        }
+
+        /// <summary>The classic window's "New UI (preview)" button: opens or closes the new window (flight only).</summary>
+        internal void ToggleAppWindow()
+        {
+            if (!window_allowed) return;
+            if (EnsureAppWindow())
+                app_window.IsWindowOpen = !app_window.IsWindowOpen;
         }
 
         // Creates the VAB tools window on first use, like EnsureWindow (same Addressables caveat).
@@ -374,6 +410,9 @@ namespace SkySpaceAgency
                 else if (step.OpenWindow)
                     main_window.IsWindowOpen = true;
             }
+            // The new window is only for flight and map view, like the classic one; it is not reopened by itself.
+            if (app_window != null && app_window.IsWindowOpen && (step.CloseWindow || !window_allowed))
+                app_window.IsWindowOpen = false;
 
             if (Enabled)
             {

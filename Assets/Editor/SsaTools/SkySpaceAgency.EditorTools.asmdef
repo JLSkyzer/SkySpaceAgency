@@ -1,0 +1,12 @@
+{
+    "name": "SkySpaceAgency.EditorTools",
+    "rootNamespace": "SkySpaceAgency.EditorTools",
+    "references": [
+        "Unity.Addressables",
+        "Unity.Addressables.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": false
+}

@@ -97,8 +97,14 @@ public class CoexistenceTests
     {
         string all = File.ReadAllText(AssetsPath("AddressableAssetsData", "AssetGroups", $"addressables_{ModIdentity.ModId}_all.asset"));
         var addresses = Regex.Matches(all, @"m_Address: (.+)$", RegexOptions.Multiline).Cast<Match>().Select(m => m.Groups[1].Value.Trim()).ToArray();
-        CollectionAssert.AreEqual(new[] { ModIdentity.MainWindowAddress }, addresses);
-        Assert.IsTrue(File.Exists(AssetsPath(ModIdentity.MainWindowAddress.Substring("Assets/".Length))), "the window uxml is at its address");
+        // The classic window and, since 2026-11-19, the new window (preview). Both under our own UI folder.
+        CollectionAssert.AreEquivalent(new[] { ModIdentity.MainWindowAddress, ModIdentity.AppWindowAddress }, addresses);
+        foreach (string address in addresses)
+        {
+            StringAssert.StartsWith(ModIdentity.UiFolder, address);
+            Assert.AreNotEqual(K2D2WindowAddress, address);
+            Assert.IsTrue(File.Exists(AssetsPath(address.Substring("Assets/".Length))), address + " is at its address");
+        }
     }
 
     [Test]
