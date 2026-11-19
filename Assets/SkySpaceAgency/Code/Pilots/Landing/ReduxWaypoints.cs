@@ -21,6 +21,10 @@ namespace K2D2.Landing
     // going in alongside everything else here.
     public struct ReduxWaypoint
     {
+        // Redux's own id of a player waypoint (PlayerWaypointRecord.Id, read by reflection; null
+        // when the field is missing, and for every other entry): lets the target follow a moved
+        // waypoint (WaypointChoices.Follow), since labels hold the coordinates.
+        public string id;
         public string name;
         public string body_name;
         public double latitude;
@@ -89,6 +93,7 @@ namespace K2D2.Landing
 
                 result.Add(new ReduxWaypoint
                 {
+                    id = record_type.GetField("Id")?.GetValue(record)?.ToString(),
                     name = record_type.GetField("Name")?.GetValue(record) as string,
                     body_name = this_body,
                     latitude = (double)(record_type.GetField("Latitude")?.GetValue(record) ?? 0.0),

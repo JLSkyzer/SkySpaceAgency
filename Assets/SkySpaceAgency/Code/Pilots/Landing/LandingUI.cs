@@ -44,6 +44,10 @@ namespace K2D2.Landing
             // Keyed by the exact string shown in drop, since DropdownField only ever gives us the
             // selected label back in its ChangeEvent - not an index or the underlying record.
             public Dictionary<string, ReduxWaypoint> choices = new();
+            // The player waypoint the target was last taken from (Redux id), and where it was then:
+            // the target follows it when it moves (WaypointChoices.Follow). Null: nothing to follow.
+            public string selected_id;
+            public double selected_lat, selected_lon;
         }
 
         TargetBlock target_vac;
@@ -334,6 +338,9 @@ namespace K2D2.Landing
             {
                 if (evt.newValue != null && block.choices.TryGetValue(evt.newValue, out var waypoint))
                 {
+                    block.selected_id = string.IsNullOrEmpty(waypoint.id) ? null : waypoint.id;
+                    block.selected_lat = waypoint.latitude;
+                    block.selected_lon = waypoint.longitude;
                     block.settings.target_latitude.V = (float)waypoint.latitude;
                     block.settings.target_longitude.V = (float)waypoint.longitude;
                 }
@@ -380,6 +387,30 @@ namespace K2D2.Landing
             return new ReduxWaypoint { name = WaypointChoices.KscName, body_name = ksc_body, latitude = lat, longitude = lon };
         }
 
+        // The chosen player waypoint was moved in Redux's Waypoints window: the target goes with it,
+        // unless the player has set another target since (K2-D2 1.4.0, IanMealworm). The only write
+        // of the target from a rebuild.
+        void FollowSelectedWaypoint(TargetBlock block, List<ReduxWaypoint> player, string bodyName)
+        {
+            var result = WaypointChoices.Follow(block.selected_id, block.selected_lat, block.selected_lon,
+                block.settings.target_latitude.V, block.settings.target_longitude.V, player);
+            if (result.Action == WaypointChoices.FollowAction.Forget)
+            {
+                block.selected_id = null;
+                return;
+            }
+            if (result.Action != WaypointChoices.FollowAction.Follow)
+                return;
+            var w = result.Waypoint;
+            pilot.logger.LogInfo(string.Format(CultureInfo.InvariantCulture,
+                "[Landing] target: waypoint '{0}' moved from ({1:0.0000}, {2:0.0000}) to ({3:0.0000}, {4:0.0000}) on {5}, the target follows ({6} profile).",
+                w.name, block.selected_lat, block.selected_lon, w.latitude, w.longitude, bodyName, block.suffix.TrimStart('_')));
+            block.selected_lat = w.latitude;
+            block.selected_lon = w.longitude;
+            block.settings.target_latitude.V = (float)w.latitude;
+            block.settings.target_longitude.V = (float)w.longitude;
+        }
+
         void buildWaypointList(TargetBlock block)
         {
             var waypoint_choices = block.choices;
@@ -399,6 +430,7 @@ namespace K2D2.Landing
                 // KSC and the picked point, the player's own waypoints, then the game's (missions
                 // that need a precise point create one when they activate): see WaypointChoices.
                 var player = ReduxWaypoints.available ? ReduxWaypoints.GetWaypointsForBody(body.Name) : new List<ReduxWaypoint>();
+                FollowSelectedWaypoint(block, player, body.Name);
                 built = WaypointChoices.Build(player, ReduxWaypoints.GetGameWaypoints(), body.Name,
                     KscEntry(body.Name), picked_point);
                 foreach (var choice in built)
@@ -409,9 +441,10 @@ namespace K2D2.Landing
             }
 
             // This runs every UI tick (see onUpdateUI()) so the list stays current if a waypoint's
-            // added while this tab's open. A rebuild NEVER writes the target settings (not even on a
+            // added while this tab's open. A rebuild never writes the target settings (not even on a
             // body change): only an explicit choice does (dropdown change, Pick on map, typing in the
-            // fields). Everything below goes through SetValueWithoutNotify.
+            // fields), and a chosen player waypoint that moved (FollowSelectedWaypoint above).
+            // Everything below goes through SetValueWithoutNotify.
             string current = waypoint_drop.value;
 
             // Keep the shown entry only while it still matches the saved target (the player may have typed

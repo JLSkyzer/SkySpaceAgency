@@ -47,6 +47,41 @@ namespace K2D2.Landing
             return -1;
         }
 
+        public enum FollowAction { None, Follow, Forget }
+
+        public struct FollowResult
+        {
+            public FollowAction Action;
+            public ReduxWaypoint Waypoint;
+        }
+
+        /// <summary>
+        /// The target follows a moved waypoint (from K2-D2 1.4.0, IanMealworm's WaypointPicker). The
+        /// player chose the waypoint with Redux id selectedId, which was at (savedLat, savedLon) then.
+        /// Follow (with the waypoint) when it has moved and the target (stored as floats in the
+        /// settings) still holds the saved position; Forget when the target holds something else
+        /// (typed over, picked on the map, another entry); None otherwise, also when the waypoint is
+        /// not listed now (it may only be unavailable for a moment) or when nothing was chosen.
+        /// </summary>
+        public static FollowResult Follow(string selectedId, double savedLat, double savedLon,
+            float targetLat, float targetLon, IEnumerable<ReduxWaypoint> waypoints)
+        {
+            var none = new FollowResult { Action = FollowAction.None };
+            if (string.IsNullOrEmpty(selectedId))
+                return none;
+            if (targetLat != (float)savedLat || targetLon != (float)savedLon)
+                return new FollowResult { Action = FollowAction.Forget };
+            foreach (var waypoint in waypoints)
+            {
+                if (waypoint.id != selectedId)
+                    continue;
+                if (waypoint.latitude == savedLat && waypoint.longitude == savedLon)
+                    return none;
+                return new FollowResult { Action = FollowAction.Follow, Waypoint = waypoint };
+            }
+            return none;
+        }
+
         /// <summary>The "Custom (lat, lon)" entry for a saved target that matches no listed entry.</summary>
         public static WaypointChoice Custom(string bodyName, double lat, double lon)
         {
