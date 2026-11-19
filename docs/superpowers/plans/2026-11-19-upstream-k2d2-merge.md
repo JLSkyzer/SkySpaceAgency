@@ -174,6 +174,17 @@ Rule (memory `ui-follow-the-mockups`): no new K2-D2-style interface. As in the 4
 - **Frames** (lesson 2026-11-18) and **refusals that name the failed check** (lesson 2026-11-04) apply to every ported pilot.
 - **Each pilot tested from every start state** (lesson 2026-10-30): boost-back from orbit (refused), suborbital in the air, already falling, on the pad (refused).
 
+## Revision of 2026-11-19 (evening): no git link with K2-D2 — this section wins over everything below and above
+
+The user decided that **SkySpaceAgency keeps no git link with K2-D2** (apart from the original history already published up to `7ea025c`, and the CC BY-SA credits, which stay). Done on 2026-11-19:
+- **No merge commit.** The `-s ours` merge (Task 2) was removed before anything was pushed: the work branch was rebuilt from `main` by cherry-picking our commits, and the merge's content became an ordinary commit "Remove files K2-D2 1.4.x dropped". The final tree was checked identical to the tree before the rewrite (`git diff` empty), and `git log 7ea025c..` has no IanMealworm commit. The work branch is `ssa/k2d2-port` (was `merge/k2d2-1.4.1`).
+- **Remote `upstream` removed** from SkySpaceAgency, with the two upstream-only tags `1.4.0`, `1.4.1`. Ported commits still cite `IanMealworm/K2D2Redux <sha>` in their messages, as credit.
+- **K2-D2 is read from a separate clone**, `D:/KSPReduxModding/.k2d2-pr/` (ignored by the parent's `.gitignore`), remote `upstream` = `https://github.com/IanMealworm/K2D2Redux.git`.
+- **The PR branch lives in that clone**, not in SkySpaceAgency: `pr/k2d2` starts from `upstream/main` (`8273fb8`) so IanMealworm can merge it, and receives our tree at the "before rename" stage, with the K2-D2 identity and without `docs/`, in a few readable commits authored by JLSkyzer. Nothing is pushed: the fork `JLSkyzer/K2D2Redux` will be created by the coordinator when the PR is opened, and the clone deleted after the PR.
+- **How the K2-D2 identity is put on our tree in that clone** (replaces Tasks 34–35): their project already has the K2-D2 assets (`Assets/K2D2/K2D2.asset`, `swinfo.json`, Addressables groups `K2D2_*`, pipelines). Our code is laid over it: `Assets/SkySpaceAgency/Code` → `Assets/K2D2/Code`, our `Assets/UI`, `Assets/Runtime`, `Assets/Tests`, `Packages/manifest.json`, `project.info` (name kept `K2D2Redux`, version 26w42c), template-generated files; **their** mod asset, swinfo, Addressables groups/profile/labels and pipelines are kept (bumped to version 1.5.0); `ModIdentity` gets the K2-D2 values and `IsK2D2 = true`; asmdef `K2D2`; test asmdefs reference `K2D2`. No editor script is needed for that: their generated assets are already right. Compile and tests run in the clone (one Unity job at a time).
+- **Later K2-D2 releases** are read in the clone and ported by hand into SkySpaceAgency (no merge is possible any more, and after Phase H the names differ anyway).
+- Statements below about "the merge commit", "history kept", "`git merge upstream/main`", `-s ours`, and `pr/k2d2` inside SkySpaceAgency are superseded.
+
 ## Decisions (taken by the user on 2026-11-19; they replace the proposals above where they differ)
 
 1. **Merge shape:** `-s ours`, then one commit per port, each compiled and tested.
