@@ -308,6 +308,7 @@ namespace K2D2.Landing
                     K2D2_Plugin.ResetControllers();
 
                     _active = true;
+                    ResetReduxLogs();
 
                     // Precision landing (decided by CheckCanStart: precision_run) starts with its
                     // four planned burns (orbit preparation, plane change, deorbit, mid-course
@@ -1057,6 +1058,8 @@ namespace K2D2.Landing
 
             // detect collision and compute time to burn
             computeValues();
+            // Redux's impact prediction and the body spin, next to ours (logs only).
+            UpdateReduxLogs();
 
             if (!collision_detected)
             {
