@@ -5,19 +5,71 @@ using UnityEngine.UIElements;
 namespace SkySpaceAgency.AppUI
 {
     /// <summary>
+    /// A side column of a page (plan, telemetry, budget): a vertical scroll view of its own, so the
+    /// three-column page keeps its height and each side column scrolls by itself. When the page is
+    /// stacked (narrow Reflow) the column grows with its content instead and the page scrolls.
+    /// </summary>
+    public class AppColumn : ScrollView
+    {
+        public const string StackedClass = "ssa-col--stacked";
+
+        public AppColumn(params string[] classes) : base(ScrollViewMode.Vertical)
+        {
+            AddToClassList("ssa-col");
+            AddToClassList("ssa-colscroll");
+            foreach (string c in classes) AddToClassList(c);
+            horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            verticalScrollerVisibility = ScrollerVisibility.Auto;
+            // The content is at least the column's height, so the card fills it down to the bottom.
+            contentViewport.RegisterCallback<GeometryChangedEvent>(e =>
+                contentContainer.style.minHeight = Stacked ? StyleKeyword.Null : (StyleLength)e.newRect.height);
+            contentContainer.RegisterCallback<GeometryChangedEvent>(FollowContent);
+        }
+
+        public bool Stacked { get; private set; }
+
+        // A ScrollView does not size itself to its content: stacked, its height follows the content's.
+        void FollowContent(GeometryChangedEvent e)
+        {
+            if (Stacked && e.newRect.height > 0) style.height = e.newRect.height;
+        }
+
+        public void SetStacked(bool stacked)
+        {
+            if (stacked == Stacked) return;
+            Stacked = stacked;
+            EnableInClassList(StackedClass, stacked);
+            if (stacked)
+            {
+                contentContainer.style.minHeight = StyleKeyword.Null;
+                if (contentContainer.layout.height > 0) style.height = contentContainer.layout.height;
+            }
+            else
+                style.height = StyleKeyword.Null;
+        }
+
+        /// <summary>True when the content is taller than the column (a scroll bar is needed).</summary>
+        public bool Overflows => contentContainer.layout.height > contentViewport.layout.height + 0.5f;
+    }
+
+    /// <summary>
     /// A page of the new window, as the mockups lay it out: three columns (plan, view, telemetry and
-    /// safety), then the phase timeline and the action bar. The columns scroll when the window is too
-    /// small for them; a narrow window puts the view on its own row under the other two.
+    /// safety), then the phase timeline and the action bar, both fixed at the bottom. The page keeps
+    /// its height: the plan and the side column scroll by themselves, the view does not. A narrow
+    /// Reflow window stacks the columns (the view under the other two) and the whole page scrolls.
     /// </summary>
     public class AppPage : VisualElement
     {
         public const string UssClass = "ssa-page";
         readonly VisualElement _columns;
+        readonly AppColumn _plan, _side;
 
         public ScrollView Scroll { get; }
-        public VisualElement Plan { get; }
+        public VisualElement Plan => _plan;
         public VisualElement View { get; }
-        public VisualElement Side { get; }
+        public VisualElement Side => _side;
+        public AppColumn PlanColumn => _plan;
+        public AppColumn SideColumn => _side;
         public AppTimeline Timeline { get; }
         public AppActionBar Actions { get; }
         public bool Narrow { get; private set; }
@@ -30,16 +82,15 @@ namespace SkySpaceAgency.AppUI
             Scroll.AddToClassList("ssa-page__scroll");
             Scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             _columns = Ui.Box("ssa-columns");
-            Plan = Ui.Box("ssa-col", "ssa-col--plan");
+            _plan = new AppColumn("ssa-col--plan");
             View = Ui.Box("ssa-col", "ssa-col--view");
-            Side = Ui.Box("ssa-col", "ssa-col--side");
-            _columns.Add(Plan);
+            _side = new AppColumn("ssa-col--side");
+            _columns.Add(_plan);
             _columns.Add(View);
-            _columns.Add(Side);
+            _columns.Add(_side);
             Scroll.Add(_columns);
             Add(Scroll);
-            // The columns fill the page's height (and so follow the window's size); they only scroll
-            // when their content is taller than the page.
+            // The columns are as high as the page's viewport (and so follow the window's size).
             Scroll.contentViewport.RegisterCallback<GeometryChangedEvent>(e => FitColumns(e.newRect.height));
             Timeline = new AppTimeline();
             Timeline.style.display = DisplayStyle.None;
@@ -50,16 +101,14 @@ namespace SkySpaceAgency.AppUI
 
         float _viewportHeight;
 
-        // The columns fill the page's height. When the plan or the side column holds more than fits,
-        // the page scrolls, but the view keeps the page's height (it is not stretched with them).
+        // Wide: the columns row is exactly the page's height; the plan and side columns stretch to it
+        // and scroll, the view fills it. Stacked: everything grows with its content, the page scrolls.
         void FitColumns(float height)
         {
             if (height <= 0) return;
             _viewportHeight = height;
             Scroll.contentContainer.style.minHeight = height;
-            Plan.style.minHeight = Narrow ? StyleKeyword.Null : (StyleLength)height;
-            Side.style.minHeight = Narrow ? StyleKeyword.Null : (StyleLength)height;
-            View.style.height = Narrow ? StyleKeyword.Null : (StyleLength)height;
+            _columns.style.height = Narrow ? StyleKeyword.Null : (StyleLength)height;
         }
 
         public void SetTimeline(IReadOnlyList<string> steps, int current)
@@ -68,26 +117,13 @@ namespace SkySpaceAgency.AppUI
             Timeline.style.display = steps != null && steps.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        public bool Compact { get; private set; }
-
-        /// <summary>
-        /// Compact (a low window): the phase timeline scrolls with the columns instead of staying
-        /// fixed, so the columns keep most of the height; the action bar stays fixed.
-        /// </summary>
-        public void SetCompact(bool compact)
-        {
-            if (compact == Compact) return;
-            Compact = compact;
-            Timeline.RemoveFromHierarchy();
-            if (compact) Scroll.Add(Timeline);
-            else Insert(IndexOf(Scroll) + 1, Timeline);
-        }
-
         /// <summary>Narrow: plan and side on the first row, the view under them (the USS wraps the row).</summary>
         public void SetNarrow(bool narrow)
         {
             if (narrow == Narrow) return;
             Narrow = narrow;
+            _plan.SetStacked(narrow);
+            _side.SetStacked(narrow);
             FitColumns(_viewportHeight);
             View.RemoveFromHierarchy();
             if (narrow) _columns.Add(View);
@@ -112,6 +148,23 @@ namespace SkySpaceAgency.AppUI
 
         public AppHeader Header { get; }
         public AppHeaderData HeaderData { get; }
+        public AppOpacityBar OpacityBar { get; }
+
+        /// <summary>Raised when the player moves the opacity bar (the value to save).</summary>
+        public event System.Action<float> opacityChanged;
+
+        public float WindowOpacityValue { get; private set; } = WindowOpacity.Default;
+
+        /// <summary>Sets the whole window's opacity (30 to 100 %). The bar follows without raising an event.</summary>
+        public void SetWindowOpacity(float v)
+        {
+            v = WindowOpacity.Clamp(v);
+            bool changed = !Mathf.Approximately(v, WindowOpacityValue);
+            WindowOpacityValue = v;
+            style.opacity = v;
+            OpacityBar.SetValueWithoutNotify(v);
+            if (changed) opacityChanged?.Invoke(v);
+        }
         public AppTabBar Tabs { get; }
         public bool Narrow { get; private set; }
         public bool Minimised { get; private set; }
@@ -136,6 +189,11 @@ namespace SkySpaceAgency.AppUI
             Tabs.selected += ShowPage;
             Tabs.selected += code => Tabs.SetBadge(TabFor(code)?.Badge);
             HeaderData = new AppHeaderData(Header);
+            // The opacity bar sits in the bottom strip of the window, left of the resize handle, outside the
+            // body (so it is neither scaled nor re-laid out in Scale mode).
+            OpacityBar = new AppOpacityBar(WindowOpacity.Default);
+            hierarchy.Add(OpacityBar);
+            OpacityBar.changed += SetWindowOpacity;
             Header.MinimiseButton.clicked += () => SetMinimised(!Minimised);
             RegisterCallback<GeometryChangedEvent>(e => ApplyLayoutMode());
         }
@@ -184,7 +242,6 @@ namespace SkySpaceAgency.AppUI
                 _body.style.scale = StyleKeyword.Null;
                 _body.style.transformOrigin = StyleKeyword.Null;
                 UpdateNarrow(layout.width);
-                UpdateCompact(layout.height);
                 return;
             }
             float s = SmallWindowScale.Factor(inner.size);
@@ -199,7 +256,6 @@ namespace SkySpaceAgency.AppUI
             _body.style.transformOrigin = new TransformOrigin(0, 0, 0);
             _body.style.scale = new Scale(new Vector3(s, s, 1));
             UpdateNarrow(logical.x);
-            UpdateCompact(logical.y);
         }
 
         readonly List<AppTab> _tabs = new();
@@ -260,16 +316,6 @@ namespace SkySpaceAgency.AppUI
         static bool SafeRunning(AppTab t)
         {
             try { return t.IsRunning; } catch (System.Exception) { return false; }
-        }
-
-        /// <summary>Below this height the timeline scrolls with the columns.</summary>
-        public const float CompactHeight = 640;
-
-        public void UpdateCompact(float height)
-        {
-            if (height <= 0 || Minimised) return;
-            foreach (var p in _pageByCode.Values)
-                if (p is AppPage page) page.SetCompact(height < CompactHeight);
         }
 
         public void UpdateNarrow(float width)

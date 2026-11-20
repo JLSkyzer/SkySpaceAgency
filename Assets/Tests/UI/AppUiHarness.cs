@@ -56,6 +56,18 @@ public static class AppUiHarness
                         Name = $"small_{mode.ToString().ToLowerInvariant()}_{size.x:0}x{size.y:0}_{tab}",
                         Tab = tab, Mode = mode, Texture = size + new Vector2(40, 40), Window = new Rect(new Vector2(20, 20), size),
                     });
+        // Sections unfolded: the page keeps its height, each side column scrolls by itself (2026-11-20).
+        foreach (string tab in new[] { "land", "transfer" })
+            list.Add(new Shot
+            {
+                Name = tab + "_sections_open_scrolling", Tab = tab, Texture = new Vector2(1600, 900), Scale = MockupScale, Window = MockupWindow,
+                Setup = v => { foreach (var sec in v.Query<AppSection>().ToList()) sec.SetOpen(true); },
+            });
+        list.Add(new Shot
+        {
+            Name = "lift_opacity_60pc", Tab = "lift", Texture = new Vector2(1600, 900), Scale = MockupScale, Window = MockupWindow,
+            Setup = v => v.SetWindowOpacity(0.6f),
+        });
         list.Add(new Shot { Name = "hud_land", Tab = "land", Texture = new Vector2(1600, 200), Scale = MockupScale, Window = new Rect(-4000, 0, 800, 480), Hud = true });
         return list.ToArray();
     }

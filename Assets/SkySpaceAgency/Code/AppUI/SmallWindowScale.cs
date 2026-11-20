@@ -22,9 +22,9 @@ namespace SkySpaceAgency.AppUI
     {
         /// <summary>
         /// The inner size the mockups' layout fits without scrolling: the default window size
-        /// (1360 x 765) minus the frame (2 px border, 17 px side padding, 5 px top and 16 px bottom).
+        /// (1360 x 765) minus the frame (2 px border, 17 px side padding, 5 px top and 22 px bottom).
         /// </summary>
-        public static readonly Vector2 ReferenceInner = new Vector2(1322, 740);
+        public static readonly Vector2 ReferenceInner = new Vector2(1322, 734);
 
         /// <summary>Below this the text would be too small to read (the minimum window, 760 x 480, gives about 0.56).</summary>
         public const float Floor = 0.5f;

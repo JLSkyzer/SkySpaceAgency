@@ -31,7 +31,7 @@
     border-width: 2px;
     border-color: var(--edge);
     border-radius: 15px;
-    padding: 5px 17px 16px 17px;
+    padding: 5px 17px 22px 17px;
     color: var(--text);
     font-size: 12px;
     -unity-font-definition: var(--font);
@@ -159,18 +159,23 @@
 .ssa-page__scroll .unity-scroll-view__content-viewport,
 .ssa-page__scroll .unity-scroll-view__content-container { padding: 0; margin: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
 .ssa-page__scroll > .unity-scroll-view__content-viewport > .unity-scroll-view__content-container { flex-grow: 1; }
-.ssa-columns { flex-direction: row; flex-grow: 1; flex-shrink: 1; min-height: 300px; align-items: flex-start; }
-.ssa-col { align-self: auto; }
+.ssa-columns { flex-direction: row; flex-grow: 1; flex-shrink: 1; min-height: 200px; align-items: stretch; }
+.ssa-col { align-self: auto; flex-shrink: 1; min-height: 0; }
 .ssa-col > .ssa-card { flex-grow: 1; }
-.ssa-col { flex-shrink: 1; }
+.ssa-colscroll { padding: 0; margin: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
+.ssa-colscroll > .unity-scroll-view__content-and-vertical-scroll-container,
+.ssa-colscroll .unity-scroll-view__content-viewport,
+.ssa-colscroll .unity-scroll-view__content-container { padding: 0; margin: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); background-image: none; }
+/* A stacked column (narrow Reflow) grows with its content: the page scrolls instead. */
+.ssa-col--stacked { flex-shrink: 0; }
 .ssa-col--plan { width: 340px; min-width: 280px; }
 .ssa-col--view { flex-grow: 1; min-width: 300px; margin: 0 14px; }
 .ssa-col--side { width: 326px; min-width: 270px; }
 /* Narrow window: the view moves to its own row, under the plan and the telemetry (AppPage moves it last). */
-.ssa-app--narrow .ssa-columns { flex-wrap: wrap; align-items: stretch; flex-shrink: 0; }
+.ssa-app--narrow .ssa-columns { flex-wrap: wrap; align-items: flex-start; align-content: flex-start; flex-grow: 0; flex-shrink: 0; height: auto; }
 .ssa-app--narrow .ssa-col--plan { width: 48%; flex-grow: 1; margin-right: 14px; }
 .ssa-app--narrow .ssa-col--side { width: 48%; flex-grow: 1; }
-.ssa-app--narrow .ssa-col--view { width: 100%; min-height: 340px; margin: 14px 0 0 0; }
+.ssa-app--narrow .ssa-col--view { width: 100%; height: 360px; min-height: 340px; flex-grow: 0; flex-shrink: 0; margin: 14px 0 0 0; }
 
 /* ---- Card ---- */
 .ssa-card {
@@ -462,3 +467,42 @@
 /* Narrow window: the action bar grows for a note that needs more lines next to the buttons. */
 .ssa-app--narrow .ssa-actionbar { height: auto; min-height: 44px; }
 .ssa-app--narrow Label.ssa-actionbar__note { max-height: none; font-size: 11px; }
+
+/* ---- Scroll bars (columns, page): a thin track over the content's right edge, no arrows ---- */
+.ssa-app .unity-scroller--vertical {
+    position: absolute;
+    right: 1px;
+    top: 4px;
+    bottom: 4px;
+    width: 6px;
+    margin: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+.ssa-app .unity-scroller__low-button,
+.ssa-app .unity-scroller__high-button { display: none; }
+.ssa-app .unity-scroller--vertical > .unity-base-slider { width: 6px; height: 100%; margin: 0; padding: 0; }
+.ssa-app .unity-scroller--vertical > .unity-base-slider > .unity-base-field__input { width: 6px; border-width: 0; background-color: rgba(0, 0, 0, 0); }
+.ssa-app .unity-scroller--vertical .unity-base-slider__tracker { width: 6px; border-width: 0; border-radius: 3px; background-color: rgba(31, 47, 102, 0.55); background-image: none; }
+.ssa-app .unity-scroller--vertical .unity-base-slider__dragger {
+    width: 6px;
+    border-width: 0;
+    border-radius: 3px;
+    background-color: #3d5bb5;
+    background-image: none;
+}
+.ssa-app .unity-scroller--vertical:hover .unity-base-slider__dragger { background-color: var(--cyan); }
+
+/* ---- Window opacity bar, in the bottom strip left of the resize handle ---- */
+.ssa-opacity {
+    position: absolute;
+    right: 30px;
+    bottom: -1px;
+    height: 24px;
+    flex-direction: row;
+    align-items: center;
+}
+.ssa-app Label.ssa-opacity__label { font-size: 9px; color: var(--dim); letter-spacing: 1.2px; margin-right: 8px; }
+.ssa-app Label.ssa-opacity__value { font-size: 9px; color: var(--muted); width: 30px; -unity-text-align: middle-right; }
+.ssa-opacity__slider { width: 110px; height: 17px; margin: 0; padding: 0; }
+.ssa-app .ssa-opacity.ssa-slider { margin: 0; }
+.ssa-app--minimised .ssa-opacity { display: none; }

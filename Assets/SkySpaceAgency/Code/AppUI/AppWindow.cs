@@ -28,6 +28,11 @@ namespace SkySpaceAgency.AppUI
         /// <summary>Settings > Interface > "Small window": Scale (default) keeps the three-column layout and shrinks it; Reflow re-flows the columns.</summary>
         public static EnumSetting<SmallWindowMode> SmallWindow => _small ??= new EnumSetting<SmallWindowMode>("app_small_window", SmallWindowMode.Scale);
 
+        static Setting<float> _opacity;
+
+        /// <summary>The window's opacity, 0.3 to 1 (the bar at the bottom of the window).</summary>
+        public static Setting<float> Opacity => _opacity ??= new Setting<float>("app_window_opacity", WindowOpacity.Default);
+
         public static Setting<bool> CompactBar => _compact ??= new Setting<bool>("app_compact_bar", true);
 
         public const string PositionKey = "app_window_pos";
@@ -116,6 +121,7 @@ namespace SkySpaceAgency.AppUI
             foreach (var tab in AppTabs.Create(context))
                 view.AddTab(tab);
             view.SetSmallWindowMode(mode ?? AppSettings.SmallWindow.V);
+            view.SetWindowOpacity(AppSettings.Opacity.V);
             host?.Add(view);
             return view;
         }
@@ -140,6 +146,8 @@ namespace SkySpaceAgency.AppUI
             _context = context;
             _view = BuildView(host, context);
             AppSettings.SmallWindow.listeners += mode => _view?.SetSmallWindowMode(mode);
+            _view.opacityChanged += v => AppSettings.Opacity.V = v;
+            AppSettings.Opacity.listeners += v => _view?.SetWindowOpacity(v);
             _hud = new AppHudView();
             _hud.style.display = DisplayStyle.None;
             _hud.openWindow += () => IsWindowOpen = true;
