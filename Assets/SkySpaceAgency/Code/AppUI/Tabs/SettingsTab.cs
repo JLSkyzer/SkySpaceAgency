@@ -130,6 +130,13 @@ namespace SkySpaceAgency.AppUI
             card.Add(new AppNote("Multiplies the game's UI Scale, for this window and the compact flight bar. "
                 + "The classic window follows the game's UI Scale."));
 
+            card.Add(Row("Small window", AppBind.Segmented(AppSettings.SmallWindow,
+                new List<SmallWindowMode> { SmallWindowMode.Scale, SmallWindowMode.Reflow },
+                new List<string> { "Scale", "Reflow" })));
+            card.Add(new AppNote("When the window is smaller than the layout of the mockups: Scale keeps the three columns, the timeline "
+                + "and the action bar and shrinks everything to fit, with no scrolling (down to half size); Reflow re-flows the columns "
+                + "(the view goes under the plan and the telemetry below 1100 px wide) and the page scrolls."));
+
             var classic = AppSettings.ClassicUi;
             ClassicSwitch = new AppSwitch("Classic UI", classic.V);
             AppBind.Record(classic.key);

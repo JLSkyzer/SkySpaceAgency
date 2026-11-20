@@ -23,6 +23,11 @@ namespace SkySpaceAgency.AppUI
         public static Setting<bool> ClassicUi => _classic ??= new Setting<bool>("app_classic_ui", false);
 
         /// <summary>The compact flight bar while a pilot flies and the window is closed (settings mockup).</summary>
+        static EnumSetting<SmallWindowMode> _small;
+
+        /// <summary>Settings > Interface > "Small window": Scale (default) keeps the three-column layout and shrinks it; Reflow re-flows the columns.</summary>
+        public static EnumSetting<SmallWindowMode> SmallWindow => _small ??= new EnumSetting<SmallWindowMode>("app_small_window", SmallWindowMode.Scale);
+
         public static Setting<bool> CompactBar => _compact ??= new Setting<bool>("app_compact_bar", true);
 
         public const string PositionKey = "app_window_pos";
@@ -99,7 +104,7 @@ namespace SkySpaceAgency.AppUI
         }
 
         /// <summary>Builds the frame and the preview pages into the host. Also used by the EditMode harness.</summary>
-        public static AppWindowView BuildView(VisualElement host, AppTabContext context)
+        public static AppWindowView BuildView(VisualElement host, AppTabContext context, SmallWindowMode? mode = null)
         {
             var view = new AppWindowView(ModIdentity.Title, ModIdentity.Slogan);
             view.style.left = AppWindowGeometry.DefaultPosition.x;
@@ -110,6 +115,7 @@ namespace SkySpaceAgency.AppUI
             view.style.minHeight = AppWindowGeometry.MinSize.y;
             foreach (var tab in AppTabs.Create(context))
                 view.AddTab(tab);
+            view.SetSmallWindowMode(mode ?? AppSettings.SmallWindow.V);
             host?.Add(view);
             return view;
         }
@@ -133,6 +139,7 @@ namespace SkySpaceAgency.AppUI
             };
             _context = context;
             _view = BuildView(host, context);
+            AppSettings.SmallWindow.listeners += mode => _view?.SetSmallWindowMode(mode);
             _hud = new AppHudView();
             _hud.style.display = DisplayStyle.None;
             _hud.openWindow += () => IsWindowOpen = true;

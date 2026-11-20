@@ -106,6 +106,7 @@ namespace SkySpaceAgency.AppUI
         public const string MinimisedClass = "ssa-app--minimised";
 
         readonly VisualElement _pages;
+        readonly VisualElement _body;
         readonly Dictionary<string, VisualElement> _pageByCode = new();
         StyleLength _heightBeforeMinimise, _minHeightBeforeMinimise;
 
@@ -120,18 +121,85 @@ namespace SkySpaceAgency.AppUI
             AddToClassList(UssClass);
             name = "app-window";
             SsaPalette.SetBackground(this, SsaPalette.WindowGradient);
+            // Header, tabs and pages live in a body. In Reflow mode it simply fills the window; in Scale
+            // mode it is laid out at the logical size and drawn shrunk (ApplyLayoutMode).
+            _body = Ui.Box("ssa-body");
+            _body.name = "app-body";
+            hierarchy.Add(_body);
             Header = new AppHeader(title, slogan);
-            Add(Header);
+            _body.Add(Header);
             Tabs = new AppTabBar();
-            Add(Tabs);
+            _body.Add(Tabs);
             _pages = Ui.Box("ssa-pages");
             _pages.name = "pages";
-            Add(_pages);
+            _body.Add(_pages);
             Tabs.selected += ShowPage;
             Tabs.selected += code => Tabs.SetBadge(TabFor(code)?.Badge);
             HeaderData = new AppHeaderData(Header);
             Header.MinimiseButton.clicked += () => SetMinimised(!Minimised);
-            RegisterCallback<GeometryChangedEvent>(e => { UpdateNarrow(e.newRect.width); UpdateCompact(e.newRect.height); });
+            RegisterCallback<GeometryChangedEvent>(e => ApplyLayoutMode());
+        }
+
+        // ---- small-window mode ----
+
+        SmallWindowMode _smallMode = SmallWindowMode.Reflow;
+
+        /// <summary>The mode the window is in (Reflow until a window sets it).</summary>
+        public SmallWindowMode SmallMode => _smallMode;
+
+        /// <summary>The factor the content is drawn at: 1 in Reflow, SmallWindowScale.Factor in Scale.</summary>
+        public float ContentScale { get; private set; } = 1;
+
+        /// <summary>The size the content is laid out at (the window's inner size in Reflow).</summary>
+        public Vector2 LogicalSize { get; private set; }
+
+        public void SetSmallWindowMode(SmallWindowMode mode)
+        {
+            if (mode == _smallMode) return;
+            _smallMode = mode;
+            ApplyLayoutMode();
+        }
+
+        /// <summary>
+        /// Reflow: the body fills the window, narrow and compact follow its real size (as before).
+        /// Scale: the body is positioned over the window's inner box, laid out at inner / factor and drawn
+        /// with that factor (transform from its top-left corner), so it fills the window exactly while
+        /// the window keeps its real size. The layout is then never narrow nor compact, because the
+        /// logical size is at least the reference.
+        /// </summary>
+        public void ApplyLayoutMode()
+        {
+            Rect inner = contentRect;
+            if (inner.width <= 0 || inner.height <= 0) return;   // hidden
+            bool scale = _smallMode == SmallWindowMode.Scale && !Minimised;
+            if (!scale)
+            {
+                ContentScale = 1;
+                LogicalSize = inner.size;
+                _body.style.position = StyleKeyword.Null;
+                _body.style.left = StyleKeyword.Null;
+                _body.style.top = StyleKeyword.Null;
+                _body.style.width = StyleKeyword.Null;
+                _body.style.height = StyleKeyword.Null;
+                _body.style.scale = StyleKeyword.Null;
+                _body.style.transformOrigin = StyleKeyword.Null;
+                UpdateNarrow(layout.width);
+                UpdateCompact(layout.height);
+                return;
+            }
+            float s = SmallWindowScale.Factor(inner.size);
+            Vector2 logical = SmallWindowScale.LogicalSize(inner.size, s);
+            ContentScale = s;
+            LogicalSize = logical;
+            _body.style.position = Position.Absolute;
+            _body.style.left = resolvedStyle.paddingLeft;
+            _body.style.top = resolvedStyle.paddingTop;
+            _body.style.width = logical.x;
+            _body.style.height = logical.y;
+            _body.style.transformOrigin = new TransformOrigin(0, 0, 0);
+            _body.style.scale = new Scale(new Vector3(s, s, 1));
+            UpdateNarrow(logical.x);
+            UpdateCompact(logical.y);
         }
 
         readonly List<AppTab> _tabs = new();
@@ -238,6 +306,7 @@ namespace SkySpaceAgency.AppUI
                 style.minHeight = _minHeightBeforeMinimise;
             }
             EnableInClassList(MinimisedClass, minimised);
+            ApplyLayoutMode();
             minimisedChanged?.Invoke(minimised);
         }
     }

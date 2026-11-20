@@ -28,6 +28,7 @@ public static class AppUiHarness
         public float Scale = 1;      // panel scale
         public Rect Window;          // in panel pixels
         public Action<AppWindowView> Setup;
+        public SmallWindowMode Mode = SmallWindowMode.Reflow;
         public bool Hud;             // render the compact flight bar of the tab instead of the window
         public override string ToString() => Name;
     }
@@ -46,6 +47,15 @@ public static class AppUiHarness
             list.Add(new Shot { Name = tab + "_minimum_narrow", Tab = tab, Texture = new Vector2(800, 520), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.MinSize) });
         list.Add(new Shot { Name = "lift_default_100pc", Tab = "lift", Texture = new Vector2(1400, 805), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.DefaultSize) });
         list.Add(new Shot { Name = "lift_minimised", Tab = "lift", Texture = new Vector2(1400, 120), Window = new Rect(new Vector2(20, 20), AppWindowGeometry.DefaultSize), Setup = v => v.SetMinimised(true) });
+        // Small windows, both modes (user request 2026-11-20): Reflow re-flows and scrolls, Scale keeps the layout and shrinks it.
+        foreach (string tab in new[] { "lift", "land" })
+            foreach (var mode in new[] { SmallWindowMode.Reflow, SmallWindowMode.Scale })
+                foreach (var size in new[] { new Vector2(760, 480), new Vector2(1000, 600), new Vector2(1360, 765) })
+                    list.Add(new Shot
+                    {
+                        Name = $"small_{mode.ToString().ToLowerInvariant()}_{size.x:0}x{size.y:0}_{tab}",
+                        Tab = tab, Mode = mode, Texture = size + new Vector2(40, 40), Window = new Rect(new Vector2(20, 20), size),
+                    });
         list.Add(new Shot { Name = "hud_land", Tab = "land", Texture = new Vector2(1600, 200), Scale = MockupScale, Window = new Rect(-4000, 0, 800, 480), Hud = true });
         return list.ToArray();
     }
@@ -76,7 +86,7 @@ public static class AppUiHarness
         }
     }
 
-    public static Opened Open(string tab, Rect window, Vector2 texture, float scale = 1)
+    public static Opened Open(string tab, Rect window, Vector2 texture, float scale = 1, SmallWindowMode mode = SmallWindowMode.Reflow)
     {
         var asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(AppUxmlPath);
         if (asset == null)
@@ -105,7 +115,7 @@ public static class AppUiHarness
         visualTree.Add(o.Root);
         var host = o.Root.Q("ssa-app-host");
         o.Context = AppTabContext.Editor();
-        o.View = AppWindow.BuildView(host, o.Context);
+        o.View = AppWindow.BuildView(host, o.Context, mode);
         foreach (var t in o.View.TabList) t.ShowSample();
         o.View.HeaderData.Set("Kerbal Explorer II", true, "Kerbin", "Pad", 4812, 1.46);   // the mockups' chips
         o.View.style.left = window.x; o.View.style.top = window.y;
@@ -117,7 +127,7 @@ public static class AppUiHarness
 
     public static Opened Open(Shot s)
     {
-        var o = Open(s.Tab, s.Window, s.Texture, s.Scale);
+        var o = Open(s.Tab, s.Window, s.Texture, s.Scale, s.Mode);
         if (s.Setup != null) { s.Setup(o.View); o.Layout(); }
         if (s.Hud)
         {
