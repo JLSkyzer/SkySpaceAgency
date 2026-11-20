@@ -1,4 +1,5 @@
 using SsaUI;
+using SkySpaceAgency.AppUI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -13,20 +14,17 @@ using UnityEngine.UIElements;
 namespace SkySpaceAgency.UI
 {
     /// <summary>
-    /// The VAB tools window (title ModIdentity.VabWindowTitle): export, import, parts dump, open folder, status line.
-    /// Built in code, so it needs no Addressables entry of its own (only SkySpaceAgency_Window.uxml is one):
-    /// it borrows that asset's style sheets and AppShell's USS class names. VAB only: it closes
-    /// itself in any other scene. The flight window keeps its own scene gating.
+    /// The VAB tools window: export, import, parts dump, open folder, status line and journal. The view
+    /// (AppUI/VabToolsView) is built in code from the new interface's components; this MonoBehaviour holds
+    /// the actions and the window's life. It needs no Addressables entry of its own: it borrows the style
+    /// sheets of the new window's uxml. VAB only: it closes itself in any other scene.
     /// </summary>
     public class VabToolsWindow : MonoBehaviour
     {
         public const string WindowId = ModIdentity.VabWindowId;
-        const string NoFileChoice = "(no .json file in vab/imports or vab/exports)";
 
-        VisualElement _window;
-        DropdownField _files;
-        Label _status;
-        readonly List<Button> _buttons = new();
+        PanelRenderer _panel;
+        VabToolsView _view;
         bool _isOpen;
         bool _busy;
 
@@ -41,7 +39,7 @@ namespace SkySpaceAgency.UI
                 WindowId = WindowId,
                 Parent = null,
                 IsHidingEnabled = true,
-                UseStockScale = true,      // follows the game's UI Scale, as the main window
+                UseStockScale = true,      // follows the game's UI Scale, times ours (the interface scale setting)
                 DisableGameInputForTextFields = true,
                 MoveOptions = new MoveOptions
                 {
@@ -51,6 +49,7 @@ namespace SkySpaceAgency.UI
             };
             var panel = Window.Create(options, host);
             var window = panel.gameObject.AddComponent<VabToolsWindow>();
+            window._panel = panel;
             window.Build(host, styleSource);
             return window;
         }
@@ -60,7 +59,7 @@ namespace SkySpaceAgency.UI
             bool styled = false;
             if (styleSource != null)
             {
-                // Unity API (VisualTreeAsset.stylesheets): SkySpaceAgency.uss, KerbalUI.uss, SsaUI*.uss.
+                // Unity API (VisualTreeAsset.stylesheets): SsaApp.uss and the tabs' style sheets.
                 foreach (StyleSheet sheet in styleSource.stylesheets)
                 {
                     if (sheet == null)
@@ -69,96 +68,37 @@ namespace SkySpaceAgency.UI
                     styled = true;
                 }
             }
-
-            _window = new VisualElement { name = "vab-tools" };
-            _window.AddToClassList("root");
-            _window.AddToClassList("oab-window-root");
-            _window.style.position = Position.Absolute;
-            _window.style.left = 420;
-            _window.style.top = 90;
-            _window.style.width = 340;
             if (!styled)
+                SkySpaceAgencyPlugin.logger.LogWarning("[VabTools] the window's style sheets were not found: the window will look plain.");
+
+            _view = new VabToolsView(ModIdentity.Title, "VAB tools", OnExport, OnImport, RefreshFiles, OnDump, OnOpenFolder,
+                () => IsWindowOpen = false);
+            _view.style.left = 420;
+            _view.style.top = 90;
+            host.Add(_view);
+            _view.AddManipulator(new DragManipulator(false, "vab_window_pos")
             {
-                _window.style.backgroundColor = new Color(0.07f, 0.08f, 0.11f, 0.95f);
-                Pad(_window, 8);
+                CanStart = target => IsInsideHeader(target),
+            });
+            _view.Show(false);
+            ApplyScale();
+        }
+
+        bool IsInsideHeader(VisualElement e)
+        {
+            for (var v = e; v != null; v = v.parent)
+            {
+                if (v == _view.Header.MinimiseButton || v == _view.Header.CloseButton) return false;
+                if (v == _view.Header) return true;
             }
-
-            var header = new VisualElement { name = "header" };
-            header.AddToClassList("oab-window-header");
-            header.style.flexDirection = FlexDirection.Row;
-            header.style.alignItems = Align.Center;
-            var title = new Label(ModIdentity.VabWindowTitle) { name = "header-title" };
-            title.AddToClassList("oab-window-header-title");
-            title.style.flexGrow = 1;
-            var close = new Button(() => IsWindowOpen = false) { name = "close-button", text = "x" };
-            close.AddToClassList("oab-close-button");
-            header.Add(title);
-            header.Add(close);
-            _window.Add(header);
-
-            var content = new VisualElement { name = "content" };
-            content.AddToClassList("oab-window-content");
-            _window.Add(content);
-
-            content.Add(SectionLabel("Export"));
-            content.Add(NewButton("Export", OnExport, false));
-
-            content.Add(SectionLabel("Import"));
-            var fileRow = Row();
-            _files = new DropdownField { name = "import-file" };
-            _files.style.flexGrow = 1;
-            fileRow.Add(_files);
-            fileRow.Add(NewButton("Refresh", RefreshFiles, false));
-            content.Add(fileRow);
-            content.Add(NewButton("Import (replaces the current rocket)", OnImport, false));
-
-            content.Add(SectionLabel("Parts and files"));
-            var toolsRow = Row();
-            toolsRow.Add(NewButton("Dump parts", OnDump, true));
-            toolsRow.Add(NewButton("Open folder", OnOpenFolder, true));
-            content.Add(toolsRow);
-
-            _status = new Label("Ready.") { name = "status" };
-            _status.style.whiteSpace = WhiteSpace.Normal;
-            _status.style.marginTop = 6;
-            content.Add(_status);
-
-            host.Add(_window);
-            _window.AddManipulator(new DragManipulator(false, "vab_window_pos"));
-            _window.Show(false);
+            return false;
         }
 
-        static void Pad(VisualElement e, float px)
+        // The panel scale: the game's UI scale times the interface scale of the new window.
+        void ApplyScale()
         {
-            e.style.paddingLeft = px;
-            e.style.paddingRight = px;
-            e.style.paddingTop = px;
-            e.style.paddingBottom = px;
-        }
-
-        static Label SectionLabel(string text)
-        {
-            var label = new Label(text);
-            label.style.unityFontStyleAndWeight = FontStyle.Bold;
-            label.style.marginTop = 6;
-            return label;
-        }
-
-        static VisualElement Row()
-        {
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
-            return row;
-        }
-
-        Button NewButton(string text, Action onClick, bool grow)
-        {
-            var button = new Button(onClick) { text = text };
-            if (grow)
-                button.style.flexGrow = 1;
-            _buttons.Add(button);
-            return button;
+            if (_panel == null) return;
+            AppUI.PanelScale.Apply(_panel.panelSettings, AppUI.UiScale.Combine(AppUI.PanelScale.Stock(), AppUI.AppSettings.Scale.V));
         }
 
         /// <summary>Opens or closes the window; it only opens in the VAB.</summary>
@@ -172,7 +112,7 @@ namespace SkySpaceAgency.UI
                 if (_isOpen == value)
                     return;   // also ends the AppBar toggle -> callback -> setter loop
                 _isOpen = value;
-                _window?.Show(value);
+                _view?.Show(value);
                 GameObject.Find(SkySpaceAgencyPlugin.ToolbarOabButtonID)
                     ?.GetComponent<UIValue_WriteBool_Toggle>()
                     ?.SetValue(value);
@@ -183,26 +123,22 @@ namespace SkySpaceAgency.UI
 
         void Update()
         {
+            ApplyScale();
             if (_isOpen && (!VabReader.InVab() || SkySpaceAgencyPlugin.Instance == null || !SkySpaceAgencyPlugin.Instance.Enabled))
                 IsWindowOpen = false;
         }
 
-        void SetStatus(string text)
-        {
-            if (_status != null)
-                _status.text = text;
-        }
+        void SetStatus(string text) => _view?.SetStatus(text);
 
         void SetBusy(bool busy)
         {
             _busy = busy;
-            foreach (Button b in _buttons)
-                b.SetEnabled(!busy);
+            _view?.SetBusy(busy);
         }
 
         void RefreshFiles()
         {
-            if (_files == null)
+            if (_view == null)
                 return;
             List<string> choices;
             try { choices = VabActions.ImportChoices(); }
@@ -211,15 +147,7 @@ namespace SkySpaceAgency.UI
                 SkySpaceAgencyPlugin.logger.LogError("[VabTools] cannot list the import files: " + e.Message);
                 choices = new List<string>();
             }
-            string previous = _files.value;
-            if (choices.Count == 0)
-            {
-                _files.choices = new List<string> { NoFileChoice };
-                _files.SetValueWithoutNotify(NoFileChoice);
-                return;
-            }
-            _files.choices = choices;
-            _files.SetValueWithoutNotify(choices.Contains(previous) ? previous : choices[0]);
+            _view.SetFiles(choices, _view.SelectedFile);
         }
 
         void OnExport()
@@ -243,8 +171,8 @@ namespace SkySpaceAgency.UI
         {
             if (_busy)
                 return;
-            string choice = _files?.value;
-            if (string.IsNullOrEmpty(choice) || choice == NoFileChoice)
+            string choice = _view?.SelectedFile;
+            if (string.IsNullOrEmpty(choice))
             {
                 SetStatus("Put a .json file in vab/imports first (Open folder), then press Refresh.");
                 return;

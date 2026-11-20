@@ -1,0 +1,11 @@
+/* The VAB tools window (AppUI/VabToolsView.cs): a small one-page window in the style of the main window. */
+.ssa-app.ssa-vab { position: absolute; width: 440px; padding: 5px 17px 18px 17px; }
+.ssa-vab .ssa-header { height: 54px; }
+.ssa-vab__body { margin-top: 10px; }
+.ssa-vab .ssa-card { flex-grow: 0; flex-shrink: 0; margin-bottom: 10px; padding: 12px 16px 8px 16px; }
+.ssa-vab__row { flex-direction: row; align-items: flex-start; }
+.ssa-vab .ssa-vab__button { flex-grow: 1; flex-shrink: 1; min-width: 0; height: 38px; margin: 0 8px 8px 0; padding: 0 12px; }
+.ssa-vab .ssa-vab__files { flex-grow: 1; flex-shrink: 1; min-width: 0; margin: 0 8px 8px 0; }
+.ssa-vab .ssa-vab__last { margin-right: 0; }
+.ssa-vab .ssa-chips { margin-left: 0; }
+.ssa-vab .ssa-pill { margin-top: 0; }

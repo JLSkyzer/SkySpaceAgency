@@ -10,5 +10,6 @@
     <Style src="Tabs/Transfer.uss" />
     <Style src="Tabs/Rendezvous.uss" />
     <Style src="Tabs/Settings.uss" />
+    <Style src="Tabs/Vab.uss" />
     <ui:VisualElement name="ssa-app-host" picking-mode="Ignore" style="position: absolute; left: 0; top: 0; right: 0; bottom: 0;" />
 </ui:UXML>

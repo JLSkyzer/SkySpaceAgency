@@ -29,6 +29,8 @@ public static class AppUiHarness
         public Rect Window;          // in panel pixels
         public Action<AppWindowView> Setup;
         public SmallWindowMode Mode = SmallWindowMode.Reflow;
+        public bool Vab;             // render the VAB tools window instead of the main window
+        public Action<VabToolsView> SetupVab;
         public bool Hud;             // render the compact flight bar of the tab instead of the window
         public override string ToString() => Name;
     }
@@ -68,6 +70,28 @@ public static class AppUiHarness
             Name = "lift_opacity_60pc", Tab = "lift", Texture = new Vector2(1600, 900), Scale = MockupScale, Window = MockupWindow,
             Setup = v => v.SetWindowOpacity(0.6f),
         });
+        // The VAB tools window (no mockup exists: the new interface's style extended to a small window).
+        list.Add(new Shot { Name = "vab_tools_ready", Vab = true, Texture = new Vector2(600, 820), Scale = MockupScale });
+        list.Add(new Shot
+        {
+            Name = "vab_tools_imported", Vab = true, Texture = new Vector2(600, 820), Scale = MockupScale,
+            SetupVab = v =>
+            {
+                v.SetFiles(new[] { "heavy trip-5.json", "before_import_20261119.json" });
+                v.SetStatus("Exported to ...vab/exports/heavy trip-5.json");
+                v.SetStatus("Importing heavy trip-5.json...");
+                v.SetStatus("Imported as the main rocket (212 parts). Previous workspace saved to exports/before_import_20261120.json.");
+            },
+        });
+        list.Add(new Shot
+        {
+            Name = "vab_tools_refused", Vab = true, Texture = new Vector2(600, 820), Scale = MockupScale,
+            SetupVab = v =>
+            {
+                v.SetStatus("Put a .json file in vab/imports first (Open folder), then press Refresh.");
+                v.SetStatus("Refused: the game reports that this rocket uses parts not unlocked in this campaign. Your rocket is unchanged.");
+            },
+        });
         list.Add(new Shot { Name = "hud_land", Tab = "land", Texture = new Vector2(1600, 200), Scale = MockupScale, Window = new Rect(-4000, 0, 800, 480), Hud = true });
         return list.ToArray();
     }
@@ -81,6 +105,7 @@ public static class AppUiHarness
         public AppWindowView View;
         public AppTabContext Context;
         public AppHudView HudView;
+        public VabToolsView Vab;
 
         public void Layout()
         {
@@ -89,7 +114,8 @@ public static class AppUiHarness
             UiLayoutHarness.Invoke(Panel, "ValidateLayout");
         }
 
-        public UiLayoutHarness.Window AsLayoutWindow() => new UiLayoutHarness.Window { Panel = Panel, Root = Root, Shell = View, Page = View };
+        public UiLayoutHarness.Window AsLayoutWindow() =>
+            new UiLayoutHarness.Window { Panel = Panel, Root = Root, Shell = (VisualElement)View ?? Vab, Page = (VisualElement)View ?? Vab };
 
         public void Dispose()
         {
@@ -98,7 +124,7 @@ public static class AppUiHarness
         }
     }
 
-    public static Opened Open(string tab, Rect window, Vector2 texture, float scale = 1, SmallWindowMode mode = SmallWindowMode.Reflow)
+    static Opened NewPanel(Vector2 texture, float scale)
     {
         var asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(AppUxmlPath);
         if (asset == null)
@@ -125,6 +151,24 @@ public static class AppUiHarness
         o.Root.style.left = 0; o.Root.style.top = 0; o.Root.style.right = 0; o.Root.style.bottom = 0;
         o.Root.style.backgroundColor = SsaPalette.Hex(0x050816);   // the mockups' backdrop
         visualTree.Add(o.Root);
+        return o;
+    }
+
+    /// <summary>The VAB tools window (a small one-page window) on the harness panel.</summary>
+    public static Opened OpenVab(Vector2 texture, float scale = 1)
+    {
+        var o = NewPanel(texture, scale);
+        o.Vab = new VabToolsView(ModIdentity.Title, "VAB tools", null, null, null, null, null, null);
+        o.Vab.style.left = 20;
+        o.Vab.style.top = 20;
+        o.Root.Q("ssa-app-host").Add(o.Vab);
+        o.Layout();
+        return o;
+    }
+
+    public static Opened Open(string tab, Rect window, Vector2 texture, float scale = 1, SmallWindowMode mode = SmallWindowMode.Reflow)
+    {
+        var o = NewPanel(texture, scale);
         var host = o.Root.Q("ssa-app-host");
         o.Context = AppTabContext.Editor();
         o.View = AppWindow.BuildView(host, o.Context, mode);
@@ -139,6 +183,13 @@ public static class AppUiHarness
 
     public static Opened Open(Shot s)
     {
+        if (s.Vab)
+        {
+            var v = OpenVab(s.Texture, s.Scale);
+            s.SetupVab?.Invoke(v.Vab);
+            v.Layout();
+            return v;
+        }
         var o = Open(s.Tab, s.Window, s.Texture, s.Scale, s.Mode);
         if (s.Setup != null) { s.Setup(o.View); o.Layout(); }
         if (s.Hud)

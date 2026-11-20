@@ -66,9 +66,12 @@ namespace SkySpaceAgency.AppUI
             AddToClassList("ssa-icon-button");
             name = glyph == Glyph.Close ? "close-button" : "minimise-button";
             if (onClick != null) clicked += onClick;
-            this.AddManipulator(new Clickable(() => clicked?.Invoke()));
+            this.AddManipulator(new Clickable(Click));
             generateVisualContent += Draw;
         }
+
+        /// <summary>What a click does; also the way tests press the button.</summary>
+        public void Click() => clicked?.Invoke();
 
         void Draw(MeshGenerationContext ctx)
         {
