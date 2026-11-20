@@ -162,6 +162,32 @@ public class SettingsTabTests
         protected override void OnBuild(AppPage page) { }
     }
 
+    sealed class ClosingTab : AppTab
+    {
+        public int Closed;
+        public bool Throws;
+        public ClosingTab(string code) : base(null) { _code = code; }
+        readonly string _code;
+        public override string Code => _code;
+        public override string Label => _code;
+        protected override void OnBuild(AppPage page) { }
+        public override void OnWindowClosed() { Closed++; if (Throws) throw new System.InvalidOperationException("boom"); }
+    }
+
+    [Test]
+    public void WindowClosed_TellsEveryTab_AndOneThrowingDoesNotStopTheOthers()
+    {
+        var view = new AppWindowView("t", "s");
+        var a = new ClosingTab("lift") { Throws = true };
+        var b = new ClosingTab("land");
+        view.AddTab(a);
+        view.AddTab(b);
+        UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Warning, new System.Text.RegularExpressions.Regex("OnWindowClosed"));
+        view.WindowClosed();
+        Assert.AreEqual(1, a.Closed);
+        Assert.AreEqual(1, b.Closed);
+    }
+
     [Test]
     public void Settings_Done_GoesBackToThePreviousTab()
     {

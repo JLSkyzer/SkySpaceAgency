@@ -504,6 +504,8 @@ namespace SkySpaceAgency.AppUI
             _timelineKey = -1;
         }
 
+        public override void OnWindowClosed() => Targets?.CancelPick("window closed");
+
         public override void Tick()
         {
             ResolvePilot();

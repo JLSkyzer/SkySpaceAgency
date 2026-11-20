@@ -137,8 +137,7 @@ public class CoexistenceTests
     public void Sources_DeclareNoK2D2NamespaceOrType()
     {
         var declaration = new Regex(@"^\s*namespace\s+(K2D2|K2UI)\b|\b(class|struct|enum|interface|record)\s+K2(D2)?[A-Z_]", RegexOptions.Multiline);
-        var files = Directory.GetFiles(AssetsPath(ModIdentity.ModId), "*.cs", SearchOption.AllDirectories)
-            .Concat(Directory.GetFiles(AssetsPath("Runtime"), "*.cs", SearchOption.AllDirectories)).ToArray();
+        var files = Directory.GetFiles(AssetsPath(ModIdentity.ModId), "*.cs", SearchOption.AllDirectories);
         Assert.Greater(files.Length, 100, "the scan found no source files");
         var offenders = files.Where(f => declaration.IsMatch(File.ReadAllText(f))).ToArray();
         CollectionAssert.IsEmpty(offenders);

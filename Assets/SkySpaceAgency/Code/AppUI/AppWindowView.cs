@@ -284,6 +284,16 @@ namespace SkySpaceAgency.AppUI
                 Tabs.TabElement(t.Code)?.EnableInClassList(RunningClass, SafeRunning(t));
         }
 
+        /// <summary>Tells every tab the window closed (a pick waiting for a map click is cancelled).</summary>
+        public void WindowClosed()
+        {
+            foreach (var t in _tabs)
+            {
+                try { t.OnWindowClosed(); }
+                catch (System.Exception e) { UnityEngine.Debug.LogWarning($"[AppWindow] {t.Code}.OnWindowClosed: {e.Message}"); }
+            }
+        }
+
         public IEnumerable<string> PageCodes => _pageByCode.Keys;
         public VisualElement PageFor(string code) => _pageByCode.TryGetValue(code, out var p) ? p : null;
 

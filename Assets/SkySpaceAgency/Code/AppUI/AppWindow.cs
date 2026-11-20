@@ -197,6 +197,7 @@ namespace SkySpaceAgency.AppUI
                 _open = value;
                 if (_view == null) return;
                 _view.style.display = value ? DisplayStyle.Flex : DisplayStyle.None;
+                if (!value) _view.WindowClosed();
                 // The app bar button follows the window.
                 if (_panel != null)
                     GameObject.Find(SkySpaceAgencyPlugin.ToolbarFlightButtonID)

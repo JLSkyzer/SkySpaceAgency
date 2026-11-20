@@ -70,7 +70,7 @@ Remove the demo (`AppDemo.cs`), harness shots per tab at mockup size (`docs/desi
 fix the slider track offset and the minimum-size scrolling, CHANGELOG, checklist section 27, todo, lessons, parent
 CLAUDE.md, zip, final review.
 
-### Task 9 (after the user's in-game validation, NOT now): remove the classic window
+### Task 9 (DONE 2026-11-20, commit 1426ff6; the user validated the new window in game): remove the classic window
 
 Delete: `Assets/UI/SkySpaceAgency_UI/{SkySpaceAgency_Window,node,Orbit,Transfer,Lift,Landing,Dock,attitude,about}.uxml`,
 `SkySpaceAgency.uss`, `Assets/Runtime/SsaUI/USS/*.uss` once unused, `Code/UI/SkySpaceAgencyWindow.cs`,

@@ -1,7 +1,7 @@
 /* The new SkySpaceAgency window (docs/design/ui, plan docs/superpowers/plans/2026-11-19-new-ui-foundations.md).
    Every colour, size and font of the new UI is here. Sizes are the mockups' pixels (drawn for a 1600 x 900 window)
    times 0.85; the interface scale setting scales the whole panel on top of that (AppUI/UiScale.cs).
-   Variables live on .ssa-app, not :root, so nothing here reaches the classic window.
+   Variables live on .ssa-app, not :root, so nothing here reaches the game's own UI.
    Gradients (window, sky, gold) cannot be written in USS: AppUI/SsaPalette.cs builds them as textures. */
 
 .ssa-app {

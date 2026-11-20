@@ -465,7 +465,7 @@ namespace SkySpaceAgency.AppUI
         /// <summary>
         /// Every tick of the tab (LandingUI.UpdatePick). The tab only ticks while shown: a gap of more
         /// than a few frames since the last tick means it was hidden (or the window closed), which
-        /// cancels a pick as the classic tab does.
+        /// cancels a pick (OnWindowClosed does it at once when the window closes).
         /// </summary>
         public void UpdatePick(LandTargetBlock visible)
         {

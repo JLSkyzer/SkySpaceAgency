@@ -55,6 +55,9 @@ namespace SkySpaceAgency.AppUI
 
         public virtual void Tick() { }
 
+        /// <summary>The window was closed (button, Alt+Y, scene change): drop anything that waits for a click.</summary>
+        public virtual void OnWindowClosed() { }
+
         /// <summary>True while this tab's pilot flies: the tab is lit, and the compact flight bar shows it.</summary>
         public virtual bool IsRunning => false;
 

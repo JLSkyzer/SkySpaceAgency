@@ -371,35 +371,29 @@ Relevé des collisions : `docs/superpowers/notes/2026-11-19-coexistence-with-k2d
 ## 26. Nouvelle interface, étape 1 : les fondations (2026-11-19, aperçu)
 
 Plan `docs/superpowers/plans/2026-11-19-new-ui-foundations.md`. Captures de référence (éditeur) :
-`docs/design/ui/foundations/`. Rien ne vole depuis la nouvelle fenêtre : seul l'affichage est à vérifier.
+`docs/design/ui/foundations/`. (Réécrite le 2026-11-20 : il n'y a plus d'ancienne fenêtre. Les points « aspect »,
+   « ouverture » et « déplacement » ont été vus par l'utilisateur le 2026-11-20 : « l'ui est parfaite ».)
 
-1. **Rien ne change sans clic.** La fenêtre classique, ses onglets et Alt+Y marchent comme avant. Seul nouveau : le
-   bouton « New UI (preview) » en bas de la fenêtre classique, entre « Auto-staging » et « i », qui ne déborde pas.
-2. **Ouverture.** Le bouton ouvre la nouvelle fenêtre (un second clic la ferme), en vol et en vue carte seulement.
-   Log : `AppWindow: built, scale 100 % on the game's …`. Sinon chercher `New window not created yet` ou
+1. **Ouverture.** Alt+Y et le bouton d'AppBar ouvrent la fenêtre (un second appui la ferme), en vol et en vue carte
+   seulement. Log : `AppWindow: built, scale 100 % on the game's …`. Sinon chercher `Window not created yet` ou
    `Failed to load UXML from Addressables at 'Assets/UI/SkySpaceAgency_UI/App/SkySpaceAgency_App.uxml'`.
-3. **Aspect.** Comparer à `docs/design/ui/lift.png` et à `docs/design/ui/foundations/lift_mockup_size.png` : fond bleu
-   nuit en dégradé, police Noto Sans (pas la police à chasse fixe de la fenêtre classique), onglet LIFT doré souligné,
-   badge PREVIEW, frise des phases, bouton « Running… » doré. Le relief de vol (courbe cyan pointillée, trajectoire
-   dorée, fusée) est dessiné. Noter tout carré blanc, texte manquant ou police différente (la police vient du paquet
-   du SDK : à vérifier dans le jeu).
-4. **Déplacement.** Glisser par l'en-tête déplace la fenêtre ; glisser dans le corps (curseurs, champs) ne la déplace
+2. **Aspect.** Comparer à `docs/design/ui/lift.png` et à `docs/design/ui/migration/lift_mockup_size.png` : fond bleu
+   nuit en dégradé, police Noto Sans, onglet LIFT doré souligné, frise des phases, bouton « Running… » doré. Noter tout
+   carré blanc, texte manquant ou police différente.
+3. **Déplacement.** Glisser par l'en-tête déplace la fenêtre ; glisser dans le corps (curseurs, champs) ne la déplace
    pas. Un clic droit ne la déplace pas.
-5. **Redimensionnement.** La poignée en bas à droite agrandit et réduit en largeur et en hauteur, jamais sous 760 x 480 ;
+4. **Redimensionnement.** La poignée en bas à droite agrandit et réduit en largeur et en hauteur, jamais sous 760 x 480 ;
    la vue centrale suit la taille ; sous 1100 px de large, la vue passe sous les deux colonnes et les onglets se
    resserrent. Log `WindowSizeSaver: window size saved WxH`.
-6. **Mémoire.** Fermer, rouvrir, puis relancer le jeu : position, taille et onglet reviennent.
-7. **Échelle.** Onglet SETTINGS, « Interface scale » : 75 à 150 % par pas de 5 %, effet immédiat sur la nouvelle
-   fenêtre seulement (log `AppWindow: panel scale X (game Y x ours Z %)`). Changer ensuite l'échelle d'UI du jeu, puis
-   la résolution : la nouvelle fenêtre suit (produit des deux) et reste à l'écran ; la fenêtre classique ne suit que
-   l'échelle du jeu.
-8. **Réduire.** Le bouton « – » ne garde que l'en-tête ; un second clic rend la hauteur d'avant, et la taille réduite
+5. **Mémoire.** Fermer, rouvrir, puis relancer le jeu : position, taille et onglet reviennent.
+6. **Échelle.** Onglet SETTINGS, « Interface scale » : 75 à 150 % par pas de 5 %, effet immédiat sur la fenêtre
+   et sur la fenêtre des outils du VAB (log `AppWindow: panel scale X (game Y x ours Z %)`). Changer ensuite l'échelle d'UI du jeu, puis
+   la résolution : la fenêtre suit (produit des deux) et reste à l'écran.
+7. **Réduire.** Le bouton « – » ne garde que l'en-tête ; un second clic rend la hauteur d'avant, et la taille réduite
    n'est pas enregistrée.
-9. **Scènes.** Quitter le vol (VAB, KSC, menu) ferme la nouvelle fenêtre ; elle ne se rouvre pas toute seule. F2 la
+8. **Scènes.** Quitter le vol (VAB, KSC, menu) ferme la nouvelle fenêtre ; elle ne se rouvre pas toute seule. F2 la
    masque avec le reste de l'interface.
-10. **Champs.** Taper dans un champ de l'onglet LIFT (« Target altitude ») ne déclenche aucune commande du jeu.
-11. Onglet « Orbit » (ou un autre onglet de vol) : le message « moves to this window in step 2 », et « Classic window »
-    ouvre la fenêtre classique.
+9. **Champs.** Taper dans un champ de l'onglet LIFT (« Target altitude ») ne déclenche aucune commande du jeu.
 
 ## 27. Nouvelle interface, étape 2 : tous les onglets (2026-11-19)
 
@@ -407,10 +401,9 @@ Plan `docs/superpowers/plans/2026-11-19-new-ui-tab-migration.md`, inventaire `do
 (chaque fichier finit par une liste « Not verified in game » à reprendre ici onglet par onglet). Captures de référence :
 `docs/design/ui/migration/`. La section 26 (fenêtre, déplacement, taille, échelle) reste à faire aussi.
 
-1. **Bascule.** Alt+Y et le bouton d'AppBar ouvrent la nouvelle fenêtre ; le bouton d'AppBar reste allumé tant qu'elle
-   est ouverte. SETTINGS > Interface > « Classic UI » : Alt+Y ouvre l'ancienne fenêtre, jamais les deux à la fois ; son
-   bouton « New UI » revient à la nouvelle. Une erreur d'onglet n'apparaît qu'une fois dans le log
-   (`AppWindow: tab '…' update failed`) : n'en voir aucune.
+1. **Fenêtre unique.** Alt+Y et le bouton d'AppBar ouvrent la fenêtre ; le bouton d'AppBar reste allumé tant qu'elle
+   est ouverte. Il n'y a plus de réglage « Classic UI » ni de bouton « New UI ». Une erreur d'onglet n'apparaît qu'une
+   fois dans le log (`AppWindow: tab '…' update failed`) : n'en voir aucune.
 2. **En-tête.** Puces : nom du vaisseau (point vert pendant un vol de pilote), « corps · situation », Δv, TWR.
 3. **Onglet allumé.** L'onglet du pilote qui vole s'affiche en vert.
 4. **NODES.** Liste des nœuds réels, Circularize AP/PE, Start/Running…, Abort, pause en fin, sections Node info et
@@ -425,14 +418,14 @@ Plan `docs/superpowers/plans/2026-11-19-new-ui-tab-migration.md`, inventaire `do
    Cancel saved plan, carte (sens de l'arc, angle de phase), budget Δv.
 9. **RENDEZVOUS.** Liste des cibles avec distances, mode Rendezvous / + Dock / Dock only, ports et « Change », Prepare
    only, chaîne vers un autre corps, vue d'approche, CHECKS, tuile RCS LEFT (lecture du MonoPropellant à vérifier).
-10. **SETTINGS.** Échelle (section 26), Classic UI, barre compacte, auto-staging, warp des burns, debug, Reset All (deux
+10. **SETTINGS.** Échelle (section 26), fenêtre réduite (section 28), barre compacte, auto-staging, warp des burns, debug, Reset All (deux
     clics), crédits complets, version.
 11. **RETURN.** Page « planned », contrôles grisés, badge PLANNED dans la barre d'onglets.
 12. **Barre compacte.** Fenêtre fermée pendant un vol : la barre apparaît en haut (pilote, phase, valeurs, Stop, ouvrir
     la fenêtre) ; corail quand la garde de chauffe agit ; disparaît à la fin du vol ou si on la coupe dans SETTINGS.
-13. **Réglages partagés.** Changer un réglage dans la nouvelle fenêtre puis passer en Classic UI : l'ancienne montre la
-    même valeur (et l'inverse). Relancer le jeu : les valeurs restent.
-14. **Fenêtre basse.** À 760 x 480, la frise défile avec les colonnes ; la barre d'actions reste visible.
+13. **Réglages.** Changer un réglage dans un onglet, relancer le jeu : la valeur reste (les fichiers `skyspaceagency_*.json`
+    sont ceux d'avant).
+14. **Fenêtre basse.** Voir les sections 28 et 30 (défilement par colonne, la frise et la barre d'actions restent fixes).
 
 ## 28. Fenêtre réduite : Scale / Reflow (2026-11-20)
 
@@ -468,3 +461,30 @@ le warp avant un changement de carburant ou d'électricité.
    `the warp left rails (index …, set by the player or the game)` suit, et le burn se termine en boucle fermée à x1.
 4. **26w46a et 26w42c.** Sans le plan glissant (propriété absente), rien ne change : la fin du burn du jeu reste la
    fin du propergol.
+
+## 30. Opacité, défilement par colonne, outils du VAB, plus d'ancienne fenêtre (2026-11-20)
+
+Captures de référence : `docs/design/ui/migration/` (`land_sections_open_scrolling`, `transfer_sections_open_scrolling`,
+`lift_opacity_60pc`, `vab_tools_*`).
+
+1. **Barre d'opacité.** Petit curseur « OPACITY » en bas de la fenêtre, à gauche de la poignée de redimensionnement :
+   30 à 100 %, la fenêtre entière s'éclaircit ; la poignée reste utilisable (aucun recouvrement) ; déplacer et
+   redimensionner marchent à toute opacité, en Scale comme en Reflow. La valeur revient après redémarrage
+   (`app_window_opacity`). La barre disparaît quand la fenêtre est réduite (« – »).
+2. **Défilement par colonne.** Déplier des sections (Options, plan details, ADVANCED, listes) : la page à trois colonnes
+   garde sa hauteur ; chaque colonne latérale (plan, télémétrie / budget) a sa propre barre fine (sur le bord droit de
+   la carte, sans flèches) et défile seule ; la colonne centrale ne défile jamais ; la frise et la barre d'actions
+   restent en bas. À vérifier sur Lift, Orbit, Transfer, Rendezvous, Land, Nodes, Settings, Return, en Scale et en Reflow.
+   En Reflow étroit (< 1100 px) les colonnes sont empilées et c'est toute la page qui défile (attendu).
+3. **Molette.** Sur une colonne qui défile, la molette fait défiler la colonne et pas la caméra du jeu ; sur la vue
+   centrale, elle ne fait rien d'inattendu.
+4. **Outils du VAB.** Dans le VAB, le bouton d'AppBar ouvre une petite fenêtre au style de la nouvelle interface (en-tête,
+   cartes Export / Import / Parts and files, pastille d'état, journal des derniers messages). Mêmes fonctions qu'avant :
+   Export, liste des fichiers + Refresh, Import (remplace la fusée actuelle), Dump parts, Open folder ; fichiers dans
+   `<mod>/vab/{exports,imports,dumps}` ; pendant un import les boutons sont grisés ; elle se ferme hors du VAB ; elle
+   se déplace par l'en-tête (position gardée) et suit l'échelle d'interface. Les messages d'erreur sont en rouge corail.
+5. **Plus d'ancienne fenêtre.** Aucun bouton, réglage ni raccourci de l'ancienne fenêtre ; aucune ligne `Failed to load
+   UXML` ni `[Plugin] Window not created yet` au chargement ; le jeu ne contient plus que l'entrée Addressables
+   `App/SkySpaceAgency_App.uxml`. Alt+Y et l'AppBar ouvrent bien la fenêtre dès le premier chargement de campagne.
+6. **Réglages inchangés.** Les valeurs des réglages et des plans enregistrés avant la mise à jour sont encore là.
+7. **Choix de cible en attente.** Onglet Land, cliquer « Pick on map » (bouton en attente), puis fermer la fenêtre (croix, Alt+Y) : l'attente est annulée tout de suite (ligne `[Landing] target: pick cancelled (window closed)`), un clic sur la carte ne pose rien.

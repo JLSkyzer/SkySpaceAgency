@@ -154,7 +154,9 @@ namespace SkySpaceAgency.UI
         {
             if (_busy)
                 return;
-            VabActions.Export(out string message);
+            string message;
+            try { VabActions.Export(out message); }
+            catch (System.Exception e) { message = "Export failed: " + e.Message; }
             SetStatus(message);
             RefreshFiles();
         }
@@ -163,7 +165,9 @@ namespace SkySpaceAgency.UI
         {
             if (_busy)
                 return;
-            VabActions.Dump(out string message);
+            string message;
+            try { VabActions.Dump(out message); }
+            catch (System.Exception e) { message = "Dump failed: " + e.Message; }
             SetStatus(message);
         }
 

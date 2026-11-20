@@ -48,7 +48,7 @@
 .ssa-app Label.ssa-nodes-burn__note--info { color: var(--gold-light); }
 .ssa-app Label.ssa-nodes-burn__note--neutral { color: var(--dim); }
 
-/* ---- Hold attitude card (the classic Attitude tab, one row under the view) ---- */
+/* ---- Hold attitude card (the former Attitude tab, one row under the view) ---- */
 .ssa-app .ssa-nodes-attitude { flex-grow: 0; flex-shrink: 0; margin-top: 14px; padding-bottom: 14px; }
 .ssa-app .ssa-nodes-hold { margin-bottom: 0; align-items: flex-end; }
 .ssa-app .ssa-button.ssa-nodes-hold__button { min-width: 102px; height: 37px; margin-left: 0; border-radius: 8.5px; }
