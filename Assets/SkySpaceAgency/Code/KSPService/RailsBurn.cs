@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using KSP.Game;
 using KSP.Sim;
 using KSP.Sim.DeltaV;
@@ -32,6 +33,15 @@ namespace SkySpaceAgency.KSPService
     /// ends when the lit engines' propellant does. With
     /// PhysicsSettings.DisableTimeWarpWhileUnderThrust, GetMaxRateIndexInternal allows only index 0
     /// under thrust out of physics mode: SetRateIndex then refuses rails.
+    ///
+    /// Facts from the 26w47a IL (2026-11-20): the burn is no longer built to the propellant's end. A
+    /// burn made from the lit engines' tracked propellant (VesselComponent.UsesRollingBurnPlan, private)
+    /// is planned over a horizon of at most 3600 s or the time to use half the vessel's mass, and rolls: when
+    /// its last patch ends (transition Final, which does not slow the warp) the game builds the next. The
+    /// game itself drops the warp before a fuel or power change
+    /// (VesselComponent.OrbitalBurnResourceChangeUT, TimeWarp.LimitRateToResourceForecast). So
+    /// GetEndBurnOrbit().EndUT is no longer where the stage's propellant ends: BurnEndUT reports none while
+    /// the plan rolls, and the caller falls back on the stage estimate it took at entry.
     /// </summary>
     public class RailsBurn
     {
@@ -242,13 +252,33 @@ namespace SkySpaceAgency.KSPService
             }
         }
 
-        /// <summary>UT at which the game's burn ends (its last patch: the lit engines' propellant). NaN when it flies none.</summary>
+        // VesselComponent.UsesRollingBurnPlan, private, new in 26w47a (null in 26w46a and the 26w42c imports).
+        static readonly PropertyInfo RollingPlanProperty =
+            typeof(VesselComponent).GetProperty("UsesRollingBurnPlan", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+
+        /// <summary>The game's burn plan is a rolling horizon (26w47a): its end is not the stage's propellant.</summary>
+        public bool GameBurnRolls()
+        {
+            try
+            {
+                return RollingPlanProperty != null && RollingPlanProperty.GetValue(vessel?.Invoke()) is true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// UT at which the game's burn ends (its last patch: the lit engines' propellant in 26w46a). NaN when it
+        /// flies none, and in 26w47a while its plan rolls (the end is then a horizon, not the propellant).
+        /// </summary>
         public double BurnEndUT()
         {
             try
             {
                 VesselComponent v = vessel?.Invoke();
-                if (v == null || !v.IsOrbitalPhysicsUnderThrustActive)
+                if (v == null || !v.IsOrbitalPhysicsUnderThrustActive || GameBurnRolls())
                     return double.NaN;
                 IPatchedOrbit end = v.GetEndBurnOrbit();
                 return end != null ? end.EndUT : double.NaN;

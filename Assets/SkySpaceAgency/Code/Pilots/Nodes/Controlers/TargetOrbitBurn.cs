@@ -1002,7 +1002,9 @@ namespace SkySpaceAgency.Node
                     // The burn trajectory against the conic the game also writes back (both Zup).
                     IKeplerPatch conic = current_vessel.VesselComponent.Orbit;
                     double gap = (conic.GetRelativePositionAtUTZup(now) - r).magnitude;
-                    logger.LogInfo($"{text}; the game's burn ends in {rails.BurnEndUT() - now:n1} s (stage estimate {rails_stage_seconds - (now - rails_entry_UT):n1} s), " +
+                    double gameEnd = rails.BurnEndUT();
+                    string gameEndText = double.IsNaN(gameEnd) ? (rails.GameBurnRolls() ? "a rolling plan, no end" : "unknown") : $"ends in {gameEnd - now:n1} s";
+                    logger.LogInfo($"{text}; the game's burn: {gameEndText} (stage estimate {rails_stage_seconds - (now - rails_entry_UT):n1} s), " +
                         $"trajectory vs conic {gap:n1} m");
                 }
                 else
@@ -1025,9 +1027,7 @@ namespace SkySpaceAgency.Node
             if (double.IsNaN(modelled))
                 modelled = rails_entry_accel;
             double accel = RailsBurnPolicy.ExitAccel(modelled, rails_measured_accel);
-            double endUT = rails.BurnEndUT();
-            if (double.IsNaN(endUT))
-                endUT = rails_entry_UT + rails_stage_seconds;
+            double endUT = RailsBurnPolicy.StageEndUT(rails.BurnEndUT(), rails_entry_UT, rails_stage_seconds);
             CelestialBodyComponent body = current_vessel.VesselComponent.Orbit.referenceBody;
 
             RailsStep step = RailsBurnPolicy.Decide(new RailsInputs

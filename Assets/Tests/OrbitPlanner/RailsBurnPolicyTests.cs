@@ -423,6 +423,15 @@ public class RailsBurnPolicyTests
     }
 
     [Test]
+    public void StageEndUT_UsesTheGameEndOrTheEntryEstimate()
+    {
+        // 26w46a: the game's burn ends where the propellant does.
+        Assert.That(RailsBurnPolicy.StageEndUT(1500, 1000, 800), Is.EqualTo(1500));
+        // 26w47a, rolling plan (no end reported): the stage estimate taken at entry.
+        Assert.That(RailsBurnPolicy.StageEndUT(double.NaN, 1000, 800), Is.EqualTo(1800));
+    }
+
+    [Test]
     public void AccelAfter_GrowsAsMassDrops()
     {
         // 100 kN on 10 t burning 30 kg/s: 10 m/s² now, 100 kN / 7 t after 100 s.

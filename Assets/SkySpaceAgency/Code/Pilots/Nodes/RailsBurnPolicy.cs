@@ -10,7 +10,8 @@ namespace SkySpaceAgency.Node
         public double BurnLeftGameSeconds;
         // Game seconds the active stage can still burn: off rails the stage's
         // OdeSolverStageComponent.MaxPossibleBurnTime, on rails the game's burn end (the lit
-        // engines' propellant, GetEndBurnOrbit().EndUT) minus now.
+        // engines' propellant, GetEndBurnOrbit().EndUT in 26w46a; the entry estimate in 26w47a, whose burn
+        // plan rolls, see StageEndUT) minus now.
         public double StageBurnLeftSeconds;
         // Real seconds aligned within MaxAlignDeg at a steady full throttle, without a break.
         public double AlignedSteadyRealSeconds;
@@ -249,6 +250,13 @@ namespace SkySpaceAgency.Node
                 return Math.Min(modelled, measured);
             return m ? modelled : s ? measured : double.NaN;
         }
+
+        /// <summary>
+        /// UT of the end of the stage's propellant while on rails: the game's burn end when it reports one, else
+        /// the entry UT plus the stage's burn seconds taken at entry (26w47a's rolling burn plan has no such end).
+        /// </summary>
+        public static double StageEndUT(double gameBurnEndUT, double entryUT, double stageSecondsAtEntry) =>
+            double.IsNaN(gameBurnEndUT) ? entryUT + stageSecondsAtEntry : gameBurnEndUT;
 
         /// <summary>Game seconds from now to the planned rails exit: the earlier of the two margins.</summary>
         public static double PlannedRailsSeconds(double burnLeft, double stageBurnLeft) =>

@@ -452,3 +452,19 @@ Réglage SETTINGS > Interface > « Small window » (Scale par défaut, Reflow = 
 6. **Réduire (« – »).** L'en-tête seul, à taille normale ; la restauration rend l'échelle d'avant. La taille enregistrée
    reste celle de la fenêtre (relancer le jeu : même taille, même échelle).
 7. **Défaut.** Un joueur sans réglage enregistré a Scale (fichier de réglages sans `app_small_window`).
+
+## 29. Redux 26w47a : burn sur rails (2026-11-20)
+
+Compatibilité vérifiée à la lecture de l'IL, jeu jamais lancé : `docs/superpowers/notes/2026-11-20-redux-26w47a-compat.md`.
+Le jeu de 26w47a construit le burn sur rails comme un plan glissant (horizon, pas fin du propergol) et ralentit lui-même
+le warp avant un changement de carburant ou d'électricité.
+
+1. **Garde et plan glissant.** Un burn Node ou Transfer en mode « Rails (native) » : la ligne
+   `rails burn: guard ok … the game's burn: a rolling plan, no end (stage estimate … s)` apparaît. Si elle dit
+   `ends in … s`, le plan n'est pas glissant : le comportement de 26w46a s'applique.
+2. **Durée sur les rails.** Un burn de plus de deux minutes de jeu reste sur les rails (x10 à x100) jusqu'aux marges de Δv
+   ou d'étage (10 s plus 2 s réelles), au lieu de repasser à x1 quelques images après l'entrée.
+3. **Panne sèche sur les rails.** Un étage trop petit pour le burn : le jeu ralentit seul avant la panne, la ligne
+   `the warp left rails (index …, set by the player or the game)` suit, et le burn se termine en boucle fermée à x1.
+4. **26w46a et 26w42c.** Sans le plan glissant (propriété absente), rien ne change : la fin du burn du jeu reste la
+   fin du propergol.
