@@ -356,15 +356,22 @@ Two flows exist; they do not behave the same.
   engine modules, so a clone is likely hard [inferred].
 - **Render and physics range for the copy**: 2 km RigidBody, 100 km view load (section 1).
 
-## 8. Decisions the user must take before any spec
+## 8. Decisions taken (2026-11-20)
 
-1. **R4 / R4c / R4b: base the flow on Redux's stage recovery** (mission parked, booster flown from its recovery point,
-   result merged), accepting that the landed booster appears **at once** at the checkpoint time and the in-flight copy
-   disappears; **or** keep the roadmap's "booster kept in flight, visual replay, landed vessel at touchdown time" and
-   pay for it with a patch of Redux's merge step. Recommended: the first for R3/R4/R4c (cheap, robust), and decide
-   R4b separately because it is what makes the upper stage's video consistent.
-2. **R6 versus Redux's released Lua**: keep our own language as decided on 2026-10-30, now that the comparison is in
-   front of him (section 6), and say whether the interpreter may reuse the shipped MoonSharp.
+The two questions this note asked were answered by the user on 2026-11-20:
+
+1. **R3 / R4 / R4c are built on Redux's stage recovery capture, and R4b keeps our replay.** The merge step is
+   **patched, not endured**: Harmony on the internal static `StageRecoveryReconciler.TryReconcile` so that the
+   in-flight copy stays, the terminal stage goes to our own booster-landed record, and the landed vessel appears at its
+   touchdown time (swap of the replayed copy). The cost listed in section 7 is accepted. The revised step-by-step flow
+   is in the roadmap ("Phase 0 result and decisions").
+2. **R6 stays our own language, without MoonSharp** and without Redux's Lua. The interpreter is written by us; the
+   remark in section 6 about reusing the shipped `MoonSharp.Interpreter.dll` is dropped.
+
+Open design points that these decisions leave (to settle in the R4b spec, after the in-game checks of section 9):
+the GUID clash between the replayed copy and the landed vessel, the exact patch point (prefix replacing the merge, or
+postfix undoing it), and what the patch does when our recorder has no recording for the stage (fall back to Redux's
+own merge).
 
 ## 9. Left to confirm in game
 

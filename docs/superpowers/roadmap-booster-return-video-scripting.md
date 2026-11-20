@@ -1,7 +1,8 @@
 # Roadmap: booster return, flight recording, scripting
 
-Status: **not started**. Written on 2026-10-30 from the user's ideas, before any research. This is a
-roadmap, not an implementation plan. Each sub-project below gets its own spec, then its own plan
+Status: **phase 0 done on 2026-11-20** (`notes/2026-11-20-roadmap-phase0-scan.md`), no code yet. Written on
+2026-10-30 from the user's ideas; revised on 2026-11-20 after the scan (section "Phase 0 result and decisions"
+below, which wins over the older R-sections where they differ). This is a roadmap, not an implementation plan. Each sub-project below gets its own spec, then its own plan
 (`specs/` and `plans/`), when its turn comes.
 
 ## When
@@ -60,6 +61,9 @@ A community member said that Redux already plans two things on this roadmap:
 - **A built-in replay mode with flight recording**, "talked about for months". It overlaps R5
   (recording), and maybe the replay of R4b.
 - **Built-in Lua scripting support.** It overlaps R6.
+
+**Result (2026-11-20)**: no replay and no flight or video recording in Redux 26w47a (code, XML, release notes); the
+Discord claim is not confirmed. Runtime Lua for mods **is** released (build 0.2.9.0.103836); see the decision below.
 
 Phase 0 checks this first, in the Redux docs, the IL and the changelogs:
 - what exists already;
@@ -144,7 +148,120 @@ drop ours on an announcement alone.
   - the Patch Manager for the part definition;
   - tech-tree placement in campaigns, and campaign features.
 
+## Phase 0 result and decisions (2026-11-20)
+
+Everything here is read from the IL of Redux 26w47a, not seen in game. Details, sources and the proof level of each
+fact are in `notes/2026-11-20-roadmap-phase0-scan.md`.
+
+### Decisions of the user (2026-11-20)
+
+1. **Booster return: we keep our own replay (R4b).** The flow of R3/R4/R4c is built on **Redux's Stage Recovery
+   capture** (stage saved in the campaign, two universe resets), which avoids the destruction of the upper stage on
+   rails. But **Redux's merge step is patched, not endured**: `StageRecoveryReconciler.TryReconcile` (internal
+   static, Harmony patch in our mod) no longer removes the in-flight booster nor adds the landed one at once.
+   The booster appears landed at its touchdown time and is replayed on screen until then.
+2. **Scripting (R6): our own language, without MoonSharp.** No dependency on Redux's Lua (released since build
+   0.2.9.0.103836, 2026-08-04) nor on `MoonSharp.Interpreter.dll`. The interpreter is ours.
+
+### Why the flow changes (facts of the scan)
+
+- **Redux already has a Stage Recovery** (`Redux.StageRecovery.StageRecoveryManager`, internal, no public API):
+  after a `VesselSplitMessage` it waits the "Recovery Save Delay" (default 2 s of game time, 0 to 30) and saves the
+  whole game as `stage-<id>.json`. The candidate is the new or remaining vessel that is controllable, has a
+  `Module_Command` and is not the active vessel (**any** pod or probe qualifies). "Fly" (`StartReplay`) saves a mission
+  checkpoint, resets the universe, loads the stage snapshot with the stage as active vessel, and at the end loads the
+  checkpoint back. The merge edits the checkpoint file.
+- **A non-active vessel more than 2 km away goes on rails, and a vessel on rails that enters the atmosphere is
+  destroyed** (unless parachutes can set it down). Switching to the booster in the same session would lose a
+  suborbital upper stage. The parked mission avoids that.
+- **Today the merge removes the booster's in-flight copy (same GUID) and adds the landed one at once.** That is what
+  decision 1 patches.
+- Redux **does not pause**, and the capture only happens once game time has passed the delay: pausing at the
+  separation would block the save.
+- Redux blocks every save, load and flight revert it did not start during a session.
+
+### Revised flow (replaces R4c; R3, R4 and R4b follow it)
+
+1. **At the Lift start** (R3): refuse or warn when Redux's recovery points are off, when the booster has no command
+   module with power and no crew need, or when the save delay is large. Say what `AllowQuickLoad` off means (a failed
+   attempt is final).
+2. **Lift flies the ascent.** At the separation Redux makes its stage save by itself.
+3. **The mod waits until the record exists** (`IsCapturePending` false, a `Ready` record for the booster's GUID in
+   `Records`; log line `[Stage Recovery] Saved …`), **then pauses**. At that moment the mod writes **its own Lift
+   resume file** (goal, phase, plan, staging, upper stage's vessel GUID, Redux record `Id`), outside the game save.
+   Lift does not survive a universe reset, so this file is not optional.
+4. **Fly**: the player presses Fly in Redux's window, or the mod calls `StartReplay` (reflection). Redux saves the
+   mission checkpoint, resets the universe and loads the booster. **Return** starts by itself when "Start Return on
+   taking control" is ticked (detected as `SessionPhase == FlyingStage` with the active vessel equal to the record's
+   `VesselGuid`), otherwise the player presses Return.
+5. **During the booster's flight** the mod records its flight in game time (position and attitude in the body's frame,
+   engine, leg and fin states, touchdown time and outcome) to a file in the mod folder. This file is the replay of
+   R4b and the telemetry of R7. It lives in files, not in the save, because the return reloads the checkpoint.
+6. **At the end of the session** (`CompleteActiveLanding`, recovery, loss) our patch of `TryReconcile` runs: the
+   in-flight copy stays in the mission checkpoint, the terminal stage is kept in our **booster-landed record**
+   (file: serialized terminal stage, landing place, touchdown UT, outcome), and the outcome is still reported to
+   Redux's record. Recovered resources and a lost stage keep Redux's behaviour.
+7. **Redux loads the mission checkpoint.** The mod waits for `GameLoadFinishedMessage` **and** `SessionPhase ==
+   Idle`, makes sure the game is paused (pauses it if not), then lets the player take the upper stage.
+8. **Lift resumes** from its resume file, only if the active vessel is the upper stage of that flight (barrier:
+   refuse on the booster's GUID, in plain words, never fire an engine).
+9. **Replay and appearance**: the booster's in-flight copy in the checkpoint is driven along the recording (R4b
+   option (a), kinematic, no second simulation) until it is out of the physics and render range. When game time
+   reaches the touchdown time, it is swapped for the real landed vessel (`CreateVesselSimObject`, GUID clash to
+   settle: the copy is removed first). A crash or a recovery ends as it did, then the copy disappears.
+10. **Recording (R5)**: at the reload of step 7, every frame of the upper stage's recording at or after the
+    checkpoint's UT is dropped; the recording goes on from there. This happens at **every** return, it is not an
+    edge case.
+
+### Phase 0 points that change the order or the risks
+
+- **Pause only after the recovery record exists** (step 3). Showing a clear message when the delay is large.
+- **Lift state is stored at the separation** (step 3): it does not survive a universe reset (the mod listens to no
+  load message today), and whether the plugin objects survive `ResetUniverse` is unknown. The mod must also
+  subscribe to `GameLoadFinishedMessage` and `QuitToMainMenuStartedMessage`.
+- **R1 flight-view picker**: use Redux's `PlayerWaypointManager.BeginPlacement` (terrain raycast on layer 28, fallback
+  `PQS.RaycastTerrainWorld`, works in `FlightView` and `Map3DView`); no new raycast and no switch to the map. Return
+  point storage: a Redux waypoint (visible), a `ModSaves` block, or `[KSPState]` data on our computer part; all of
+  these live in the save and follow Redux's snapshots.
+- **R1b**: Redux makes any pod or probe eligible. If only our recovery computer may qualify, that is a Harmony patch
+  on the internal `StageRecoveryCandidateSelector`; decide when R1b is specced.
+- **R2**: no SAS levels (a powered `Module_Command` is enough), no wind for vessels, lift exists (`BodyLiftEnabled`),
+  no grid-fin concept in Redux, no ignition counter or ullage (only `allowRestart`, `minThrust`). Redux's impact
+  prediction is already read by the mod; the K2-D2 boost-back code is already in the repo (`Pilots/Landing/BoostBack/`,
+  inactive): read it before designing the flip.
+- **R4b**: patching the merge is the largest remaining cost: Harmony on an internal static, a deferred spawn, and a
+  kinematic drive of a real vessel (`AtRest` + `UpdatePosition` is the only precedent in the game, never tested for
+  this). Fallback (b), a ghost, stays a fallback to agree with the user again.
+- **R5 and R7 stay ours**: nothing to record or replay video in Redux; `Unity.Recorder*.dll` are stubs; no
+  encoder in the game folder. Part cameras (`Module_Camera`) are shot overrides of the single flight camera, so
+  **no second camera is known**: "one video per camera" is sequential unless a second render to a `RenderTexture`
+  works in game. Redux's screenshot pipeline (`HdrOutput.CaptureScreenshot` + `AsyncGPUReadback`) is the reusable
+  part; it captures the final screen with the UI, and plumes and clouds are temporally refined.
+- **R6**: the interpreter is ours (decision 2). Per-part state fits a `[KSPState]` field; a `PartComponentModule`
+  updates on unloaded vessels.
+
+### First code task and in-game confirmations
+
+- **First code task: the bridge to Redux's Stage Recovery**, no behaviour change for the player. Extend
+  `ReduxStageRecovery.cs` (reflection) to read `Records`, `IsCapturePending`, `IsTransitioning`, `CanRetryRecovery`,
+  `ActiveRecord`, `SessionPhase` and to call `StartReplay`, `CompleteActiveLanding`, `ReturnToMission`; subscribe to
+  `GameLoadFinishedMessage` and `QuitToMainMenuStartedMessage`; log whether the plugin and its pilots survive the
+  universe resets (`[StageBridge]` lines). Pure parts (record matching, "has it saved" rule, barrier rule) tested in
+  EditMode. It gates the design of R3/R4/R4b/R5, so its in-game check comes first.
+- **To confirm in game, before each phase**:
+  - *before R4, R3*: pausing right after the record exists, and that pausing before it blocks the save; `StartReplay`
+    from our code behaves like the window's Fly; plugin and state survive `ResetUniverse`; the duration of the two
+    loads; the game is paused (or not) when the mission is back; switching vessel while paused.
+  - *before R4b*: that the patched merge leaves the in-flight copy alive; kinematic driving of the real copy; spawning
+    the landed vessel mid-flight; the GUID clash.
+  - *before R1*: flight-view placement without the map.
+  - *before R2, R3*: body lift of a booster; SAS driving control surfaces at speed; the booster's EC for the whole return.
+  - *before R5, R7*: a second camera to a `RenderTexture` in URP and its cost; hiding the UI (windows included); plume
+    and cloud quality in a continuous capture; Wwise output capture if audio is ever wanted.
+
 ## Sub-projects (proposed order)
+
+Read each R-section together with "Phase 0 result and decisions" above: R3, R4, R4b and R4c are revised there.
 
 ### R1. Return point in the K2D2 window
 - A return point per vessel and per stage, with a name, body, latitude, longitude and terrain
@@ -262,6 +379,10 @@ parachutes.
     must keep this delay exactly as it was flown.
 
 ### R4c. The exact flow, step by step (user's, 2026-10-31)
+
+**Revised on 2026-11-20: the "Revised flow" of the section "Phase 0 result and decisions" replaces the steps
+below** (it keeps the user's intent: pause at the separation, fly the booster, come back to the upper stage with Lift
+resuming behind a barrier, replay of the booster). The original text is kept as the record of the intent.
 
 This section is the reference for R3, R4 and R4b.
 
@@ -453,7 +574,8 @@ Starship webcasts.
   performance cost.
 - **Background simulation, StageRecovery style.** It is not a real flight, and there is nothing to
   film.
-- **Redux's Lua surface for scripting.** We write our own language.
+- **Redux's Lua surface for scripting.** We write our own language. Confirmed on 2026-11-20 after the scan of the
+  released Lua: **no MoonSharp either**, the interpreter is ours.
 
 ## Rules that apply
 
