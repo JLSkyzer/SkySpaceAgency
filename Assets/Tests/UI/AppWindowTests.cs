@@ -173,13 +173,19 @@ public class AppWindowTests
     }
 
     [Test]
-    public void ClassicWindow_HasNewUiButton()
+    public void Theme_IsTheSdkKerbalUiTheme()
     {
-        var asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ModIdentity.MainWindowAddress);
-        var root = asset.Instantiate();
-        var toolbar = root.Q("toolbar");
-        Assert.IsNotNull(toolbar.Q<Button>("new-ui-button"));
-        Assert.IsNotNull(toolbar.Q<Button>("info-toggle"), "the About button is still there");
+        Assert.IsNotNull(UiLayoutHarness.LoadTheme(), UiLayoutHarness.ThemePath);
+    }
+
+    // The classic window is gone (2026-11-20): neither its uxml nor its Addressables entry exist.
+    [Test]
+    public void ClassicWindow_IsGone()
+    {
+        Assert.IsNull(AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/UI/" + ModIdentity.ModId + "_UI/" + ModIdentity.ModId + "_Window.uxml"));
+        string group = System.IO.File.ReadAllText(System.IO.Path.Combine(Application.dataPath,
+            "AddressableAssetsData/AssetGroups/addressables_" + ModIdentity.ModId + "_all.asset"));
+        StringAssert.DoesNotContain("_Window.uxml", group);
     }
 
     [Test]
@@ -188,6 +194,5 @@ public class AppWindowTests
         string group = System.IO.File.ReadAllText(System.IO.Path.Combine(Application.dataPath,
             "AddressableAssetsData/AssetGroups/addressables_" + ModIdentity.ModId + "_all.asset"));
         StringAssert.Contains("m_Address: " + ModIdentity.AppWindowAddress, group);
-        StringAssert.Contains("m_Address: " + ModIdentity.MainWindowAddress, group);
     }
 }

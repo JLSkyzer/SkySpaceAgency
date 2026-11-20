@@ -5,10 +5,9 @@ using System;
 
 namespace SsaUI
 {
-    // UxmlFactory/UxmlTraits -> [UxmlElement] (see Group.cs's class comment for why). Console
-    // exposes no attributes beyond the standard "name" (which is what the old Init() override
-    // existed only to re-apply), and node_infos_el = panel.Q<Console>("node_infos") keeps working
-    // exactly the same way since UI Toolkit itself handles "name" for every element type now.
+    // The status mirror of the pilots (AppPilotStatus): the pilots' controllers write their status, console
+    // text and progress into a detached FullStatus made of a StatusLine, a Console and a SsaProgressBar;
+    // the window's tabs copy them into the new window's controls.
     [UxmlElement]
     public partial class Console : Label
     {

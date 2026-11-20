@@ -5,9 +5,9 @@ using UnityEngine.UIElements;
 namespace SkySpaceAgency.UI
 {
     /// <summary>
-    /// Saves the window size the player picks with Redux's resize handle (WindowResizeHandle in
-    /// SkySpaceAgency_Window.uxml), and applies it again when the window is created. The handle only resizes;
-    /// it keeps nothing between sessions.
+    /// Saves the window size the player picks with the resize handle (UITK for KSP2's ResizeManipulator, added by
+    /// the window), and applies it again when the window is created. The handle only resizes; it keeps
+    /// nothing between sessions.
     ///
     /// The height keeps its old key (`main_window_size`, written by our former height-only resize
     /// manipulator), so a saved height survives the change; the width has its own key. Writes are

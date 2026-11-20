@@ -39,14 +39,10 @@ namespace SkySpaceAgency.Node
 
         public SingleExecuteController current_executor = new SingleExecuteController();
 
-        NodeExUI ui;
-
         public NodeExPilot()
         {
             Instance = this;
             debug_mode_only = false;
-
-            _page = ui = new NodeExUI(this);
 
             SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Node", this);
 
@@ -215,14 +211,8 @@ namespace SkySpaceAgency.Node
             setMode(next);
         }
 
-        public void UpdateUI()
-        {
-            if (!ui.isVisible) return;
-            UpdateStatus(page.panel, ui.status_bar);
-        }
-
         // The status line, console and progress bar of this pilot, written into st: the classic
-        // page's (UpdateUI) or the new window's NODES tab (AppPilotStatus), with root its panel.
+        // NODES tab's (AppPilotStatus), with root its panel.
         public void UpdateStatus(UnityEngine.UIElements.VisualElement root, SkySpaceAgency.UI.FullStatus st)
         {
             st.Reset();
@@ -376,7 +366,6 @@ namespace SkySpaceAgency.Node
                     TimeWarpTools.SetIsPaused(true);
             }
 
-            UpdateUI();
         }
 
         // Start of a node run. A node the Orbit tab registered (NodeTargets) is flown by the
@@ -455,7 +444,6 @@ namespace SkySpaceAgency.Node
             else if (target_burn.finished)
                 OnTargetBurnDone();
 
-            UpdateUI();
         }
 
         // A registered burn is done: its node is deleted, as after any node. When the next node of
@@ -518,7 +506,7 @@ namespace SkySpaceAgency.Node
         void ContinueOrbitPlan()
         {
             var sequence = OrbitPlanRun.Sequence;
-            if (!OrbitUI.TryReadState(out var r, out var v, out var ut, out var body))
+            if (!OrbitState.TryReadState(out var r, out var v, out var ut, out var body))
             {
                 EndOrbitPlan("Plan stopped: no orbit to plan the next step from.");
                 return;
@@ -592,7 +580,6 @@ namespace SkySpaceAgency.Node
             base.Update();
             if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.O))
                 Stop();
-            UpdateUI();
         }
 
         // Drops the registered targets of nodes no longer on the plan (deleted by hand).
@@ -668,7 +655,6 @@ namespace SkySpaceAgency.Node
                 nextMode();
             }
 
-            UpdateUI();
         }
 
   

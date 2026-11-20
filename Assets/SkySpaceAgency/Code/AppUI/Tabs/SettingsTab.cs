@@ -10,10 +10,9 @@ namespace SkySpaceAgency.AppUI
 {
     /// <summary>
     /// SETTINGS (docs/design/ui/settings.png): a list of categories on the left, the chosen category's
-    /// settings in the middle, the About card on the right. Holds every setting the classic window
-    /// binds outside the flight tabs (the About tab's Reset All and Debug Mode, the title bar's
-    /// Auto-staging toggle), the new window's own settings (interface scale, Classic UI, compact flight
-    /// bar), the burn warp mode (also in NODES > ADVANCED) and the shortcut. Inventory:
+    /// settings in the middle, the About card on the right. Holds every setting outside the flight tabs
+    /// (Reset All and Debug Mode, the Auto-staging toggle), the window's own settings (interface scale,
+    /// small-window mode, compact flight bar), the burn warp mode (also in NODES > ADVANCED) and the shortcut. Inventory:
     /// docs/superpowers/notes/new-ui-inventory/settings.md.
     /// </summary>
     public class SettingsTab : AppTab
@@ -35,7 +34,6 @@ namespace SkySpaceAgency.AppUI
         public IReadOnlyDictionary<string, AppCard> Panels => _panels;
 
         public AppSlider ScaleSlider { get; private set; }
-        public AppSwitch ClassicSwitch { get; private set; }
         public AppButton ResetButton { get; private set; }
         public AppButton DoneButton { get; private set; }
         public Label VersionLabel { get; private set; }
@@ -127,8 +125,7 @@ namespace SkySpaceAgency.AppUI
             ScaleSlider.changed += SetScalePercent;
             scale.listeners += v => ScaleSlider.SetValueWithoutNotify(UiScale.Clamp(v) * 100);
             card.Add(Row("Interface scale", ScaleSlider));
-            card.Add(new AppNote("Multiplies the game's UI Scale, for this window and the compact flight bar. "
-                + "The classic window follows the game's UI Scale."));
+            card.Add(new AppNote("Multiplies the game's UI Scale, for this window and the compact flight bar."));
 
             card.Add(Row("Small window", AppBind.Segmented(AppSettings.SmallWindow,
                 new List<SmallWindowMode> { SmallWindowMode.Scale, SmallWindowMode.Reflow },
@@ -136,15 +133,6 @@ namespace SkySpaceAgency.AppUI
             card.Add(new AppNote("When the window is smaller than the layout of the mockups: Scale keeps the three columns, the timeline "
                 + "and the action bar and shrinks everything to fit, with no scrolling (down to half size); Reflow re-flows the columns "
                 + "(the view goes under the plan and the telemetry below 1100 px wide) and the page scrolls."));
-
-            var classic = AppSettings.ClassicUi;
-            ClassicSwitch = new AppSwitch("Classic UI", classic.V);
-            AppBind.Record(classic.key);
-            ClassicSwitch.changed += SetClassic;
-            classic.listeners += v => ClassicSwitch.SetValueWithoutNotify(v);
-            card.Add(ClassicSwitch);
-            card.Add(new AppNote("Alt+Y and the app bar button open the classic window instead of this one. "
-                + "Its \"New UI\" button switches back."));
         }
 
         /// <summary>What the scale slider does: snaps to 5 %, then applies through the window (or the setting alone in the editor).</summary>
@@ -154,12 +142,6 @@ namespace SkySpaceAgency.AppUI
             ScaleSlider.SetValueWithoutNotify(s * 100);
             if (Context.SetScale != null) Context.SetScale(s);
             else AppSettings.Scale.V = s;
-        }
-
-        void SetClassic(bool classic)
-        {
-            if (Context.InGame) Context.Plugin.SwitchUi(classic);
-            else AppSettings.ClassicUi.V = classic;
         }
 
         void Staging(AppCard card)

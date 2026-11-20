@@ -73,7 +73,6 @@ namespace SkySpaceAgency.Lift
         {
             settings = new LiftSettings();
             ascent_path = new LiftAscentPath(settings);
-            _page = new LiftUI(this);
 
             current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
        

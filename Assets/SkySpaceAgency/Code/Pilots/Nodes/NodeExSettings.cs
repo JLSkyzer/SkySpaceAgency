@@ -1,4 +1,4 @@
-using SsaUI;
+
 using KTools;
 // using KTools.UI;
 using UnityEngine.UIElements;
@@ -17,73 +17,6 @@ namespace SkySpaceAgency.Node
         public EnumSetting<StartMode> start_mode = new EnumSetting<StartMode>("node_ex.start_mode", StartMode.precise);
 
         public Setting<float> start_before = new Setting<float>("node_ex.start_before", 1);
-
-        public void setupUI(VisualElement root)
-        {
-            // Turn To
-            root.Q<SsaSlider>("max_angle_maneuver").Bind(TurnToSettings.max_angle_maneuver);
-            root.Q<SsaSlider>("max_angular_speed").Bind(TurnToSettings.max_angular_speed);
-
-            // Warp
-            root.Q<SsaToggle>("auto_warp").Bind(auto_warp);
-            var warp_settings = root.Q<VisualElement>("warp_settings");    
-            auto_warp.listeners += v => warp_settings.Show(v); 
-
-            warp_settings.Q<SsaSlider>("warp_speed").Bind(WarpToSettings.warp_speed);
-            warp_settings.Q<IntegerField>("warp_safe_duration").Bind(WarpToSettings.warp_safe_duration);
-            // Warp during burns (every closed-loop burn reads it at ignition).
-            root.Q<InlineEnum>("burn_warp_mode")?.Bind(BurnWarpSettings.mode, BurnWarpModes.Labels);
-
-            // Burn
-            root.Q<SsaSlider>("burn_adjust").Bind(BurnManeuverSettings.burn_adjust);
-            root.Q<SsaSlider>("max_dv_error").Bind(BurnManeuverSettings.max_dv_error);
-
-            // Experimental - start_mode is now three individual radio-style SsaToggle rows
-            // (T0/Before/Mid-duration) instead of InlineEnum's button row, so "Before" can host
-            // start_before nested directly under it while selected, Parts-Manager-style.
-            // InlineEnum itself is untouched here - Dock tab still uses it as-is - this wiring is
-            // built straight on SsaToggle + EnumSetting instead.
-            var start_mode_precise = root.Q<SsaToggle>("start_mode_precise");
-            var start_mode_constant = root.Q<SsaToggle>("start_mode_constant");
-            var start_mode_half_duration = root.Q<SsaToggle>("start_mode_half_duration");
-            var start_mode_constant_content = root.Q<VisualElement>("start_mode_constant_content");
-
-            var start_before_el = root.Q<SsaSlider>("start_before");
-            start_before_el.Bind(start_before);
-
-            // Clicking the already-active row's toggle would otherwise turn it off and leave
-            // nothing selected - snap it back on instead (SetValueWithoutNotify so this doesn't
-            // re-fire its own "listeners" event) so exactly one option is always selected, like a
-            // radio group.
-            start_mode_precise.listeners += v => { if (v) start_mode.V = StartMode.precise; else start_mode_precise.SetValueWithoutNotify(true); };
-            start_mode_constant.listeners += v => { if (v) start_mode.V = StartMode.constant; else start_mode_constant.SetValueWithoutNotify(true); };
-            start_mode_half_duration.listeners += v => { if (v) start_mode.V = StartMode.half_duration; else start_mode_half_duration.SetValueWithoutNotify(true); };
-
-            void UpdateStartModeToggles(StartMode mode)
-            {
-                start_mode_precise.SetValueWithoutNotify(mode == StartMode.precise);
-                start_mode_constant.SetValueWithoutNotify(mode == StartMode.constant);
-                start_mode_half_duration.SetValueWithoutNotify(mode == StartMode.half_duration);
-
-                bool show_constant = mode == StartMode.constant;
-                start_mode_constant_content.Show(show_constant);
-            }
-
-            start_mode.listeners += UpdateStartModeToggles;
-            UpdateStartModeToggles(start_mode.V);
-
-            root.Q<SsaToggle>("rotate_during_burn").Bind(BurnManeuverSettings.rotate_during_burn);
-        }
-
-
-
-    
-
-    
-                           
-    
-
-
     }
 }
 

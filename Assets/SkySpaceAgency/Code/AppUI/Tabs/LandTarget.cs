@@ -488,7 +488,7 @@ namespace SkySpaceAgency.AppUI
 
             if (_owner == null) return;
             var pilot = P;
-            // Cancelled elsewhere (LandingPilot.onReset cancels Redux's placement through the classic page).
+            // Cancelled elsewhere (LandingPilot.onReset cancels Redux's placement).
             if (!_beginPending && !ReduxPlacement.Waiting)
             {
                 _owner.Pick.Text = PickText;

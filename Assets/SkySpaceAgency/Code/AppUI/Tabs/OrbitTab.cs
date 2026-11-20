@@ -256,7 +256,7 @@ namespace SkySpaceAgency.AppUI
 
         bool TryReadClosed(out Reading c) => TryReadTrajectory(out c) && c.El.IsClosed;
 
-        // Any trajectory, open ones included (the planner captures them first). OrbitUI.TryReadState is
+        // Any trajectory, open ones included (the planner captures them first). OrbitState.TryReadState is
         // the classic tab's reader (also used by the Node pilot); the game's inclination is read here
         // for the frame guard.
         bool TryReadTrajectory(out Reading c)
@@ -266,7 +266,7 @@ namespace SkySpaceAgency.AppUI
                 return false;
             try
             {
-                if (!OrbitUI.TryReadState(out c.R, out c.V, out c.UT, out c.Body))
+                if (!OrbitState.TryReadState(out c.R, out c.V, out c.UT, out c.Body))
                     return false;
                 c.El = OrbitMath.Elements(c.R, c.V, c.Body.Mu);
                 var orbit = Context.Plugin?.current_vessel?.VesselComponent?.Orbit;
@@ -328,7 +328,7 @@ namespace SkySpaceAgency.AppUI
         {
             var text = new StringBuilder();
             if (plan.Capture != null)
-                text.AppendLine(OrbitUI.CaptureLine(plan.Capture, c.BodyName, c.Body.Radius));
+                text.AppendLine(OrbitState.CaptureLine(plan.Capture, c.BodyName, c.Body.Radius));
             for (int i = 0; i < plan.Burns.Count; i++)
             {
                 var burn = plan.Burns[i];
@@ -386,7 +386,7 @@ namespace SkySpaceAgency.AppUI
                     TotalRows.Set("Total Δv", OrbitText.Dv(plan.TotalDeltaV), StatusKind.Ok);
                 }
                 CaptureNote.Set(plan?.Capture != null && _hasReading
-                    ? OrbitUI.CaptureLine(plan.Capture, _reading.BodyName, _reading.Body.Radius) : "");
+                    ? OrbitState.CaptureLine(plan.Capture, _reading.BodyName, _reading.Body.Radius) : "");
             }
 
             var (kind, text) = PillFor(_message, OrbitPlanRun.Status, Context.InGame, _hasReading, _preview, _previewError);

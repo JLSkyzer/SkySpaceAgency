@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using SsaUI;
 using KTools;
 using NUnit.Framework;
 
@@ -88,18 +87,6 @@ public class KToolsTests
         var s = new ClampSetting<float>("t.x", 5, 0, 10, file);
         file.Reset();
         Assert.AreEqual(5f, s.V);
-    }
-
-    [Test]
-    public void SsaSlider_FormatValue()
-    {
-        Assert.AreEqual("1.23", SsaSlider.FormatValue(1.2345f, null));
-        Assert.AreEqual("1.23", SsaSlider.FormatValue(1.2345f, ""));
-        Assert.AreEqual("1.23", SsaSlider.FormatValue(1.2345f, "N2"));
-        Assert.AreEqual("1", SsaSlider.FormatValue(1.2345f, "N0"));
-        Assert.AreEqual("1.235", SsaSlider.FormatValue(1.2346f, "N3"));
-        Assert.AreEqual("45", SsaSlider.FormatValue(0.45f, "percent"));
-        Assert.AreEqual("1,235", SsaSlider.FormatValue(1234.6f, "N0"));
     }
 
     // K2-D2 1.4.0 renamed warp.elevation/heading to attitude.*: an old file keeps its value.

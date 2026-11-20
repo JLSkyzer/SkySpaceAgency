@@ -24,7 +24,6 @@ namespace SkySpaceAgency
         public const string LandingVacFileName = SettingsPrefix + "landing_vac.json";
 
         // Windows and AppBar buttons.
-        public const string WindowId = "SkySpaceAgency";
         public const string VabWindowId = "SkySpaceAgencyVabTools";
         public const string VabWindowTitle = Title + " — VAB tools";
         public const string ToolbarButtonPrefix = "BTN-SkySpaceAgency";
@@ -32,15 +31,11 @@ namespace SkySpaceAgency
         public const string ToolbarOabButtonId = ToolbarButtonPrefix + "OAB";
         public const string ToolbarKscButtonId = ToolbarButtonPrefix + "KSC";
 
-        // UI assets. The main window's uxml is the mod's only Addressables entry; its address is its
-        // project path, so it must differ from K2-D2's (Assets/UI/K2D2_UI/K2D2_Window.uxml): two
-        // catalogs with one address give each mod whichever window was loaded first.
+        // UI assets. The window's uxml (style sheets and a host; the window is built in code) is the mod's
+        // only Addressables entry; its address is its project path, so it differs from K2-D2's
+        // (Assets/UI/K2D2_UI/K2D2_Window.uxml): two catalogs with one address give each mod whichever
+        // window was loaded first.
         public const string UiFolder = "Assets/UI/" + ModId + "_UI/";
-        public const string MainWindowUxml = ModId + "_Window.uxml";
-        public const string MainWindowAddress = UiFolder + MainWindowUxml;
-
-        // The new wide window (preview, docs/superpowers/plans/2026-11-19-new-ui-foundations.md): a second
-        // Addressables entry, which carries the new style sheet; the window itself is built in code.
         public const string AppWindowId = "SkySpaceAgencyApp";
         public const string AppWindowUxml = "App/" + ModId + "_App.uxml";
         public const string AppWindowAddress = UiFolder + AppWindowUxml;

@@ -13,7 +13,7 @@ using UnityEngine.UIElements;
 public class SettingsTabTests
 {
     // The settings touched here are the mod's static ones: put them back after each test.
-    bool _auto, _debug, _classic, _compact;
+    bool _auto, _debug, _compact;
     float _freeze, _scale;
     BurnWarpMode _warp;
 
@@ -23,7 +23,6 @@ public class SettingsTabTests
         _auto = StagingSettings.auto_staging.V;
         _freeze = StagingSettings.freeze_duration.V;
         _debug = SkySpaceAgencySettings.debug_mode.V;
-        _classic = AppSettings.ClassicUi.V;
         _compact = AppSettings.CompactBar.V;
         _scale = AppSettings.Scale.V;
         _warp = BurnWarpSettings.mode.V;
@@ -35,7 +34,6 @@ public class SettingsTabTests
         StagingSettings.auto_staging.V = _auto;
         StagingSettings.freeze_duration.V = _freeze;
         SkySpaceAgencySettings.debug_mode.V = _debug;
-        AppSettings.ClassicUi.V = _classic;
         AppSettings.CompactBar.V = _compact;
         AppSettings.Scale.V = _scale;
         BurnWarpSettings.mode.V = _warp;
@@ -73,7 +71,7 @@ public class SettingsTabTests
         AppBind.Bound.UnionWith(before);
         foreach (string key in new[]
         {
-            AppSettings.Scale.key, AppSettings.ClassicUi.key, AppSettings.CompactBar.key,
+            AppSettings.Scale.key, AppSettings.SmallWindow.path, AppSettings.CompactBar.key,
             StagingSettings.auto_staging.key, StagingSettings.freeze_duration.key,
             BurnWarpSettings.mode.path, SkySpaceAgencySettings.debug_mode.key,
         })
@@ -112,17 +110,6 @@ public class SettingsTabTests
         var debug = tab.Panels["logs"].Query<AppSwitch>().First();
         SkySpaceAgencySettings.debug_mode.V = true;
         Assert.IsTrue(debug.value);
-    }
-
-    [Test]
-    public void Settings_ClassicUi_InTheEditor_OnlyWritesTheSetting()
-    {
-        var tab = BuildSettings();
-        AppSettings.ClassicUi.V = false;
-        tab.ClassicSwitch.Toggle();
-        Assert.IsTrue(AppSettings.ClassicUi.V);
-        AppSettings.ClassicUi.V = false;
-        Assert.IsFalse(tab.ClassicSwitch.value);
     }
 
     [Test]

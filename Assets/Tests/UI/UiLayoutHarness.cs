@@ -3,149 +3,21 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using SsaUI;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
 
-// Lays out the mod window without the game, to catch layout bugs in EditMode tests and to render each
-// tab to a PNG.
-//
-// The window is SkySpaceAgency_Window.uxml, cloned into a runtime panel (a PanelSettings with a RenderTexture
-// target) with the UITK for KSP2 theme of the SDK package (KerbalUI.tss, the same KerbalUI.uss the
-// game ships). The panel is internal to Unity: PanelSettings.panel gives it, and its public
-// ValidateLayout / Repaint / Render run the style, layout and render passes. Layout works under
-// -nographics; the PNG pass needs a graphics device (run Unity without -nographics):
-//   Unity.exe -batchmode -projectPath <project> -executeMethod UiLayoutHarness.RenderAll -uiShotsDir <dir> -quit
-//
-// Each tab is shown as the game shows it (only its page visible), with sample values close to
-// the in-game screenshots. Elements that the pages build from C# at run time are not there.
+// Lays out a window of the mod without the game, to catch layout bugs in EditMode tests: a runtime panel
+// (a PanelSettings with a RenderTexture target) with the UITK for KSP2 theme of the SDK package
+// (KerbalUI.tss, the same KerbalUI.uss the game ships). The panel is internal to Unity: PanelSettings.panel
+// gives it, and its public ValidateLayout / Repaint / Render run the style, layout and render passes.
+// Layout works under -nographics; the PNG pass (AppUiHarness.RenderAll) needs a graphics device.
+// The checks look for overlapping siblings, squeezed controls, clipped labels and elements outside their
+// parent. (Before 2026-11-20 this file also opened the classic window's tabs; AppUiHarness opens the new one.)
 public static class UiLayoutHarness
 {
-    public const string WindowPath = SkySpaceAgency.ModIdentity.MainWindowAddress;
     public const string ThemePath = "Packages/ksp2redux.sdk/Controls/Assets/Theme/KerbalUI.tss";
-
-    // SkySpaceAgency_Window.uxml: the AppShell is 350 x 500 px by default. Redux's resize handle and the saved
-    // size can change both in game; the harness keeps the default width and sets the height (500 and
-    // 900 px, a tall window).
-    public const float WindowWidth = 350;
-    public const float WindowHeight = 500;
-    public const float TallWindowHeight = 900;
-
-    // A setup is a tab and the state its page is put in before the layout.
-    public sealed class Scenario
-    {
-        public string Name;
-        public string Tab;
-        public Action<VisualElement> Setup;
-        public override string ToString() => Name;
-    }
-
-    public static readonly Scenario[] Scenarios =
-    {
-        new Scenario { Name = "node", Tab = "node" },
-        new Scenario { Name = "orbit", Tab = "orbit", Setup = SetupOrbit },
-        new Scenario { Name = "transfer", Tab = "transfer", Setup = SetupTransfer },
-        new Scenario { Name = "lift", Tab = "lift" },
-        new Scenario { Name = "landing_atmo", Tab = "landing", Setup = p => SetupLanding(p, atmo: true) },
-        new Scenario { Name = "landing_vac", Tab = "landing", Setup = p => SetupLanding(p, atmo: false) },
-        new Scenario { Name = "rendezvous", Tab = "dock" },
-        new Scenario { Name = "attitude", Tab = "attitude" },
-        new Scenario { Name = "about", Tab = "about" },
-        // The same tabs with every foldout open (Profile, ADVANCED, INFO, ...).
-        new Scenario { Name = "node_open", Tab = "node", Setup = OpenFoldouts },
-        new Scenario { Name = "orbit_open", Tab = "orbit", Setup = p => { SetupOrbit(p); OpenFoldouts(p); } },
-        new Scenario { Name = "orbit_capture", Tab = "orbit", Setup = SetupOrbitCapture },
-        new Scenario { Name = "transfer_open", Tab = "transfer", Setup = p => { SetupTransfer(p); OpenFoldouts(p); } },
-        new Scenario { Name = "lift_open", Tab = "lift", Setup = OpenFoldouts },
-        new Scenario { Name = "lift_gravity_turn_open", Tab = "lift", Setup = p => { SetupGravityTurn(p); OpenFoldouts(p); } },
-        new Scenario { Name = "landing_atmo_open", Tab = "landing", Setup = p => { SetupLanding(p, atmo: true); OpenFoldouts(p); } },
-        new Scenario { Name = "landing_vac_open", Tab = "landing", Setup = p => { SetupLanding(p, atmo: false); OpenFoldouts(p); } },
-        new Scenario { Name = "rendezvous_open", Tab = "dock", Setup = OpenFoldouts },
-        new Scenario { Name = "attitude_open", Tab = "attitude", Setup = OpenFoldouts },
-    };
-
-    static void OpenFoldouts(VisualElement page)
-    {
-        foreach (var f in page.Query<Foldout>().ToList())
-            f.SetValueWithoutNotify(true);
-    }
-
-    // As LiftSettings.UpdateProfileSettings with the Gravity Turn profile (Orbit goal), Auto off
-    // (every slider shown).
-    static void SetupGravityTurn(VisualElement page)
-    {
-        var drop = page.Q<DropdownField>("ascent_profile_drop");
-        drop.choices = new List<string> { "Guided", "Gravity Turn (Experimental)" };
-        drop.SetValueWithoutNotify("Gravity Turn (Experimental)");
-        page.Q("guided_profile_settings").Show(false);
-        page.Q("guided_roll_settings").Show(false);
-        page.Q("graph").Show(false);
-        page.Q("gravity_turn_settings").Show(true);
-    }
-
-    // As 14.png: Ap and Pe ticked, Inclination unticked (OrbitUI disables its field).
-    static void SetupOrbit(VisualElement page)
-    {
-        page.Q<SsaToggle>("ap_enabled").SetValueWithoutNotify(true);
-        page.Q<SsaToggle>("pe_enabled").SetValueWithoutNotify(true);
-        page.Q<FloatField>("ap_km").SetValueWithoutNotify(200);
-        page.Q<FloatField>("pe_km").SetValueWithoutNotify(200);
-        page.Q<FloatField>("inc_deg").SetValueWithoutNotify(0.43f);
-        page.Q<FloatField>("inc_deg").SetEnabled(false);
-    }
-
-    // The plan summary of a capture from a flyby (OrbitUI.Summary), with its capture line.
-    static void SetupOrbitCapture(VisualElement page)
-    {
-        SetupOrbit(page);
-        var capture = new SkySpaceAgency.OrbitPlanning.CaptureInfo { AtPeriapsis = true, Radius = 370000, DeltaV = 254 };
-        page.Q<Label>("summary").text =
-            string.Join("\n",
-                SkySpaceAgency.OrbitPlanning.OrbitUI.CaptureLine(capture, "Mun", 200000),
-                "1. T+00:42:10  Capture at periapsis (170.0 km): 254.0 m/s",
-                "2. T+01:20:05  Set Pe 100.0 km at apoapsis: 61.3 m/s",
-                "Total Δv: 315.3 m/s",
-                "Final orbit: Ap 500.0 km, Pe 100.0 km, inclination 12.00°",
-                "Step 1/2: node created for 'Capture at periapsis (170.0 km)'. Start in the Node tab flies the whole plan.");
-    }
-
-    static void SetupTransfer(VisualElement page)
-    {
-        var body = page.Q<DropdownField>("target_body");
-        body.choices = new List<string> { "Duna" };
-        body.SetValueWithoutNotify("Duna");
-        page.Q<FloatField>("inc_deg").SetEnabled(false);
-        // 4.6: the plan with its two lines (long ones, to check the wrapping).
-        page.Q("plan_group").style.display = DisplayStyle.Flex;
-        page.Q("assist_choice").style.display = DisplayStyle.Flex;
-        page.Q<Button>("choose_direct").text = "○ Direct: 12 140 m/s, 1y 120d — no gravity assist saves 5 % or more (best: via Eve, 11 960 m/s, 1.5 % saved)";
-        page.Q<Button>("choose_assist").text = "● Via Eve: 11 760 m/s, 2y 30d";
-    }
-
-    // As 16.png and 17.png: Propulsive mode on an atmospheric body (the note is shown), one stage
-    // (the stage choice is disabled), a custom target.
-    static void SetupLanding(VisualElement page, bool atmo)
-    {
-        page.Q("landing_mode_group_atmo").Show(atmo);
-        page.Q("landing_mode_group_vac").Show(!atmo);
-        // As LandingUI.UpdateProfilePanels: the ADVANCED settings of the same profile.
-        page.Q("atmo_settings_panel").Show(atmo);
-        page.Q("vac_settings_panel").Show(!atmo);
-        string suffix = atmo ? "_atmo" : "_vac";
-        var stage = page.Q<DropdownField>("land_stage" + suffix);
-        stage.choices = new List<string> { "Stage 1 (current): 0 m/s" };
-        stage.SetValueWithoutNotify("Stage 1 (current): 0 m/s");
-        stage.SetEnabled(false);
-        var waypoint = page.Q<DropdownField>("waypoint_drop" + suffix);
-        waypoint.choices = new List<string> { "KSC", "Custom (15.50, 155.60)" };
-        waypoint.SetValueWithoutNotify("Custom (15.50, 155.60)");
-        page.Q<FloatField>("target_latitude" + suffix).SetValueWithoutNotify(15.50471f);
-        page.Q<FloatField>("target_longitude" + suffix).SetValueWithoutNotify(155.6024f);
-        if (page.Q<Label>("collision_value") is Label collision)
-            collision.text = "Detected";
-    }
 
     // ---- The panel ----
 
@@ -162,7 +34,7 @@ public static class UiLayoutHarness
         public void Layout()
         {
             Invoke(Panel, "ValidateLayout");
-            // TabbedPage builds its buttons on GeometryChangedEvent: a second pass lays them out.
+            // The tab bar and the columns react to GeometryChangedEvent: further passes lay them out.
             Invoke(Panel, "ValidateLayout");
         }
 
@@ -199,52 +71,6 @@ public static class UiLayoutHarness
         {
             hook?.SetValue(null, saved);
         }
-    }
-
-    public static Window Open(Scenario scenario, float height)
-    {
-        var asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(WindowPath);
-        if (asset == null)
-            throw new FileNotFoundException(WindowPath);
-
-        var w = new Window();
-        int texW = Mathf.CeilToInt(WindowWidth + 40), texH = Mathf.CeilToInt(height + 60);
-        w.Texture = new RenderTexture(texW, texH, 24, RenderTextureFormat.ARGB32) { name = "ui-harness" };
-        w.Texture.Create();
-        w.Settings = CreatePanelSettings();
-        w.Settings.name = "ui-harness";
-        w.Settings.themeStyleSheet = LoadTheme();
-        w.Settings.scaleMode = PanelScaleMode.ConstantPixelSize;
-        w.Settings.scale = 1;
-        w.Settings.targetTexture = w.Texture;
-        w.Settings.clearColor = true;
-        w.Settings.colorClearValue = new Color(0.08f, 0.09f, 0.11f, 1);
-        var panelProp = typeof(PanelSettings).GetProperty("panel", BindingFlags.Instance | BindingFlags.NonPublic);
-        w.Panel = panelProp.GetValue(w.Settings);
-        var visualTree = ((IPanel)w.Panel).visualTree;
-
-        w.Root = asset.Instantiate();
-        w.Root.style.position = Position.Absolute;
-        w.Root.style.left = 0; w.Root.style.top = 0; w.Root.style.width = texW; w.Root.style.height = texH;
-        visualTree.Add(w.Root);
-
-        w.Shell = w.Root.Q("MainFrame");
-        w.Shell.style.left = 10; w.Shell.style.top = 40;
-        w.Shell.style.height = height;
-        w.Scroll = w.Root.Q<ScrollView>("tab-scroll-view");
-
-        // As TabbedPage.ShowContent: only the chosen tab's template instance is displayed.
-        var content = w.Root.Q("Content");
-        foreach (var child in content.Children())
-            child.Show(child.name == scenario.Tab);
-        var tab = content.Children().First(c => c.name == scenario.Tab);
-        // As SsaPage: the main page is shown, the settings page hidden.
-        w.Page = tab.Q("page") ?? tab;
-        tab.Q("settings")?.Show(false);
-        w.Page.Show(true);
-        scenario.Setup?.Invoke(w.Page);
-        w.Layout();
-        return w;
     }
 
     // ---- Checks ----
@@ -286,21 +112,14 @@ public static class UiLayoutHarness
         {
             // The AppShell title bar: the dashes label is a long run of dashes cut by its container.
             if (v.name == "header") return true;
-            // The inside of a text input (its scrolling text) and the knob of a SsaToggle, which
-            // slides over the track's edges by design (SsaToggle.uss).
+            // The inside of a text input (its scrolling text).
             if (v.ClassListContains("unity-text-element--inner-input-field-component")) return true;
-            if (v.ClassListContains(SsaToggle.inputKnobUssClassName)) return true;
             if (v != e && v.ClassListContains("unity-base-text-field__input")) return true;
             // The ScrollView's scrollers and viewport machinery.
             if (v.ClassListContains("unity-scroller")) return true;
             // The dropdown arrow: KerbalUI.uss (the game's theme) pulls it 7 px right with a
             // negative margin, past the input's edge, on every dropdown of the game.
             if (v.ClassListContains("unity-base-popup-field__arrow")) return true;
-            // SsaCompass places its graduation labels itself, on zero-size anchors.
-            if (v.ClassListContains("k2compas")) return true;
-            // SsaSlider's min/max labels are pulled 2 px up towards the track on purpose
-            // (SsaSlider.uss, ".k2-slider-main #min_max_bar Label").
-            if (v.name == "min_max_bar") return true;
         }
         return false;
     }
@@ -398,7 +217,6 @@ public static class UiLayoutHarness
 
     static bool IsControl(VisualElement e) =>
         e is Button
-        || e.ClassListContains(SsaToggle.inputUssClassName)
         || e.ClassListContains("unity-toggle__input")
         || e.ClassListContains("unity-base-field__input");
 
@@ -410,59 +228,5 @@ public static class UiLayoutHarness
             into.Add(c);
             Collect(c, into);
         }
-    }
-
-    // ---- PNG renders ----
-
-    // Unity.exe -batchmode -projectPath <project> -executeMethod UiLayoutHarness.RenderAll -uiShotsDir <dir> -quit
-    public static void RenderAll()
-    {
-        string dir = ArgValue("-uiShotsDir") ?? Path.Combine(Path.GetTempPath(), "ui-shots");
-        Directory.CreateDirectory(dir);
-        Debug.Log($"[UiLayoutHarness] graphics device {SystemInfo.graphicsDeviceType}, theme {(LoadTheme() != null ? ThemePath : "none")}");
-        foreach (var s in Scenarios)
-        {
-            try
-            {
-                string file = Path.Combine(dir, s.Name + ".png");
-                Render(s, file);
-                Debug.Log($"[UiLayoutHarness] {s.Name}: wrote {file}");
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[UiLayoutHarness] {s.Name}: render failed: {e}");
-            }
-        }
-    }
-
-    // Renders the whole tab: the window is made tall enough for its content not to scroll.
-    public static void Render(Scenario s, string file)
-    {
-        float height;
-        using (var probe = Open(s, WindowHeight))
-        {
-            float overflow = probe.Scroll.contentContainer.layout.height - probe.Scroll.contentViewport.layout.height;
-            height = WindowHeight + Mathf.Max(0, overflow) + 4;
-            foreach (var issue in Check(probe))
-                Debug.Log($"[UiLayoutHarness] {s.Name} @{WindowHeight}: {issue}");
-        }
-        using var w = Open(s, height);
-        Invoke(w.Panel, "Repaint");
-        Invoke(w.Panel, "Render");
-        var previous = RenderTexture.active;
-        RenderTexture.active = w.Texture;
-        var tex = new Texture2D(w.Texture.width, w.Texture.height, TextureFormat.RGBA32, false);
-        tex.ReadPixels(new Rect(0, 0, w.Texture.width, w.Texture.height), 0, 0);
-        tex.Apply();
-        RenderTexture.active = previous;
-        File.WriteAllBytes(file, tex.EncodeToPNG());
-        Object.DestroyImmediate(tex);
-    }
-
-    static string ArgValue(string name)
-    {
-        var args = Environment.GetCommandLineArgs();
-        int i = Array.IndexOf(args, name);
-        return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
     }
 }

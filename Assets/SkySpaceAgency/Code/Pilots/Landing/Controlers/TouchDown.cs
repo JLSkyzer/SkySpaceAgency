@@ -1,6 +1,7 @@
+using SsaUI;
 using System;
 using SkySpaceAgency.KSPService;
-using SsaUI;
+
 using KSP.Sim;
 // using KTools.UI;
 using UnityEngine;
@@ -43,8 +44,8 @@ namespace SkySpaceAgency.Landing
         // tunables get the same treatment: two full copies (atmo/vac, each its own independent
         // ClampSetting<float> against its own SettingsFile), selected via the pass-through
         // properties below every existing call site in this class already reads by the same names
-        // (touch_down_max_angle.V, steering_max_angle.V, etc.). Only LandingUI.cs's binding
-        // (SetupFullUI/SetupBasicUI below) needs to reach into `atmo`/`vac` directly instead of
+        // (touch_down_max_angle.V, steering_max_angle.V, etc.). Only the LAND tab's binding
+        // needs to reach into `atmo`/`vac` directly instead of
         // through these properties, since one-time UI binding must not follow the current profile.
         // internal (with AtmoSettings/VacSettings below) for the new window's Land tab
         // (AppUI/Tabs/LandTab.cs), which binds the same two instances.
@@ -82,25 +83,6 @@ namespace SkySpaceAgency.Landing
             LandingProfile.IsAtmospheric ? atmo.steering_max_angle : vac.steering_max_angle;
         public ClampSetting<float> max_throttle_rate_per_sec =>
             LandingProfile.IsAtmospheric ? atmo.max_throttle_rate_per_sec : vac.max_throttle_rate_per_sec;
-
-        // Full binding (Vacuum panel) - touch_down_max_angle plus the PRECISION LANDING tilt limit
-        // (steering_max_angle), since that only applies to vacuum precision landing. Called once, ever,
-        // from LandingUI.onInit() against the vac_settings_panel root - see LandingSettings.cs's
-        // class comment for why this can't just go through the touch_down_max_angle/etc.
-        // properties above (those follow the CURRENT profile, which one-time UI binding must not).
-        public void SetupFullUI(VisualElement root)
-        {
-            root.Q<SsaSlider>("touch_down_max_angle_vac").Bind(vac.touch_down_max_angle);
-            root.Q<SsaSlider>("steering_max_angle_vac").Bind(vac.steering_max_angle);
-        }
-
-        // Reduced binding (Atmo panel) - just touch_down_max_angle, the one general-purpose
-        // tunable of the four that isn't precision-landing-specific. steering_max_angle and
-        // max_throttle_rate_per_sec have no control on either panel.
-        public void SetupBasicUI(VisualElement root)
-        {
-            root.Q<SsaSlider>("touch_down_max_angle_atmo").Bind(atmo.touch_down_max_angle);
-        }
 
         // compute_Throttle() below recomputes wanted_throttle fresh every frame from delta_speed,
         // and every time the Pause<->Brake cycle (see LandingPilot.Update()) restarts a burn, that

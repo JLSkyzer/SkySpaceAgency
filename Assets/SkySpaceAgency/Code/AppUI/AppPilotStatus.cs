@@ -7,7 +7,7 @@ namespace SkySpaceAgency.AppUI
 {
     /// <summary>
     /// The pilots write their status through a FullStatus (status line, console, progress bar), as
-    /// their controllers' updateUI(root, FullStatus) does for the classic window. This one is backed by
+    /// their controllers' updateUI(root, FullStatus) writes. This one is backed by
     /// detached classic elements that are never shown; Refresh copies what they hold into new-UI
     /// controls: a status pill (Normal: info, Warning: alert, Error: alert), the console text, and a
     /// progress bar. A tab calls the pilot's updateUI with <see cref="Root"/> and <see cref="Status"/>,

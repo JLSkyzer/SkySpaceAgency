@@ -21,8 +21,6 @@ namespace SkySpaceAgency.Controller
 
         public AttitudePilot()
         {
-            _page = new AttitudeUI(this);
-
             // logger.LogMessage("LandingController !");
             current_vessel = SkySpaceAgencyPlugin.Instance.current_vessel;
 

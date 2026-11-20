@@ -77,7 +77,6 @@ namespace SkySpaceAgency.Rendezvous
             debug_mode_only = false;
             SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Rendezvous", this);
             node = new PrepareOnlyNode(logger, "[Rendezvous]");
-            _page = new RendezvousUI(this);   // the Rendezvous tab, in the old Dock tab's slot
             burn.stage_when_dry = true;
         }
 

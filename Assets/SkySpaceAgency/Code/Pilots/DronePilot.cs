@@ -206,7 +206,7 @@ namespace SkySpaceAgency.Controller
 
         public override void Update()
         {
-            if (!page.isVisible && !isRunning) return;
+            if (!IsShown && !isRunning) return;
             if (current_vessel == null || current_vessel.VesselVehicle == null)
                 return;
 

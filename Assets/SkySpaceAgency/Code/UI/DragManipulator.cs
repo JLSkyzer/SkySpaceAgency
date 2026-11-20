@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UIElements;
 
-using SsaUI;
+
 using KTools;
 namespace SkySpaceAgency.UI
 {
@@ -240,8 +240,6 @@ namespace SkySpaceAgency.UI
             if (checkTargetType<IntegerField>(target)) return;
             if (checkTargetType<FloatField>(target)) return;
             if (checkTargetType<TextField>(target)) return;
-            if (checkTargetType<SsaToggle>(target)) return;
-            if (checkTargetType<SsaCompass>(target)) return;
             // Redux's resize handle: dragging it resizes the window, so it mustn't move it too.
             if (checkTargetClass(target, "window-resize-handle")) return;
             if (CanStart != null && !CanStart(target)) return;

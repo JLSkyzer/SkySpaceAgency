@@ -1,7 +1,7 @@
 namespace SkySpaceAgency.Lift
 {
-    // Player-facing choice of ascent technique, picked from the dropdown in the Lift tab's
-    // "Profile" foldout (see Lift.uxml's ascent_profile_drop / LiftSettings.setupUI) and read by
+    // Player-facing choice of ascent technique, picked in the LIFT tab (the Guided / Gravity
+    // turn choice, see LiftTab) and read by
     // LiftPilot.ascent to decide which ExecuteController actually flies the Ascent phase -
     // Ascent.cs (Guided) or ReactiveAscent.cs (GravityTurn). Both finish under the exact same
     // condition (remaining apoapsis within end_ascent_error - see LiftSettings.end_ascent_error),

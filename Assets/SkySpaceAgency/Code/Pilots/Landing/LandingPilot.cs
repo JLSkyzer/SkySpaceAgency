@@ -70,7 +70,6 @@ namespace SkySpaceAgency.Landing
             stage_drop = new LandingStageDrop(this);
             CreateAirTiming();
             CreateBoostBack();
-            _page = new LandingUI(this);
 
             Instance = this;
             debug_mode_only = false;
@@ -379,7 +378,6 @@ namespace SkySpaceAgency.Landing
             // must not fire against another vessel. (A landing's own end keeps it, see FinishLanding.)
             gear.Reset();
             // Same events end a map pick that is still waiting (no-op when none waits).
-            (_page as LandingUI)?.CancelPick("reset: vessel or scene change, or a pilot start");
             // A pick started from the new window's LAND tab (it watches ReduxPlacement.Waiting).
             if (ReduxPlacement.Waiting)
                 ReduxPlacement.Cancel();

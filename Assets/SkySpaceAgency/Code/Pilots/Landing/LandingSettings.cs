@@ -1,6 +1,6 @@
 using KTools;
 using UnityEngine.UIElements;
-using SsaUI;
+
 
 namespace SkySpaceAgency.Landing
 {
@@ -27,13 +27,11 @@ namespace SkySpaceAgency.Landing
     // original key name ("land.xxx") in both files, since the files themselves are what keeps the
     // two profiles apart.
     //
-    // The UI side is split into two methods: setupUI (the full binding, used for the Vacuum
-    // panel) and setupBasicUI (a smaller subset for the Atmo panel: warp timing, brake timing, and
-    // touchdown speed profile - the settings that are actually meaningful on an atmospheric body
-    // today), plus the target lat/lon, the precision landing toggle (enabled in Parachute mode
-    // only: the parachute precision return) and the reentry drag scale.
-    // TouchDown's own tunables (touch_down_max_angle etc.) are bound from TouchDown.cs's own
-    // SetupFullUI/SetupBasicUI, not here.
+    // The LAND tab (AppUI/Tabs/LandTab.cs) binds both profiles' instances to its controls: the Atmo
+    // panel shows the settings meaningful on an atmospheric body (warp timing, brake timing, touchdown
+    // speed profile, the target lat/lon, the precision toggle enabled in Parachute mode only, the
+    // reentry drag scale), the Vacuum panel its own. TouchDown's tunables (touch_down_max_angle etc.)
+    // live on TouchDown.cs.
     public class LandingSettings
     {
         public Setting<bool> auto_warp;
@@ -58,9 +56,9 @@ namespace SkySpaceAgency.Landing
 
         public ClampSetting<float> touch_down_speed;
 
-        // TARGET (precision landing). Waypoint list, map picker or manual lat/lon (LandingUI). On the
+        // TARGET (precision landing). Waypoint list, map picker or manual lat/lon (LAND tab). On the
         // Atmo profile precision flies in Parachute mode only (the parachute precision return,
-        // LandingPilotReentry.cs): setupBasicUI disables the toggle and keeps it off in Propulsive mode.
+        // LandingPilotReentry.cs): the LAND tab disables the toggle and keeps it off in Propulsive mode.
         public Setting<bool> precision_landing;
         public Setting<float> target_latitude;
         public Setting<float> target_longitude;
@@ -118,110 +116,6 @@ namespace SkySpaceAgency.Landing
                 mode = new("land.mode", LandingMethod.Propulsive, file);
                 reentry_drag_scale = new("land.reentry_drag_scale", 1f, 0.3f, 3f, file);
             }
-        }
-
-        // Full binding - Vacuum panel. Element names carry a "_vac" suffix in Landing.uxml so they
-        // never collide with the Atmo panel's own copies (setupBasicUI below).
-        public void setupUI(VisualElement root)
-        {
-            // TARGET
-            root.Q<SsaToggle>("precision_landing_vac").Bind(precision_landing);
-            var target_settings = root.Q<VisualElement>("target_settings_vac");
-            // Precision-only steering sliders (see PRECISION LANDING below) - shown/hidden
-            // alongside target_settings, since neither means anything with precision landing off.
-            var precision_settings = root.Q<VisualElement>("PrecisionLanding_vac");
-            // .listen(), not .listeners += - .listen() also fires once immediately with the
-            // current value when registered, not just on later changes, so these panels start
-            // with the correct visibility instead of whatever the uxml gave them at rest.
-            precision_landing.listen(v =>
-            {
-                target_settings.Show(v);
-                precision_settings.Show(v);
-            });
-            target_settings.Q<FloatField>("target_latitude_vac").Bind(target_latitude);
-            target_settings.Q<FloatField>("target_longitude_vac").Bind(target_longitude);
-
-            // LEGS
-            root.Q<SsaToggle>("deploy_legs_early_vac").Bind(deploy_legs_early);
-
-            // WARP
-            root.Q<SsaToggle>("auto_warp_vac").Bind(auto_warp);
-            var warp_settings = root.Q<VisualElement>("warp_settings_vac");
-            auto_warp.listen(v => warp_settings.Show(v));
-
-            warp_settings.Q<IntegerField>("rotation_warp_duration_vac").Bind(rotation_warp_duration);
-            warp_settings.Q<SsaSlider>("max_rotation_vac").Bind(max_rotation);
-
-            // BRAKE
-            root.Q<SsaSlider>("burn_before_vac").Bind(burn_before);
-
-            // TOUCH DOWN (touch_down_max_angle now bound by TouchDown.SetupFullUI, not here)
-            var el_touchdown_altitude = root.Q<SsaSlider>("start_touchdown_altitude_vac").Bind(start_touchdown_altitude);
-            start_touchdown_altitude.listen(v =>
-                el_touchdown_altitude.Label = "Start TouchDown Altitude : " + StrTool.DistanceToString(v)
-            );
-
-            root.Q<SsaSlider>("touch_down_ratio_vac").Bind(touch_down_ratio);
-            root.Q<SsaSlider>("touch_down_speed_vac").Bind(touch_down_speed);
-
-            // PRECISION LANDING - the guidance tilt limit lives on TouchDown (see its SetupFullUI). The
-            // plane change is planned by the pilot (Precision/PlaneChange), no trim slider.
-        }
-
-        // Reduced binding - Atmo panel. Only the settings that are actually meaningful on an
-        // atmospheric body today: warp timing, brake timing, and touchdown speed profile, plus the
-        // target (saved for atmospheric precision landing). No plane trim controls here (see
-        // class comment).
-        public void setupBasicUI(VisualElement root)
-        {
-            // TARGET - the precision toggle is enabled in Parachute mode only (the parachute
-            // precision return); in Propulsive mode it is disabled and kept off. LandingUI also
-            // forces it off every tick in Propulsive mode, in case a saved file turns it back on.
-            // K2-D2 flavour only (ModIdentity.IsK2D2): Propulsive precision is the boost-back.
-            var precision_toggle = root.Q<SsaToggle>("precision_landing_atmo").Bind(precision_landing);
-            mode.listen(m =>
-            {
-                precision_toggle.SetEnabled(PrecisionAllowed(m));
-                if (!PrecisionAllowed(m) && precision_landing.V)
-                    precision_landing.V = false;
-            });
-            precision_landing.listeners += v =>
-            {
-                if (v && !PrecisionAllowed(mode.V)) precision_landing.V = false;
-            };
-            var target_settings = root.Q<VisualElement>("target_settings_atmo");
-            target_settings.Q<FloatField>("target_latitude_atmo").Bind(target_latitude);
-            target_settings.Q<FloatField>("target_longitude_atmo").Bind(target_longitude);
-
-            // LANDING MODE (this is the atmo profile, so mode is not null)
-            root.Q<InlineEnum>("land_mode_atmo").Bind(mode);
-            root.Q<SsaToggle>("deploy_legs_early_atmo").Bind(deploy_legs_early);
-
-            root.Q<SsaToggle>("auto_warp_atmo").Bind(auto_warp);
-            var warp_settings = root.Q<VisualElement>("warp_settings_atmo");
-            auto_warp.listen(v => warp_settings.Show(v));
-
-            warp_settings.Q<IntegerField>("rotation_warp_duration_atmo").Bind(rotation_warp_duration);
-            warp_settings.Q<SsaSlider>("max_rotation_atmo").Bind(max_rotation);
-
-            root.Q<SsaSlider>("burn_before_atmo").Bind(burn_before);
-
-            var el_touchdown_altitude = root.Q<SsaSlider>("start_touchdown_altitude_atmo").Bind(start_touchdown_altitude);
-            start_touchdown_altitude.listen(v =>
-                el_touchdown_altitude.Label = "Start TouchDown Altitude : " + StrTool.DistanceToString(v)
-            );
-
-            root.Q<SsaSlider>("touch_down_ratio_atmo").Bind(touch_down_ratio);
-            root.Q<SsaSlider>("touch_down_speed_atmo").Bind(touch_down_speed);
-
-            // PRECISION RETURN
-            root.Q<SsaSlider>("reentry_drag_scale_atmo").Bind(reentry_drag_scale);
-
-            // BOOST-BACK (K2-D2 flavour only: the panel PrecisionLanding_atmo is shown by LandingUI
-            // when ModIdentity.IsK2D2, never in this mod). Upstream element names.
-            root.Q<SsaSlider>("entry_angle_of_attack_atmo").Bind(entry_angle_of_attack);
-            root.Q<SsaSlider>("entry_flight_path_angle_atmo").Bind(entry_flight_path_angle);
-            root.Q<InlineEnum>("boost_back_flip_atmo").Bind(boost_back_flip);
         }
 
         // Atmo profile: precision means the parachute return in Parachute mode; in Propulsive mode

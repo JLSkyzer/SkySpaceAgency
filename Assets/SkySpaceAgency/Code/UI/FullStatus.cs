@@ -11,10 +11,6 @@ namespace SkySpaceAgency.UI
             status = group.Q<StatusLine>("status_pilot");
             console = group.Q<SsaUI.Console>("pilot_console");
             progressBar = group.Q<SsaUI.SsaProgressBar>("progress");
-            // Not every tab has a SsaAvatar yet (only the Node tab, so far) - Q<>() just returns
-            // null when it's not there, which is fine since nothing here calls avatar.* itself;
-            // callers (e.g. NodeExUI) are the ones that need to null-check before using it.
-            avatar = group.Q<SsaUI.SsaAvatar>("k2_avatar");
             main_group = status.parent;
         }
 
@@ -22,7 +18,6 @@ namespace SkySpaceAgency.UI
         public SsaUI.Console console;
         public SsaUI.StatusLine status;
         public SsaUI.SsaProgressBar progressBar;
-        public SsaUI.SsaAvatar avatar;
 
         public void Reset()
         {

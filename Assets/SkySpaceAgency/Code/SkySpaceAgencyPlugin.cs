@@ -88,15 +88,9 @@ namespace SkySpaceAgency
 
         static bool loaded = false;
 
-        SkySpaceAgencyWindow main_window = null;
-
-        // Read by the Land tab every UI tick: a waiting map pick is cancelled once the window closes.
-        internal static bool IsMainWindowOpen => Instance?.main_window != null && Instance.main_window.IsWindowOpen;
-
         VabToolsWindow vab_window = null;
 
-        // The new wide window (preview), opened from the classic window's "New UI (preview)" button. It
-        // flies nothing yet: the tabs move to it one by one (Design plan, step 2).
+        // The window (Code/AppUI): header, tabs, one page per pilot, compact flight bar.
         SkySpaceAgency.AppUI.AppWindow app_window = null;
 
         // The shortcut that opens and closes the main window in flight. Bound in the mod's Space Warp
@@ -203,16 +197,14 @@ namespace SkySpaceAgency
             // The window is created lazily: since Redux 26w42 the mod is disabled in the main menu,
             // where OnInitialized runs, and the game then refuses to load our Addressables. A window
             // created from that null UXML stays empty forever. OnCampaignLoaded (enabled campaigns
-            // only), the AppBar button and the window shortcut all go through EnsureWindow.
-            if (Enabled)
-                EnsureWindow();
+            // only), the AppBar button and the window shortcut all go through EnsureAppWindow.
 
             // Register Flight AppBar button
             Appbar.RegisterAppButton(
                 SWMetadata.Name,
                 ToolbarFlightButtonID,
                 AssetsLoader.LoadIcon("icon.png"),
-                isOpen => SetDefaultWindowOpen(isOpen)
+                isOpen => SetWindowOpen(isOpen)
             );
 
             // Register OAB AppBar Button: the VAB tools window (export, import, parts dump). A separate
@@ -243,15 +235,13 @@ namespace SkySpaceAgency
 
         public override void OnCampaignLoaded()
         {
-            EnsureWindow();
+            EnsureAppWindow();
         }
 
         // Leaving the campaign (to the main menu, or before another one loads): the window closes
         // and the pilots stop now, not when the next campaign's first frame is read.
         public override void OnCampaignUnloading()
         {
-            if (main_window != null)
-                main_window.IsWindowOpen = false;
             if (app_window != null)
                 app_window.IsWindowOpen = false;
             window_hidden_by_scene = false;
@@ -262,128 +252,39 @@ namespace SkySpaceAgency
             }
         }
 
-        // Creates the main window once its UXML can be loaded. Returns false, without creating an
-        // empty window, while the game still refuses our Addressables (mod disabled).
-        private bool EnsureWindow()
-        {
-            if (main_window != null) return true;
-
-            var myFirstWindowUxml = AssetsLoader.LoadUxml(ModIdentity.MainWindowUxml);
-            if (myFirstWindowUxml == null)
-            {
-                logger.LogWarning($"[Plugin] Main window not created yet (mod enabled: {Enabled}).");
-                return false;
-            }
-
-            // Create the window options object
-            var windowOptions = new WindowOptions
-            {
-                // The ID of the window. It should be unique to your mod.
-                WindowId = ModIdentity.WindowId,
-                // The transform of parent game object of the window.
-                // If null, it will be created under the main canvas.
-                Parent = null,
-                // Whether or not the window can be hidden with F2.
-                IsHidingEnabled = true,
-                // Follow the game's UI Scale setting like Redux's own windows. Off, the window
-                // stays the same size whatever the player sets.
-                UseStockScale = true,
-                // Whether to disable game input when typing into text fields.
-                DisableGameInputForTextFields = true,
-                MoveOptions = new MoveOptions
-                {
-                    // Whether or not the window can be moved by dragging.
-                    IsMovingEnabled = false,
-                    // Whether or not the window can only be moved within the screen bounds.
-                    CheckScreenBounds = true
-                }
-            };
-
-            // Create the window
-            var k2d2_window = Window.Create(windowOptions, myFirstWindowUxml);
-            // Add a controller for the UI to the window's game object
-            main_window = k2d2_window.gameObject.AddComponent<SkySpaceAgencyWindow>();
-
-            return true;
-        }
-
-        // Creates the new window on first use, from its own Addressables uxml (same caveat as EnsureWindow).
+        // Creates the window once its UXML can be loaded. Returns false, without creating an empty
+        // window, while the game still refuses our Addressables (mod disabled).
         private bool EnsureAppWindow()
         {
             if (app_window != null) return true;
             var uxml = AssetsLoader.LoadUxml(ModIdentity.AppWindowUxml);
             if (uxml == null)
             {
-                logger.LogWarning($"[Plugin] New window not created yet (mod enabled: {Enabled}).");
+                logger.LogWarning($"[Plugin] Window not created yet (mod enabled: {Enabled}).");
                 return false;
             }
             app_window = SkySpaceAgency.AppUI.AppWindow.Create(uxml);
-            SkySpaceAgency.AppUI.AppWindow.OpenClassicWindow -= OpenClassicFromApp;
-            SkySpaceAgency.AppUI.AppWindow.OpenClassicWindow += OpenClassicFromApp;
             return true;
         }
 
-        void OpenClassicFromApp()
+        void ToggleWindow()
         {
-            if (window_allowed && EnsureWindow())
-                main_window.IsWindowOpen = true;
-        }
-
-        /// <summary>
-        /// The window Alt+Y and the app bar button open: the new one, or the classic one while the
-        /// "Classic UI" setting is on (kept until the new window is validated in game).
-        /// </summary>
-        bool UseClassicUi => SkySpaceAgency.AppUI.AppSettings.ClassicUi.V;
-
-        void ToggleDefaultWindow()
-        {
-            if (UseClassicUi)
-            {
-                if (EnsureWindow()) main_window.IsWindowOpen = !main_window.IsWindowOpen;
-            }
-            else if (EnsureAppWindow())
-                app_window.IsWindowOpen = !app_window.IsWindowOpen;
-        }
-
-        void SetDefaultWindowOpen(bool open)
-        {
-            if (UseClassicUi)
-            {
-                if (EnsureWindow()) main_window.IsWindowOpen = open;
-            }
-            else if (EnsureAppWindow())
-                app_window.IsWindowOpen = open;
-        }
-
-        /// <summary>Switches between the two windows (the Settings switch and the classic window's button).</summary>
-        internal void SwitchUi(bool classic)
-        {
-            // A window hidden by photo mode counts as open, and is not brought back by the scene rule
-            // afterwards (that would leave both windows open).
-            bool open = (main_window != null && main_window.IsWindowOpen) || (app_window != null && app_window.IsWindowOpen)
-                || window_hidden_by_scene || app_hidden_by_scene;
-            window_hidden_by_scene = app_hidden_by_scene = false;
-            // Close the old one first, while the setting still says which one drives the app bar button.
-            if (main_window != null && !classic) main_window.IsWindowOpen = false;
-            if (app_window != null && classic) app_window.IsWindowOpen = false;
-            SkySpaceAgency.AppUI.AppSettings.ClassicUi.V = classic;
-            if (open && window_allowed) SetDefaultWindowOpen(true);
-        }
-
-        /// <summary>The classic window's "New UI (preview)" button: opens or closes the new window (flight only).</summary>
-        internal void ToggleAppWindow()
-        {
-            if (!window_allowed) return;
             if (EnsureAppWindow())
                 app_window.IsWindowOpen = !app_window.IsWindowOpen;
         }
 
-        // Creates the VAB tools window on first use, like EnsureWindow (same Addressables caveat).
+        void SetWindowOpen(bool open)
+        {
+            if (EnsureAppWindow())
+                app_window.IsWindowOpen = open;
+        }
+
+        // Creates the VAB tools window on first use, like EnsureAppWindow (same Addressables caveat).
         private bool EnsureVabWindow()
         {
             if (vab_window != null) return true;
 
-            var styleSource = AssetsLoader.LoadUxml(ModIdentity.MainWindowUxml);
+            var styleSource = AssetsLoader.LoadUxml(ModIdentity.AppWindowUxml);
             if (styleSource == null)
             {
                 logger.LogWarning($"[Plugin] VAB tools window not created yet (mod enabled: {Enabled}).");
@@ -414,7 +315,7 @@ namespace SkySpaceAgency
         // same answer. Pilots keep flying in photo mode; the window only shows in flight and map view.
         static bool in_flight, window_allowed;
 
-        bool window_hidden_by_scene, app_hidden_by_scene;
+        bool window_hidden_by_scene;
 
         static GameState? CurrentGameState()
         {
@@ -433,32 +334,19 @@ namespace SkySpaceAgency
             // Since Redux 26w42a a mod is installed but disabled in every campaign that does not
             // enable its default feature (and in the main menu). Redux hides our AppBar button
             // then, but the window shortcut and the pilots run from here, so nothing runs while it is off.
-            bool was_in_flight = in_flight;
-            var game_state = Enabled ? CurrentGameState() : null;
-            var step = SceneTransition.Next(in_flight, Enabled, game_state,
-                main_window != null && main_window.IsWindowOpen, window_hidden_by_scene);
+            var step = SceneTransition.Next(in_flight, Enabled, Enabled ? CurrentGameState() : null,
+                app_window != null && app_window.IsWindowOpen, window_hidden_by_scene);
             in_flight = step.InFlight;
             window_allowed = step.WindowAllowed;
             window_hidden_by_scene = step.HiddenByScene;
             if (step.Reset.HasValue)
                 ResetControllers(step.Reset.Value);
-            if (main_window != null)
-            {
-                if (step.CloseWindow)
-                    main_window.IsWindowOpen = false;
-                else if (step.OpenWindow)
-                    main_window.IsWindowOpen = true;
-            }
-            // The new window follows the same rule as the classic one (hidden in photo mode and brought
-            // back, closed outside flight and map view): the same pure decision, for its own state.
             if (app_window != null)
             {
-                var app_step = SceneTransition.Next(was_in_flight, Enabled, game_state,
-                    app_window.IsWindowOpen, app_hidden_by_scene);
-                app_hidden_by_scene = app_step.HiddenByScene;
-                if (app_step.CloseWindow)
+                // Hidden in photo mode and brought back, closed outside flight and map view.
+                if (step.CloseWindow)
                     app_window.IsWindowOpen = false;
-                else if (app_step.OpenWindow)
+                else if (step.OpenWindow)
                     app_window.IsWindowOpen = true;
                 app_window.Allowed = window_allowed;
             }
@@ -481,7 +369,7 @@ namespace SkySpaceAgency
                 if (in_flight)
                 {
                     if (window_allowed && WindowShortcutDown())
-                        ToggleDefaultWindow();
+                        ToggleWindow();
 
                     StagingPilot.Instance.Update();
 

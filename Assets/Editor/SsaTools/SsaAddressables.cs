@@ -14,6 +14,31 @@ namespace SkySpaceAgency.EditorTools
     /// </summary>
     public static class SsaAddressables
     {
+        /// <summary>
+        /// Removes the Addressables entries whose asset no longer exists (the deleted classic window's uxml).
+        /// Batch mode: Unity.exe -batchmode -nographics -projectPath &lt;project&gt; -executeMethod SkySpaceAgency.EditorTools.SsaAddressables.RemoveMissingEntries -quit
+        /// </summary>
+        public static void RemoveMissingEntries()
+        {
+            var settings = AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null) { Debug.LogError("[SsaAddressables] no Addressables settings"); return; }
+            int removed = 0;
+            foreach (var group in settings.groups)
+            {
+                if (group == null) continue;
+                foreach (var entry in new System.Collections.Generic.List<AddressableAssetEntry>(group.entries))
+                {
+                    if (!string.IsNullOrEmpty(entry.AssetPath) && File.Exists(entry.AssetPath)) continue;
+                    Debug.Log($"[SsaAddressables] removing the entry of a missing asset: '{entry.address}' (group {group.Name}, guid {entry.guid})");
+                    settings.RemoveAssetEntry(entry.guid, false);
+                    removed++;
+                }
+            }
+            settings.SetDirty(AddressableAssetSettings.ModificationEvent.EntryRemoved, null, true, true);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[SsaAddressables] {removed} entr(y/ies) removed");
+        }
+
         public static void AddAppEntries()
         {
             var settings = AddressableAssetSettingsDefaultObject.Settings;

@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 namespace SkySpaceAgency.AppUI
 {
     // The new UI's small controls. Each one only builds its children and sets USS classes; the look is in
-    // SsaApp.uss. Tabs migrating from the classic window (step 2) build their pages from these.
+    // SsaApp.uss. The tabs build their pages from these.
 
     static class Ui
     {

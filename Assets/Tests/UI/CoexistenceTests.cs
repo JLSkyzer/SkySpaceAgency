@@ -49,7 +49,7 @@ public class CoexistenceTests
     {
         // K2-D2 1.4.1 K2D2_Plugin.cs and swinfo.json; pr/k2d2 ModIdentity.cs.
         Assert.AreNotEqual("K2D2", ModIdentity.ModId, "mod_id (Redux skips a second mod with the same id)");
-        Assert.AreNotEqual("K2D2", ModIdentity.WindowId);
+        Assert.AreNotEqual("K2D2", ModIdentity.AppWindowId);
         Assert.AreNotEqual("K2D2VabTools", ModIdentity.VabWindowId);
         Assert.AreNotEqual("BTN-K2D2", ModIdentity.ToolbarButtonPrefix);
         CollectionAssert.DoesNotContain(new[] { "BTN-K2D2Flight", "BTN-K2D2OAB", "BTN-K2D2KSC" }, ModIdentity.ToolbarFlightButtonId);
@@ -60,7 +60,7 @@ public class CoexistenceTests
         CollectionAssert.DoesNotContain(new[] { "k2d2_settings.json", "k2d2_landing_atmo.json", "k2d2_landing_vac.json" }, ModIdentity.SettingsFileName);
         CollectionAssert.DoesNotContain(new[] { "k2d2_settings.json", "k2d2_landing_atmo.json", "k2d2_landing_vac.json" }, ModIdentity.LandingAtmoFileName);
         CollectionAssert.DoesNotContain(new[] { "k2d2_settings.json", "k2d2_landing_atmo.json", "k2d2_landing_vac.json" }, ModIdentity.LandingVacFileName);
-        Assert.AreNotEqual(K2D2WindowAddress, ModIdentity.MainWindowAddress);
+        Assert.AreNotEqual(K2D2WindowAddress, ModIdentity.AppWindowAddress);
     }
 
     [Test]
@@ -97,8 +97,8 @@ public class CoexistenceTests
     {
         string all = File.ReadAllText(AssetsPath("AddressableAssetsData", "AssetGroups", $"addressables_{ModIdentity.ModId}_all.asset"));
         var addresses = Regex.Matches(all, @"m_Address: (.+)$", RegexOptions.Multiline).Cast<Match>().Select(m => m.Groups[1].Value.Trim()).ToArray();
-        // The classic window and, since 2026-11-19, the new window (preview). Both under our own UI folder.
-        CollectionAssert.AreEquivalent(new[] { ModIdentity.MainWindowAddress, ModIdentity.AppWindowAddress }, addresses);
+        // The window's uxml is the only entry (the classic window's went on 2026-11-20), under our own UI folder.
+        CollectionAssert.AreEquivalent(new[] { ModIdentity.AppWindowAddress }, addresses);
         foreach (string address in addresses)
         {
             StringAssert.StartsWith(ModIdentity.UiFolder, address);

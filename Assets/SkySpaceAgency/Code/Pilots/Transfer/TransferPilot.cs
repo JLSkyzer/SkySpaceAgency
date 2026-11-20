@@ -87,7 +87,6 @@ namespace SkySpaceAgency.Transfer
             Instance = this;
             debug_mode_only = false;
             SkySpaceAgencyPilotsMgr.Instance.RegisterPilot("Transfer", this);
-            _page = new TransferUI(this);
             node = new PrepareOnlyNode(logger, "[Transfer]");
             burn.stage_when_dry = true;
             burn.allow_warp = true;

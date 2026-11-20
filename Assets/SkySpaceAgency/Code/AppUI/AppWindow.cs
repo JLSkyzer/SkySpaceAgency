@@ -17,10 +17,7 @@ namespace SkySpaceAgency.AppUI
         public static Setting<float> Scale => _scale ??= new Setting<float>("app_ui_scale", UiScale.Default);
         public static Setting<string> Page => _page ??= new Setting<string>("app_main_page", "lift");
 
-        static Setting<bool> _classic, _compact;
-
-        /// <summary>Alt+Y and the app bar button open the classic window instead (until the new one is validated in game).</summary>
-        public static Setting<bool> ClassicUi => _classic ??= new Setting<bool>("app_classic_ui", false);
+        static Setting<bool> _compact;
 
         /// <summary>The compact flight bar while a pilot flies and the window is closed (settings mockup).</summary>
         static EnumSetting<SmallWindowMode> _small;
@@ -88,7 +85,6 @@ namespace SkySpaceAgency.AppUI
         bool _open, _reclamp, _awaitLayout;
 
         public AppWindowView View => _view;
-        public static event Action OpenClassicWindow;
 
         public static AppWindow Create(VisualTreeAsset uxml)
         {
@@ -141,7 +137,6 @@ namespace SkySpaceAgency.AppUI
             {
                 Plugin = SkySpaceAgencyPlugin.Instance,
                 SetScale = s => { AppSettings.Scale.V = UiScale.Clamp(s); ApplyScale(); },
-                OpenClassicWindow = () => OpenClassicWindow?.Invoke(),
             };
             _context = context;
             _view = BuildView(host, context);
@@ -158,7 +153,7 @@ namespace SkySpaceAgency.AppUI
 
             _view.Query<FloatField>().ForEach(f => f.DisableGameInputOnFocus());
 
-            // Drag by the header only (the body has sliders and fields), position saved as for the classic window.
+            // Drag by the header only (the body has sliders and fields), position saved (app_window_pos).
             var header = _view.Header;
             _view.AddManipulator(new DragManipulator(false, AppSettings.PositionKey)
             {
@@ -202,8 +197,8 @@ namespace SkySpaceAgency.AppUI
                 _open = value;
                 if (_view == null) return;
                 _view.style.display = value ? DisplayStyle.Flex : DisplayStyle.None;
-                // The app bar button follows, as for the classic window (only while the new one is the default).
-                if (_panel != null && !AppSettings.ClassicUi.V)
+                // The app bar button follows the window.
+                if (_panel != null)
                     GameObject.Find(SkySpaceAgencyPlugin.ToolbarFlightButtonID)
                         ?.GetComponent<KSP.UI.Binding.UIValue_WriteBool_Toggle>()?.SetValue(value);
                 if (value) { _awaitLayout = true; _reclamp = true; }

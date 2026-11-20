@@ -15,9 +15,6 @@ namespace SkySpaceAgency.AppUI
     {
         public SkySpaceAgencyPlugin Plugin;
 
-        /// <summary>Opens the classic window (Settings, placeholder pages).</summary>
-        public Action OpenClassicWindow;
-
         /// <summary>Applies a new interface scale (the window re-scales its panel).</summary>
         public Action<float> SetScale;
 

@@ -48,12 +48,10 @@ namespace KTools
         // .Result, since .Result on a handle that hasn't finished yet can silently return null instead of
         // actually blocking for the asset.
         //
-        // For this to resolve, SkySpaceAgency_Window.uxml needs to be marked Addressable in the Unity Editor
-        // (select it, check "Addressable" in the Inspector, leave the auto-filled address as its project
-        // path so it matches the address string built below). Its dependency closure - the nested tab
-        // templates (Dock.uxml, Landing.uxml, etc via <ui:Template>), stylesheets, and fonts - do NOT need
-        // separate Addressable marking; Addressables pulls those in automatically the same way an
-        // AssetBundle build already did.
+        // For this to resolve, the uxml (App/SkySpaceAgency_App.uxml) needs to be an Addressables entry whose
+        // address is its project path (SkySpaceAgency.EditorTools.SsaAddressables.AddAppEntries adds it). Its
+        // dependency closure - the style sheets and the fonts they name - does NOT need separate Addressable
+        // marking; Addressables pulls those in automatically.
         public static VisualTreeAsset LoadUxml(string path)
         {
             var address = ModIdentity.UiFolder + path;
