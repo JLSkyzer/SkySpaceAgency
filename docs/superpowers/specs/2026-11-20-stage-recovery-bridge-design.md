@@ -54,7 +54,9 @@ file, the return point, any change of pilot behaviour.
   (phase Idle, no capture pending, record `Ready`) and adds the guard.
 - `CanCompleteLanding(state, enabled)` and `CanReturnToMission(state, enabled)`: `ReduxUnavailable`, `Disabled`,
   `NotFlyingStage` (phase not FlyingStage), `NoActiveRecord`, `Transitioning`, else `Ok`
-  (`CanCompleteLanding` also refuses `ActiveReplayDocked` with `Docked`).
+  (`CanCompleteLanding` also refuses `ActiveReplayDocked` with `Docked`; `CanReturnToMission` answers `WouldLose` when
+  `CanRetry` is false, because Redux's `ReturnToMission` then marks the stage Lost for good).
+  Added after the review of 2026-11-20.
 - `BridgeCalls.TryStart / TryComplete / TryReturn(state, …, enabled, invoke)`: evaluate the rule; **only when `Ok`**
   call `invoke` (a delegate to Redux's method) and return its bool; otherwise the delegate is not called. The result
   carries the verdict, whether it was invoked, and the bool.
@@ -62,16 +64,20 @@ file, the return point, any change of pilot behaviour.
 ## Change detection (`BridgeWatch`, pure)
 
 `Observe(BridgeState)` returns the log lines for what changed since the last observation: first read, Redux
-available / unavailable, phase change (`phase Idle -> SavingMission`), capture pending on / off, a record added
-(`recovery point saved: id name guid parent UT MET`), a record removed, a status change, active record change. No
-change: an empty list.
+available / unavailable, phase change (`phase Idle -> SavingMission`), capture pending on / off, transitioning on / off,
+a record added (`recovery point saved: id name guid parent UT MET` when a capture was seen pending at that read or the
+previous one, else `recovery point appeared (no capture seen, loaded or restored): …`), a record removed, a status
+change, active record change. Records are compared only between two reads of an available manager (after the first
+read or when Redux comes back they are a baseline). No change: an empty list.
 
 ## Identity before / after (`UniverseIdentity`, `UniverseComparison`, pure)
 
 `UniverseIdentity` holds object ids (`RuntimeHelpers.GetHashCode`) of the plugin, the pilots manager, the game
 instance, the universe model, the space simulation, the message center; the counts `PilotCount`, the names of the
 running pilots; `ActiveVesselGuid`, `ActiveVesselName`, `ActivePartCount`, `VesselCount`, `UniverseTime`, `GameState`,
-`Phase`, `Paused`, `HasWindow`, `PluginCount` (the number of plugin objects in the scene, expected 1).
+`Phase`, `Paused`, `HasWindow`, `PluginCount` (the number of plugin objects in the scene, expected 1), and a
+`WeakReference` to each of the six objects: an id is a hash code, so `same` means the same hash **and** the same object
+(`NEW (same hash …, but not the same object …)` otherwise).
 `UniverseComparison.Compare(before, after)` returns one line per item: `same` or `NEW`/`changed` with both values; the
 active vessel line says whether the GUID is the same or changed; the pilots line says which pilots were running before
 and after.

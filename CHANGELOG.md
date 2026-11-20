@@ -2,6 +2,10 @@
 
 ## Unreleased (SkySpaceAgency)
 
+### Stage recovery bridge (2026-11-20, invisible; not yet checked in game)
+
+- **Nothing changes in flight.** First step of the booster-return work: the mod now reads Redux's Stage Recovery (the recovery points it saves when a stage separates, and its Fly / return sessions) and writes `[StageBridge]` lines in `Player.log`: Redux's state when it changes (phase, a recovery point saved, status changes), and around every universe reset (Redux's Fly and return each load the game twice) a before / after comparison of what survives (plugin, pilots, game objects, active vessel GUID, counts, running pilots). Settings > Logs holds a button **Stage bridge: log state** (reads and logs only) and a switch **Stage bridge: allow the calls** (`stage_bridge_enabled`, off): the mod can call Redux's `StartReplay`, `CompleteActiveLanding` and `ReturnToMission` only through it, and nothing calls them yet. No Harmony patch, no change of any pilot. Spec `docs/superpowers/specs/2026-11-20-stage-recovery-bridge-design.md`, in-game list section 31.
+
 ### Redux 26w47a (2026-11-20)
 
 - **Rails warp during a burn on Redux 26w47a** (not yet checked in game): Redux 26w47a no longer builds the on-rails burn to the end of the lit engines' propellant: the burn is a rolling plan over a horizon (at most an hour, or the time to use half the vessel's mass), and the game itself slows the warp before a fuel or power change. The mod used that burn end as the end of the stage's propellant to decide when to leave rails, so on 26w47a it would have left rails a frame or two after entering them and flown the rest of the burn at 1x. When the game reports a rolling plan, the mod now uses the stage estimate taken at entry instead (Redux 26w46a and 26w42c are unchanged). Log: `rails burn: guard ok … the game's burn: a rolling plan, no end`. The rest of the compatibility check (every game member the mod references, the reflection targets, the changed game methods) found nothing else: `docs/superpowers/notes/2026-11-20-redux-26w47a-compat.md`.

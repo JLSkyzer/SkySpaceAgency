@@ -1,6 +1,3 @@
-using System;
-using System.Reflection;
-
 namespace SkySpaceAgency.Landing
 {
     // What Redux's stage recovery is doing (Redux.StageRecovery.StageRecoveryManager in
@@ -25,48 +22,22 @@ namespace SkySpaceAgency.Landing
 
     public static class ReduxStageRecovery
     {
-        const BindingFlags Any = BindingFlags.Public | BindingFlags.NonPublic;
-
-        static PropertyInfo instance, session_phase, active_record;
-        static FieldInfo vessel_name, captured_UT;
-        static bool? _resolved;
-
-        static bool Resolve()
-        {
-            try
-            {
-                var manager = Type.GetType("Redux.StageRecovery.StageRecoveryManager, Ksp2Redux");
-                instance = manager?.GetProperty("Instance", Any | BindingFlags.Static);
-                session_phase = manager?.GetProperty("SessionPhase", Any | BindingFlags.Instance);
-                active_record = manager?.GetProperty("ActiveRecord", Any | BindingFlags.Instance);
-                var record = active_record?.PropertyType;
-                vessel_name = record?.GetField("VesselName", Any | BindingFlags.Instance);
-                captured_UT = record?.GetField("CapturedUniversalTime", Any | BindingFlags.Instance);
-                return instance != null && session_phase != null && active_record != null && vessel_name != null && captured_UT != null;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
+        // Reads through the bridge's one reflection class (StageRecoveryAccess), which resolves the
+        // names of Redux 26w47a once and never throws.
         public static ReduxReplay Get()
         {
             var replay = new ReduxReplay { phase = "Unavailable" };
-            if (!(_resolved ??= Resolve()))
-                return replay;
-
-            object manager = instance.GetValue(null);
-            if (manager == null)
+            var state = SkySpaceAgency.Bridge.StageRecoveryAccess.Read();
+            if (!state.Available)
                 return replay;
 
             replay.available = true;
-            replay.phase = session_phase.GetValue(manager)?.ToString() ?? "Unknown";
-            object record = active_record.GetValue(manager);
-            if (record != null)
+            replay.phase = state.Phase.ToString();
+            var active = SkySpaceAgency.Bridge.BridgeRules.Find(state, state.ActiveRecordId);
+            if (active != null)
             {
-                replay.vessel_name = vessel_name.GetValue(record) as string;
-                replay.captured_UT = (double)captured_UT.GetValue(record);
+                replay.vessel_name = active.VesselName;
+                replay.captured_UT = active.CapturedUT;
             }
             return replay;
         }

@@ -488,3 +488,52 @@ Captures de référence : `docs/design/ui/migration/` (`land_sections_open_scrol
    `App/SkySpaceAgency_App.uxml`. Alt+Y et l'AppBar ouvrent bien la fenêtre dès le premier chargement de campagne.
 6. **Réglages inchangés.** Les valeurs des réglages et des plans enregistrés avant la mise à jour sont encore là.
 7. **Choix de cible en attente.** Onglet Land, cliquer « Pick on map » (bouton en attente), puis fermer la fenêtre (croix, Alt+Y) : l'attente est annulée tout de suite (ligne `[Landing] target: pick cancelled (window closed)`), un clic sur la carte ne pose rien.
+
+## 31. Pont vers le Stage Recovery de Redux (2026-11-20)
+
+Aucun changement visible en vol : on lit des lignes `[StageBridge]` dans `Player.log`
+(`%LOCALAPPDATA%Low/Intercept Games/Kerbal Space Program 2/Player.log`, lignes `[SkySpaceAgency] [StageBridge] …`).
+Spec : `docs/superpowers/specs/2026-11-20-stage-recovery-bridge-design.md`. Ces essais décident de la conception de
+Return, de la reprise de Lift et du rejeu du booster (feuille de route R3, R4, R4b, R5). **Aucune de ces lignes n'a
+encore été lue en jeu.** Les lignes du journal n'ont pas d'heure : chronométrer à la main les chargements.
+
+1. **Démarrage.** Au menu principal puis au chargement d'une campagne où le mod est actif : `armed: persistent subscriptions
+   on GameLoadFinishedMessage and QuitToMainMenuStartedMessage (message center #…)` (sinon `armed: no message center yet`,
+   et la ligne `armed:` doit alors venir plus tard) ; `event: first read: phase Idle, … recovery point(s)` ; au premier
+   chargement `survival (campaign loaded): no before snapshot` (normal : aucun reset avant).
+2. **Bouton de diagnostic.** En vol, Settings > Logs > **Stage bridge: log state** : lignes `state (button): phase Idle,
+   capture pending False, … recovery points on True, save delay 2 s …`, une ligne `record …` par point, puis `identity
+   (button): plugin#… game#… vessel <GUID> '<nom>' …`. Le bouton marche interrupteur éteint. L'interrupteur **Stage
+   bridge: allow the calls** reste éteint par défaut (et revient éteint avec Reset) et **aucune ligne `called …` ne doit
+   jamais apparaître** : rien n'appelle encore Redux.
+3. **Un point de récupération est créé.** Un vaisseau dont l'étage du bas porte une sonde ou une capsule (un
+   `Module_Command` alimenté) : larguer cet étage, le vaisseau actif restant l'autre morceau. Attendre 2 s de jeu. Lire,
+   dans l'ordre : `event: capture pending on`, puis `event: capture pending off` et `event: recovery point saved: <id>
+   '<nom>' guid <GUID du booster> parent <GUID du vaisseau actif> UT … MET … status Ready` (la ligne dit `recovery
+   point appeared (no capture seen, …)` quand le point n'a pas été vu en cours de capture : c'est un point chargé avec
+   une sauvegarde, pas un nouveau). Le `parent` doit être le
+   vaisseau actif. Un étage sans sonde ni capsule ne doit donner **aucun** point.
+4. **Pause trop tôt (point ouvert de la feuille de route).** Refaire un largage et mettre le jeu en pause tout de suite
+   (avant les 2 s), attendre, puis reprendre. Noter si `capture pending` reste actif pendant la pause et quand le point
+   apparaît. (La lecture du code dit que la sauvegarde attend le temps de jeu : à confirmer.)
+5. **Survie aux remises à zéro (la question principale).** Ouvrir la fenêtre Stage Recovery de Redux (bouton de la barre
+   d'applications), lancer **Fly** sur le point, voler un peu le booster, puis revenir (**Return**, ou poser le booster et
+   terminer l'atterrissage). Lire, dans l'ordre : `event: phase Idle -> SavingMission`, `phase … -> LoadingStage`,
+   `before reset (campaign unloading): …`, `after (campaign loaded): …`, `event: game load finished, success True`,
+   `phase LoadingStage -> FlyingStage`, puis au retour `phase … -> LoadingMission`, un second `before reset` /
+   `after`, `phase LoadingMission -> Idle` et `after (phase back to Idle)`. Chaque ligne `survival (<où> vs before #n (<où>))` dit quel « avant » elle compare. Dans chaque bloc relever :
+   `plugin same` ou `NEW` (un objet « same hash » mais pas le même est signalé `NEW`), `pilots manager`, `game instance`, `universe model` (attendu `NEW`), `message center`, `window`,
+   `plugin objects in the scene 1 -> 1`, `active vessel guid changed` au départ (le booster) puis `same` au retour (le
+   vaisseau d'avant), `vessels n -> m`, et `pilots … running [Lift] -> []` (le mod arrête déjà ses pilotes à chaque
+   remise à zéro, via `OnCampaignUnloading` : c'est le comportement actuel, pas un défaut du pont).
+6. **Redux ne laisse pas faire.** Pendant la session (Fly lancé), noter les lignes `[Stage Recovery] Blocked …` de Redux si
+   une sauvegarde automatique du mod est tentée, et que le bouton de diagnostic marche toujours.
+7. **Quitter au menu puis recharger.** `event: quit to main menu started`, `before reset (quit to main menu)`, puis au
+   chargement `after (campaign loaded)`. Si une nouvelle ligne `armed: persistent subscriptions … #<autre numéro>`
+   apparaît, le centre de messages a été remplacé et le pont s'est réabonné ; sinon il n'a pas changé.
+8. **Durées.** Chronométrer : de l'appui sur Fly à la reprise du jeu sur le booster, et du retour au vaisseau d'avant. À
+   noter pour la feuille de route (deux chargements complets par booster). Noter aussi si le jeu est en pause quand le
+   vaisseau d'avant revient (`identity` : `paused`).
+9. **Rien d'autre ne change.** Aucune erreur `[StageBridge] … failed` ; pas de ralentissement visible (le pont lit
+   Redux 5 fois par seconde) ; sans campagne ou sans le Stage Recovery de Redux : une seule ligne `first read: Redux's
+   stage recovery is unavailable`, puis le silence.

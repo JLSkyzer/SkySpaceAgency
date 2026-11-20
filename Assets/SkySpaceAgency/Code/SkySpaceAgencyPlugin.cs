@@ -230,11 +230,15 @@ namespace SkySpaceAgency
             //     () => myFirstWindowController.IsWindowOpen = !myFirstWindowController.IsWindowOpen
             // );
 
+            // The bridge to Redux's Stage Recovery: reads and logs only (plan 2026-11-20-stage-recovery-bridge).
+            Bridge.StageBridge.Init();
+
             loaded = true;
         }
 
         public override void OnCampaignLoaded()
         {
+            Bridge.StageBridge.OnCampaignLoaded();
             EnsureAppWindow();
         }
 
@@ -242,6 +246,7 @@ namespace SkySpaceAgency
         // and the pilots stop now, not when the next campaign's first frame is read.
         public override void OnCampaignUnloading()
         {
+            Bridge.StageBridge.OnCampaignUnloading();
             if (app_window != null)
                 app_window.IsWindowOpen = false;
             window_hidden_by_scene = false;
@@ -251,6 +256,9 @@ namespace SkySpaceAgency
                 ResetControllers(ResetCause.ModDisabled);
             }
         }
+
+        // True once the window exists (the stage bridge's identity log).
+        internal bool HasAppWindow => app_window != null;
 
         // Creates the window once its UXML can be loaded. Returns false, without creating an empty
         // window, while the game still refuses our Addressables (mod disabled).
@@ -330,6 +338,8 @@ namespace SkySpaceAgency
         {
             // Unity calls Update before OnInitialized has finished; `loaded` is set at its end.
             if (!loaded) return;
+
+            Bridge.StageBridge.Tick();
 
             // Since Redux 26w42a a mod is installed but disabled in every campaign that does not
             // enable its default feature (and in the main menu). Redux hides our AppBar button

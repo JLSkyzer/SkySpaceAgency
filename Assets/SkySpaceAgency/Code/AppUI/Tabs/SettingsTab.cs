@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using KTools;
+using SkySpaceAgency.Bridge;
 using SkySpaceAgency.Controller;
 using SkySpaceAgency.Node;
 using UnityEngine;
@@ -39,6 +40,8 @@ namespace SkySpaceAgency.AppUI
         public Label VersionLabel { get; private set; }
         public Label ShortcutLabel { get; private set; }
         public AppNote WarpNote { get; private set; }
+        public AppSwitch StageBridgeSwitch { get; private set; }
+        public AppButton StageBridgeButton { get; private set; }
 
         float _resetArmedUntil = -1;
         string _previousTab;
@@ -173,6 +176,14 @@ namespace SkySpaceAgency.AppUI
             card.Add(AppBind.Switch("Debug mode", SkySpaceAgencySettings.debug_mode));
             card.Add(new AppNote("Turns on the pilots kept for debugging and the pilots' extra diagnostics (more lines in the "
                 + "game's Player.log, debug readouts). The pilots' usual log lines are always written."));
+
+            // The bridge to Redux's Stage Recovery (plan 2026-11-20-stage-recovery-bridge): invisible work for the booster return.
+            StageBridgeSwitch = AppBind.Switch("Stage bridge: allow the calls", StageBridgeSettings.Enabled);
+            card.Add(StageBridgeSwitch);
+            card.Add(new AppNote("Work in progress for the booster return. Off: nothing calls Redux's stage recovery. The button below only reads "
+                + "Redux's state and the mod's own state and writes them to Player.log ([StageBridge] lines)."));
+            StageBridgeButton = new AppButton("Stage bridge: log state", AppButton.Kind.Plain, () => StageBridge.LogState("button"));
+            card.Add(StageBridgeButton);
         }
 
         void AboutPanel(AppCard card)

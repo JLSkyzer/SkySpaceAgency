@@ -45,7 +45,7 @@
 **Files:**
 - Create: `Assets/SkySpaceAgency/Code/StageBridge/BridgeTypes.cs`, `BridgeRules.cs`, `StageBridgeSettings.cs`
 - Create: `Assets/Tests/StageBridge/SkySpaceAgency.Tests.StageBridge.asmdef`, `BridgeRulesTests.cs`
-- Namespace `SkySpaceAgency.StageBridge`.
+- Namespace `SkySpaceAgency.Bridge` (a namespace named `StageBridge` would hide the static class `StageBridge`).
 
 **Interfaces:**
 - Produces: enums `BridgePhase {Unknown, Idle, SavingMission, LoadingStage, FlyingStage, LoadingMission}`,
@@ -111,7 +111,7 @@
 ### Task 4: The glue (`StageBridge`) and the plugin hooks
 
 **Files:**
-- Create: `Assets/SkySpaceAgency/Code/StageBridge/StageBridge.cs`, `UniverseIdentityReader.cs`
+- Create: `Assets/SkySpaceAgency/Code/StageBridge/StageBridge.cs`, `UniverseIdentityReader.cs`, `BridgeFormat.cs` (pure text of the state lines)
 - Modify: `Assets/SkySpaceAgency/Code/SkySpaceAgencyPlugin.cs` (call `StageBridge.Init()` at the end of `OnInitialized`, `StageBridge.Tick()` in `Update` after the `loaded` check, `StageBridge.OnCampaignUnloading()` first in `OnCampaignUnloading`, `StageBridge.OnCampaignLoaded()` in `OnCampaignLoaded`; add `internal bool HasAppWindow => app_window != null;`)
 - Test: `Assets/Tests/StageBridge/StageBridgeGlueTests.cs`
 
@@ -119,7 +119,7 @@
 - Consumes: Tasks 1 to 3.
 - Produces: `static class StageBridge { void Init(); void Tick(); void OnCampaignUnloading(); void OnCampaignLoaded(); void LogState(string reason); bool StartReplay(string recordId); bool CompleteActiveLanding(); bool ReturnToMission(); static Action<string> Sink; }` (`Sink` defaults to the plugin logger's `LogInfo`, replaced by tests); `static class UniverseIdentityReader { UniverseIdentity Capture(); }` (reads the game; every item in its own `try`; Unity-null objects count as missing).
 
-- [ ] **Step 1: Failing tests** (editor, `Sink` captured into a list): `LogState_WithoutRedux_WritesOneStateLineSayingUnavailable`; `Tick_WithoutRedux_IsSilentAfterTheFirstLine`; `OnCampaignLoaded_WithoutBefore_LogsNoBeforeSnapshot`; `OnCampaignUnloading_ThenLoaded_LogsBeforeThenComparison` (Capture returns an empty identity in the editor: lines start with `[StageBridge] before reset` then `[StageBridge] after`, the second containing `survival`); `StartReplay_WhenSettingIsOff_LogsRefusedAndReturnsFalse` (line contains `refused (Disabled)`); `EveryLineStartsWithThePrefix`.
+- [ ] **Step 1: Failing tests** (editor, `Sink` captured into a list): `LogState_WithoutRedux_WritesOneStateLineSayingUnavailable`; `Tick_WithoutRedux_IsSilentAfterTheFirstLine`; `OnCampaignLoaded_WithoutBefore_LogsNoBeforeSnapshot`; `OnCampaignUnloading_ThenLoaded_LogsBeforeThenComparison` (Capture returns an empty identity in the editor: lines start with `[StageBridge] before reset` then `[StageBridge] after`, the second containing `survival`); `TheCalls_WhenTheSettingIsOff_AreRefusedAndReturnFalse` (line contains `refused (ReduxUnavailable)`: no Redux in the editor, and unavailable wins over disabled; the Disabled verdict itself is pinned in Task 1); `EveryLineStartsWithThePrefix`.
 - [ ] **Step 2: Run, see them fail.**
 - [ ] **Step 3: Implement** per the spec's "What the glue does": persistent subscribe through `Game.Messages.PersistentSubscribe<T>` remembering the message center (re-subscribe when it differs); the poll every 0.2 s of `Time.realtimeSinceStartup`; `GameLoadFinishedMessage` callback copies `IsSuccess` then logs `event: game load finished success=…` and an "after" comparison; `QuitToMainMenuStartedMessage` logs and takes the before; the phase returning to `Idle` after a non-Idle phase logs an "after (back to Idle)" comparison; a recovery point saved or a phase change logs `Format(Capture())`. The call methods use `BridgeCalls` with `StageRecoveryAccess` delegates and `StageBridgeSettings.Enabled.V`, and log `call <name> refused (<verdict>): <Explain>` or `called <name> -> <bool>`.
 - [ ] **Step 4: Run the StageBridge filter**: all pass. Compile the whole mod (Unity run in Task 6).

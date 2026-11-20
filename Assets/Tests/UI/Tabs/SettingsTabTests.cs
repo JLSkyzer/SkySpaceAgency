@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using SkySpaceAgency;
 using SkySpaceAgency.AppUI;
+using SkySpaceAgency.Bridge;
 using SkySpaceAgency.Controller;
 using SkySpaceAgency.Node;
 using UnityEngine;
@@ -13,7 +15,7 @@ using UnityEngine.UIElements;
 public class SettingsTabTests
 {
     // The settings touched here are the mod's static ones: put them back after each test.
-    bool _auto, _debug, _compact;
+    bool _auto, _debug, _compact, _bridge;
     float _freeze, _scale;
     BurnWarpMode _warp;
 
@@ -26,6 +28,7 @@ public class SettingsTabTests
         _compact = AppSettings.CompactBar.V;
         _scale = AppSettings.Scale.V;
         _warp = BurnWarpSettings.mode.V;
+        _bridge = StageBridgeSettings.Enabled.V;
     }
 
     [TearDown]
@@ -37,6 +40,7 @@ public class SettingsTabTests
         AppSettings.CompactBar.V = _compact;
         AppSettings.Scale.V = _scale;
         BurnWarpSettings.mode.V = _warp;
+        StageBridgeSettings.Enabled.V = _bridge;
     }
 
     static SettingsTab BuildSettings(AppTabContext context = null)
@@ -401,5 +405,41 @@ public class SettingsTabTests
         Assert.AreEqual(1, AppHudView.Fraction(3));
         Assert.AreEqual(0, AppHudView.Fraction(-1));
         Assert.AreEqual(0.5f, AppHudView.Fraction(0.5f), 1e-6f);
+    }
+
+    [Test]
+    public void Settings_LogsPanel_HoldsTheStageBridgeSwitchAndButton()
+    {
+        var tab = BuildSettings();
+        Assert.IsNotNull(tab.StageBridgeSwitch);
+        Assert.IsNotNull(tab.StageBridgeButton);
+        Assert.AreEqual("Stage bridge: log state", tab.StageBridgeButton.Text);
+        Assert.IsTrue(tab.Panels["logs"].Contains(tab.StageBridgeSwitch));
+        Assert.IsTrue(tab.Panels["logs"].Contains(tab.StageBridgeButton));
+
+        StageBridgeSettings.Enabled.V = false;
+        Assert.IsFalse(tab.StageBridgeSwitch.value);
+        StageBridgeSettings.Enabled.V = true;
+        Assert.IsTrue(tab.StageBridgeSwitch.value, "the switch follows stage_bridge_enabled");
+    }
+
+    [Test]
+    public void Settings_StageBridgeButton_LogsTheState_EvenWithTheSettingOff()
+    {
+        var lines = new List<string>();
+        var sink = StageBridge.Sink;
+        StageBridge.Sink = lines.Add;
+        try
+        {
+            StageBridgeSettings.Enabled.V = false;
+            var tab = BuildSettings();
+            tab.StageBridgeButton.Click();
+        }
+        finally
+        {
+            StageBridge.Sink = sink;
+        }
+        Assert.IsTrue(lines.Any(l => l.StartsWith("[StageBridge] state (button)")), string.Join(Environment.NewLine, lines));
+        Assert.IsFalse(lines.Any(l => l.Contains("called ")), "reading only: no call to Redux");
     }
 }

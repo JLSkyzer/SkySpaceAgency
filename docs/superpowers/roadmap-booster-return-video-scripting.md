@@ -242,7 +242,7 @@ fact are in `notes/2026-11-20-roadmap-phase0-scan.md`.
 
 ### First code task and in-game confirmations
 
-- **First code task: the bridge to Redux's Stage Recovery**, no behaviour change for the player. Extend
+- **First code task: the bridge to Redux's Stage Recovery** (**done 2026-11-20**, zip built, not installed, not run in game; spec and plan `2026-11-20-stage-recovery-bridge`, in-game list section 31), no behaviour change for the player. Extend
   `ReduxStageRecovery.cs` (reflection) to read `Records`, `IsCapturePending`, `IsTransitioning`, `CanRetryRecovery`,
   `ActiveRecord`, `SessionPhase` and to call `StartReplay`, `CompleteActiveLanding`, `ReturnToMission`; subscribe to
   `GameLoadFinishedMessage` and `QuitToMainMenuStartedMessage`; log whether the plugin and its pilots survive the
