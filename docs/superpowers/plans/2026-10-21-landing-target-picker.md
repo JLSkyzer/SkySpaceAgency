@@ -159,7 +159,7 @@ Behaviour in `LandingUI`:
 - Modify: `CHANGELOG.md` (`## Unreleased (SkySpaceAgency)` → `### Added`), `README.md` (autopilot list line for Landing, Known limitations), parent `D:/KSPReduxModding/CLAUDE.md` (Landing sub-project 3 bullet) and the submodule pointer.
 
 - [ ] **Step 1: Build** with `Deploy to Zip File` (command and judging rules in the parent `CLAUDE.md`): 0 `error CS`, 0 `logLevel: 2`, zip present.
-- [ ] **Step 2: Install** into `I:/SteamLibrary/steamapps/common/Kerbal Space Program 2/mods/SkySpaceAgency`, keeping `skyspaceagency_*.json` and `vab/`; `cmp` the DLL.
+- [ ] **Step 2: Install** into `G:/SteamLibrary/steamapps/common/Kerbal Space Program 2/mods/SkySpaceAgency`, keeping `skyspaceagency_*.json` and `vab/`; `cmp` the DLL.
 - [ ] **Step 3: CHANGELOG** entry: "Pick on map" button (map view, Esc to cancel, no waypoint created), KSC entry on Kerbin, picker shown on atmospheric bodies with precision still unavailable there. README Known limitations: precision on atmospheric bodies arrives with parachute targeting.
 - [ ] **Step 4: CLAUDE.md** bullet: plan path, what is not verified in game (argument order of `PlacementCompleted`, no waypoint created, `PlacementStateChanged` on cancel, KSC member outside the KSC scene, map toggle), the log lines to read (`[Landing] target:`). Commit and push the submodule, then the parent pointer.
 - [ ] **Step 5: In-game checklist for the user:**

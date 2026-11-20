@@ -1854,7 +1854,7 @@ Run the build command. Expected: 0 `error CS`, 0 `logLevel: 2`, and `Deploy/SkyS
 - [ ] **Step 2: Install in the game**
 
 ```bash
-G="/i/SteamLibrary/steamapps/common/Kerbal Space Program 2/mods/SkySpaceAgency"
+G="/g/SteamLibrary/steamapps/common/Kerbal Space Program 2/mods/SkySpaceAgency"
 S=/c/Users/killi/AppData/Local/Temp/claude/D--KSPReduxModding/a7cbf702-b607-4bb2-8603-776172a2b3f1/scratchpad
 rm -rf "$S/zip" && mkdir -p "$S/zip" && unzip -q -o /d/KSPReduxModding/SkySpaceAgency/Deploy/SkySpaceAgency.zip -d "$S/zip"
 ls "$S/zip"
