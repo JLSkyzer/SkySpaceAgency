@@ -115,3 +115,6 @@ classic tab. The page is the mockup's layout, every control disabled.
 - The compact flight bar: placement over the game's UI at each UI scale, its font, the alert colours, Stop and open
   buttons; it is not scaled by the interface scale unless the panel's scale applies to the host (it should: same panel).
 - The Return drawing at other window sizes (labels are placed in fractions of the view).
+
+## Addendum 2026-11-20
+- [x] `app_small_window` (Small window: Scale / Reflow) -> SETTINGS > Interface, segmented choice + note.

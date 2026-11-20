@@ -434,3 +434,21 @@ Plan `docs/superpowers/plans/2026-11-19-new-ui-tab-migration.md`, inventaire `do
     même valeur (et l'inverse). Relancer le jeu : les valeurs restent.
 14. **Fenêtre basse.** À 760 x 480, la frise défile avec les colonnes ; la barre d'actions reste visible.
 
+## 28. Fenêtre réduite : Scale / Reflow (2026-11-20)
+
+Réglage SETTINGS > Interface > « Small window » (Scale par défaut, Reflow = comportement d'avant). Captures de référence :
+`docs/design/ui/migration/small_*`.
+
+1. **Scale.** Réduire la fenêtre avec la poignée (jusqu'à 760 x 480) : les trois colonnes, la frise et la barre d'actions
+   restent comme à la grande taille, tout rétrécit sans défilement ; jamais en dessous de la moitié ; texte encore lisible
+   à la taille minimale. La poignée suit bien la souris (la fenêtre garde sa vraie taille) ; le déplacement par l'en-tête
+   marche à toute échelle.
+2. **Commandes réduites.** Curseurs, champs, interrupteurs, boutons, liste déroulante et Start/Stop restent utilisables
+   quand le contenu est réduit (clic au bon endroit). Les listes déroulantes s'ouvrent à taille normale (attendu).
+3. **Reflow.** Passer à Reflow : sous 1100 px les colonnes se réorganisent et la page défile, comme avant.
+4. **Bascule en direct.** Changer le choix fenêtre ouverte : la mise en page change tout de suite, sans fermer.
+5. **Combinaison.** Avec l'échelle d'interface (75 à 150 %) et l'échelle d'UI du jeu : la fenêtre reste à l'écran et le
+   contenu la remplit.
+6. **Réduire (« – »).** L'en-tête seul, à taille normale ; la restauration rend l'échelle d'avant. La taille enregistrée
+   reste celle de la fenêtre (relancer le jeu : même taille, même échelle).
+7. **Défaut.** Un joueur sans réglage enregistré a Scale (fichier de réglages sans `app_small_window`).

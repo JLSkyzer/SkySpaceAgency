@@ -80,3 +80,27 @@ classic-only SsaUI controls no new tab uses, `UiLayoutHarness`/`UiLayoutTests`, 
 Addressables entry, `AppSettings.ClassicUi` and the "New UI" button; `Pilot.page` and the settings' `setupUI`
 methods (classic bindings) go too, after moving any logic they hold (static settings classes declared inside
 `TransferUI.cs` and `RendezvousUI.cs` move to their own files first).
+
+### Addendum 2026-11-20: small-window mode (Reflow / Scale)
+
+Requested after the first in-game trial: below 1100 px the columns re-flowed and the page scrolled. Setting
+`app_small_window` (`EnumSetting<SmallWindowMode>`, Settings > Interface > "Small window"), **default Scale** (the
+window is designed in three columns, as the mockups; Reflow stays one click away and is unchanged).
+
+**How Scale is made.** The header, tab bar and pages live in a body (`AppWindowView`, element `app-body`). In Scale
+mode the body is laid out at the logical size `inner / s` and drawn with `style.scale = s` from its top-left corner,
+positioned over the window's inner box (absolute, at the padding), so it fills the window exactly. `s =
+SmallWindowScale.Factor(inner)`: the smaller of inner.x / 1322 and inner.y / 740 (the inner size the default window
+1360 x 765 gives), never above 1 (no enlarging: the interface scale does that), never below 0.5 (the readability
+floor; the minimum window 760 x 480 gives 0.56). The logical size is therefore never smaller than the reference: the
+layout is never narrow nor compact, so it is exactly the mockup's.
+
+**Why a transform on the body and not `PanelSettings.scale`.** The panel scale multiplies the whole panel, window
+included: a 760 px window would then occupy 760 x s pixels and the content would still not fit it. A transform on the
+window itself would falsify what the resize handle (`ResizeManipulator` reads the target's `worldBound`), the drag clamp
+and `WindowSizeSaver` read. A transform on the body only leaves the window (and its handle, a child of the window
+outside the body) at its real size: resizing, dragging, the screen clamp and the saved geometry are untouched. It
+combines with the interface scale and the game's UI scale (both are the panel scale, applied above). UITK maps pointer
+positions through element transforms, so sliders, fields and buttons inside the scaled body work. Minimised, the body
+returns to normal flow and scale 1 (the header only). Known limit: drop-down popups open in the panel root at normal
+size, not shrunk.
